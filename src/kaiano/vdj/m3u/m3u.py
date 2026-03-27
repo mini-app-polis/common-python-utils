@@ -112,6 +112,8 @@ class ParseFacade:
                     days=day_offset, minutes=minutes
                 )
             else:
+                if not last_play:
+                    continue
                 lp_dt = _parse_last_play_datetime(last_play)
                 if lp_dt is not None and (
                     prev_assigned_dt is None or lp_dt > prev_assigned_dt

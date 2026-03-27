@@ -61,3 +61,37 @@ def test_parse_m3u_backcompat(tmp_path, monkeypatch):
     p.write_text(content)
     songs = m3u.ParseFacade.parse_m3u(None, str(p), "unused")
     assert songs == [("A", "T", "#EXTVDJ:<artist>A</artist><title>T</title>")]
+
+
+def test_parse_m3u_lines_missing_time_and_lastplaytime_skips_without_raise(monkeypatch):
+    cfg = sys.modules.get("kaiano.config")
+    if cfg is not None:
+        cfg.TIMEZONE = "America/Chicago"
+
+    m3u = importlib.reload(importlib.import_module("kaiano.vdj.m3u.m3u"))
+    out = m3u.ParseFacade.parse_m3u_lines(
+        [
+            "#EXTVDJ:<title>NoTime</title><artist>A</artist>",
+            "#EXTVDJ:<time>01:00</time><title>HasTime</title><artist>B</artist>",
+        ],
+        set(),
+        "2026-01-19",
+    )
+    # Entry without time/lastplaytime is skipped; parser still continues.
+    assert [e.title for e in out] == ["HasTime"]
+
+
+def test_parse_time_str_malformed_time_falls_back_to_zero() -> None:
+    m3u = importlib.reload(importlib.import_module("kaiano.vdj.m3u.m3u"))
+    assert m3u.ParseFacade.parse_time_str("not-a-time") == 0
+
+
+def test_extract_tag_value_missing_tag_returns_empty_string() -> None:
+    m3u = importlib.reload(importlib.import_module("kaiano.vdj.m3u.m3u"))
+    assert m3u.ParseFacade.extract_tag_value("<title>T</title>", "artist") == ""
+
+
+def test_m3u_entry_dedup_key_is_stable() -> None:
+    m3u = importlib.reload(importlib.import_module("kaiano.vdj.m3u.m3u"))
+    entry = m3u.M3UEntry(dt="2026-01-19 01:00", title="Song", artist="Artist")
+    assert entry.dedup_key() == entry.dedup_key()

@@ -51,7 +51,8 @@ def get_logger() -> logging.Logger:
 
 def with_log_prefix(emoji: str, message: str) -> str:
     """Return ``message`` with one leading emoji and a single space after it."""
-    return f"{emoji} {message}".strip()
+    clean_message = " ".join(str(message).split())
+    return f"{emoji.strip()} {clean_message}".strip()
 
 
 def format_date(dt: datetime.datetime) -> str:

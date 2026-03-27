@@ -368,3 +368,161 @@ class TestClearPlaylist:
         mod.clear_playlist("pl-delegated")
 
         assert called == ["pl-delegated"]
+
+
+def _install_trim_playlist_stubs(monkeypatch, *, total: int):
+    """Minimal spotipy/requests stubs for trim_playlist_to_limit tests."""
+    _ensure_stubbed_config()
+
+    requests = types.ModuleType("requests")
+    exc_mod = types.SimpleNamespace(
+        RequestException=Exception, ReadTimeout=TimeoutError
+    )
+    requests.exceptions = exc_mod
+    _install("requests", requests)
+
+    spotipy = types.ModuleType("spotipy")
+    spotipy_exceptions = types.ModuleType("spotipy.exceptions")
+    spotipy_oauth2 = types.ModuleType("spotipy.oauth2")
+
+    class SpotifyException(Exception):
+        def __init__(self, http_status=None, headers=None):
+            super().__init__("spotify")
+            self.http_status = http_status
+            self.headers = headers or {}
+
+    class SpotifyOauthError(Exception):
+        pass
+
+    class CacheHandler:
+        pass
+
+    class SpotifyOAuth:
+        def __init__(self, **_kwargs):
+            self.calls = 0
+
+        def refresh_access_token(self, refresh_token):
+            _ = refresh_token
+            self.calls += 1
+            return {"access_token": f"token-{self.calls}"}
+
+    class Spotify:
+        def __init__(self, auth=None, auth_manager=None):
+            self.auth = auth
+            self.auth_manager = auth_manager
+            self.playlist_items_calls = 0
+            self.remove_calls = 0
+
+        def playlist_items(
+            self, playlist_id, fields=None, additional_types=None, limit=100, offset=0
+        ):
+            _ = (playlist_id, fields, additional_types, limit, offset)
+            self.playlist_items_calls += 1
+            items = [{"track": {"uri": f"uri:{i}"}} for i in range(total)]
+            return {"total": total, "items": items}
+
+        def playlist_remove_all_occurrences_of_items(self, playlist_id, items):
+            _ = (playlist_id, items)
+            self.remove_calls += 1
+            return {"snapshot_id": "r"}
+
+    spotipy.Spotify = Spotify  # type: ignore[attr-defined]
+    spotipy.exceptions = spotipy_exceptions  # type: ignore[attr-defined]
+    spotipy.oauth2 = spotipy_oauth2  # type: ignore[attr-defined]
+    _install("spotipy", spotipy)
+
+    spotipy_exceptions.SpotifyException = SpotifyException  # type: ignore[attr-defined]
+    spotipy_exceptions.SpotifyOauthError = SpotifyOauthError  # type: ignore[attr-defined]
+    _install("spotipy.exceptions", spotipy_exceptions)
+
+    spotipy_oauth2.CacheHandler = CacheHandler  # type: ignore[attr-defined]
+    spotipy_oauth2.SpotifyOAuth = SpotifyOAuth  # type: ignore[attr-defined]
+    _install("spotipy.oauth2", spotipy_oauth2)
+
+    mod = importlib.reload(importlib.import_module("kaiano.spotify.spotify"))
+    monkeypatch.setattr(mod.time, "sleep", lambda *_a, **_k: None)
+    mod._spotify_api = None
+    return mod, Spotify
+
+
+def test_spotify_client_raises_when_client_id_missing(monkeypatch):
+    _ensure_stubbed_config()
+    cfg = sys.modules["kaiano.config"]
+    cfg.SPOTIPY_CLIENT_ID = None
+
+    requests = types.ModuleType("requests")
+    requests.exceptions = types.SimpleNamespace(
+        RequestException=Exception, ReadTimeout=TimeoutError
+    )
+    _install("requests", requests)
+
+    spotipy = types.ModuleType("spotipy")
+    spotipy_exceptions = types.ModuleType("spotipy.exceptions")
+    spotipy_oauth2 = types.ModuleType("spotipy.oauth2")
+
+    class SpotifyException(Exception):
+        pass
+
+    class SpotifyOauthError(Exception):
+        pass
+
+    class CacheHandler:
+        pass
+
+    class SpotifyOAuth:
+        def __init__(self, **_kwargs):
+            pass
+
+        def refresh_access_token(self, _refresh_token):
+            return {"access_token": "token"}
+
+    class Spotify:
+        def __init__(self, auth=None, auth_manager=None):
+            self.auth = auth
+            self.auth_manager = auth_manager
+
+    spotipy.Spotify = Spotify  # type: ignore[attr-defined]
+    spotipy.exceptions = spotipy_exceptions  # type: ignore[attr-defined]
+    spotipy.oauth2 = spotipy_oauth2  # type: ignore[attr-defined]
+    _install("spotipy", spotipy)
+    spotipy_exceptions.SpotifyException = SpotifyException  # type: ignore[attr-defined]
+    spotipy_exceptions.SpotifyOauthError = SpotifyOauthError  # type: ignore[attr-defined]
+    _install("spotipy.exceptions", spotipy_exceptions)
+    spotipy_oauth2.CacheHandler = CacheHandler  # type: ignore[attr-defined]
+    spotipy_oauth2.SpotifyOAuth = SpotifyOAuth  # type: ignore[attr-defined]
+    _install("spotipy.oauth2", spotipy_oauth2)
+
+    mod = importlib.reload(importlib.import_module("kaiano.spotify.spotify"))
+    monkeypatch.setattr(mod.time, "sleep", lambda *_a, **_k: None)
+
+    api = mod.SpotifyAPI.from_env()
+    try:
+        _ = api.client
+    except ValueError as e:
+        assert "Missing one or more required Spotify credentials." in str(e)
+    else:
+        raise AssertionError("expected ValueError for missing SPOTIPY_CLIENT_ID")
+
+
+def test_trim_playlist_to_limit_under_limit_makes_no_remove_calls(monkeypatch):
+    mod, SpotifyCls = _install_trim_playlist_stubs(monkeypatch, total=2)
+    api = mod.SpotifyAPI.from_env()
+    client = api.client
+    assert isinstance(client, SpotifyCls)
+
+    api.trim_playlist_to_limit(limit=5)
+
+    assert client.playlist_items_calls == 1
+    assert client.remove_calls == 0
+
+
+def test_trim_playlist_to_limit_empty_playlist_makes_no_remove_calls(monkeypatch):
+    mod, SpotifyCls = _install_trim_playlist_stubs(monkeypatch, total=0)
+    api = mod.SpotifyAPI.from_env()
+    client = api.client
+    assert isinstance(client, SpotifyCls)
+
+    api.trim_playlist_to_limit(limit=5)
+
+    assert client.playlist_items_calls == 1
+    assert client.remove_calls == 0
