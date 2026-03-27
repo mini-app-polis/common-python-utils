@@ -15,15 +15,14 @@ class KaianoApiClient:
     Reads configuration from environment variables:
       KAIANO_API_BASE_URL — base URL of the target service
                             e.g. https://deejay-marvel-api.up.railway.app
-      KAIANO_API_CLERK_TOKEN — optional Clerk JWT; when set (or passed via
-                               ``clerk_token``), requests use
-                               ``Authorization: Bearer <token>`` instead of
-                               ``X-Owner-Id``.
+      CLERK_API_KEY — optional Clerk machine-to-machine API key; when set (or
+                      passed via ``clerk_api_key``), requests use
+                      ``Authorization: Bearer <key>``.
       KAIANO_API_OWNER_ID — owner ID passed as X-Owner-Id header when no Clerk
-                            token is configured; falls back to OWNER_ID if not set
+                            API key is configured; falls back to OWNER_ID if not set
 
-    Auth: Prefer Clerk JWT when ``KAIANO_API_CLERK_TOKEN`` is set (or when
-    ``clerk_token`` is passed). Otherwise use ``X-Owner-Id`` for local dev and
+    Auth: Prefer Clerk M2M auth when ``CLERK_API_KEY`` is set (or when
+    ``clerk_api_key`` is passed). Otherwise use ``X-Owner-Id`` for local dev and
     backward compatibility with internal service-to-service calls. Do not expose
     this client to untrusted callers.
     """
@@ -32,7 +31,7 @@ class KaianoApiClient:
         self,
         base_url: str | None = None,
         owner_id: str | None = None,
-        clerk_token: str | None = None,
+        clerk_api_key: str | None = None,
         timeout: float = 30.0,
         max_retries: int = 3,
     ):
@@ -44,12 +43,10 @@ class KaianoApiClient:
             or os.environ.get("KAIANO_API_OWNER_ID")
             or os.environ.get("OWNER_ID", "dev-owner")
         )
-        resolved_token = (
-            clerk_token
-            if clerk_token is not None
-            else os.environ.get("KAIANO_API_CLERK_TOKEN")
+        self.clerk_api_key = (
+            clerk_api_key
+            or os.environ.get("CLERK_API_KEY")
         )
-        self.clerk_token = resolved_token if resolved_token else None
         self.timeout = timeout
         self.max_retries = max_retries
 
@@ -58,12 +55,15 @@ class KaianoApiClient:
         return cls()
 
     def _headers(self) -> dict[str, str]:
-        headers: dict[str, str] = {"Content-Type": "application/json"}
-        if self.clerk_token:
-            headers["Authorization"] = f"Bearer {self.clerk_token}"
-        else:
-            headers["X-Owner-Id"] = self.owner_id
-        return headers
+        if self.clerk_api_key:
+            return {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.clerk_api_key}",
+            }
+        return {
+            "Content-Type": "application/json",
+            "X-Owner-Id": self.owner_id,
+        }
 
     def post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         """
