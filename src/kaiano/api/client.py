@@ -15,19 +15,24 @@ class KaianoApiClient:
     Reads configuration from environment variables:
       KAIANO_API_BASE_URL — base URL of the target service
                             e.g. https://deejay-marvel-api.up.railway.app
-      KAIANO_API_OWNER_ID — owner ID passed as X-Owner-Id header
-                            falls back to OWNER_ID if not set
+      KAIANO_API_CLERK_TOKEN — optional Clerk JWT; when set (or passed via
+                               ``clerk_token``), requests use
+                               ``Authorization: Bearer <token>`` instead of
+                               ``X-Owner-Id``.
+      KAIANO_API_OWNER_ID — owner ID passed as X-Owner-Id header when no Clerk
+                            token is configured; falls back to OWNER_ID if not set
 
-    Auth: Currently uses X-Owner-Id for internal service-to-service calls.
-    Clerk JWT is on the roadmap — when implemented, pass Authorization: Bearer <token>
-    instead. Until then, X-Owner-Id is the intentional contract for internal traffic only.
-    Do not expose this client to untrusted callers.
+    Auth: Prefer Clerk JWT when ``KAIANO_API_CLERK_TOKEN`` is set (or when
+    ``clerk_token`` is passed). Otherwise use ``X-Owner-Id`` for local dev and
+    backward compatibility with internal service-to-service calls. Do not expose
+    this client to untrusted callers.
     """
 
     def __init__(
         self,
         base_url: str | None = None,
         owner_id: str | None = None,
+        clerk_token: str | None = None,
         timeout: float = 30.0,
         max_retries: int = 3,
     ):
@@ -39,6 +44,12 @@ class KaianoApiClient:
             or os.environ.get("KAIANO_API_OWNER_ID")
             or os.environ.get("OWNER_ID", "dev-owner")
         )
+        resolved_token = (
+            clerk_token
+            if clerk_token is not None
+            else os.environ.get("KAIANO_API_CLERK_TOKEN")
+        )
+        self.clerk_token = resolved_token if resolved_token else None
         self.timeout = timeout
         self.max_retries = max_retries
 
@@ -47,10 +58,12 @@ class KaianoApiClient:
         return cls()
 
     def _headers(self) -> dict[str, str]:
-        return {
-            "Content-Type": "application/json",
-            "X-Owner-Id": self.owner_id,
-        }
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if self.clerk_token:
+            headers["Authorization"] = f"Bearer {self.clerk_token}"
+        else:
+            headers["X-Owner-Id"] = self.owner_id
+        return headers
 
     def post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         """

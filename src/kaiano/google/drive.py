@@ -4,19 +4,20 @@ import random
 import re
 import time
 from dataclasses import dataclass
+from functools import partial
 from typing import Any
 
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload, MediaIoBaseUpload
 
-from kaiano import config
+import kaiano.config as config
 from kaiano import logger as logger_mod
 
 from ._retry import RetryConfig, execute_with_retry
 from .types import DriveFile
 
 log = logger_mod.get_logger()
-FOLDER_CACHE = {}
+FOLDER_CACHE: dict[str, str] = {}
 
 _DRIVE_ID_RE = re.compile(r"[-\w]{25,}")
 _VERSION_RE = re.compile(r"_v(\d+)$")
@@ -121,7 +122,7 @@ class DriveFacade:
         page_token: str | None = None
         while True:
             result = execute_with_retry(
-                lambda page_token=page_token: _call(page_token),
+                partial(_call, page_token),
                 context=f"listing files in folder {parent_id}",
                 retry=self._retry,
             )
@@ -499,10 +500,13 @@ class DriveFacade:
         if not getattr(config, "VDJ_HISTORY_FOLDER_ID", None):
             log.critical("VDJ_HISTORY_FOLDER_ID is not set in config.")
             return []
+        folder_id = config.VDJ_HISTORY_FOLDER_ID
+        if folder_id is None:
+            return []
 
         try:
             files = self.list_files(
-                config.VDJ_HISTORY_FOLDER_ID,
+                folder_id,
                 name_contains=".m3u",
                 trashed=False,
                 include_folders=False,
@@ -527,10 +531,13 @@ class DriveFacade:
         if not getattr(config, "VDJ_HISTORY_FOLDER_ID", None):
             log.critical("VDJ_HISTORY_FOLDER_ID is not set in config.")
             return None
+        folder_id = config.VDJ_HISTORY_FOLDER_ID
+        if folder_id is None:
+            return None
 
         try:
             files = self.list_files(
-                config.VDJ_HISTORY_FOLDER_ID,
+                folder_id,
                 name_contains=".m3u",
                 trashed=False,
                 include_folders=False,

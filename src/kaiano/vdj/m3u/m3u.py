@@ -4,13 +4,12 @@ import datetime
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
+from zoneinfo import ZoneInfo
 
-import pytz
+import kaiano.config as config
+from kaiano import logger as logger_mod
 
-from kaiano import config
-from kaiano import logger as log
-
-log = log.get_logger()
+log = logger_mod.get_logger()
 
 
 @dataclass(frozen=True)
@@ -55,9 +54,9 @@ class ParseFacade:
         existing_keys: set[str],
         file_date_str: str,
     ) -> list[M3UEntry]:
-        tz = pytz.timezone(config.TIMEZONE)
+        tz = ZoneInfo(config.TIMEZONE)
         year, month, day = map(int, file_date_str.split("-"))
-        base_date = tz.localize(datetime.datetime(year, month, day, 0, 0))
+        base_date = datetime.datetime(year, month, day, 0, 0, tzinfo=tz)
 
         prev_assigned_dt: datetime.datetime | None = None
         day_offset = 0
@@ -74,7 +73,7 @@ class ParseFacade:
 
             if s.isdigit():
                 try:
-                    n = int(s)
+                    n: int | float = int(s)
                     if n > 10_000_000_000:
                         n = n / 1000.0
                     return datetime.datetime.fromtimestamp(n, tz)
@@ -89,7 +88,7 @@ class ParseFacade:
             ):
                 try:
                     dt_naive = datetime.datetime.strptime(s, fmt)
-                    return tz.localize(dt_naive)
+                    return dt_naive.replace(tzinfo=tz)
                 except Exception:
                     continue
             return None

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from kaiano import logger as log
+from kaiano import logger as logger_mod
 
 from ._auth import (
     AuthConfig,
@@ -16,7 +16,7 @@ from ._retry import RetryConfig
 from .drive import DriveFacade
 from .sheets import SheetsFacade
 
-log = log.get_logger()
+log = logger_mod.get_logger()
 
 
 @dataclass

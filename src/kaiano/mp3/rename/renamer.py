@@ -30,8 +30,8 @@ class Mp3Renamer:
         fallback_to_original: bool = True,
     ) -> str:
         if metadata is not None:
-            title = title or metadata.get("title")  # type: ignore[arg-type]
-            artist = artist or metadata.get("artist")  # type: ignore[arg-type]
+            title = title or metadata.get("title")
+            artist = artist or metadata.get("artist")
 
         # Delegate filename construction to the facade, but do NOT rename on disk
         name = self._rename.build_filename(

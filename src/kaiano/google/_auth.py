@@ -9,9 +9,9 @@ import gspread
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-from kaiano import logger as log
+from kaiano import logger as logger_mod
 
-log = log.get_logger()
+log = logger_mod.get_logger()
 
 
 DEFAULT_SCOPES = (

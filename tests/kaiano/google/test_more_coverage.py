@@ -24,7 +24,9 @@ def test_sheets_facade_exercises_write_append_clear_insert_sort(monkeypatch):
 
     from kaiano.google.sheets import SheetsFacade
 
-    FakeSheetsService = importlib.import_module("test_sheets_facade").FakeSheetsService
+    FakeSheetsService = importlib.import_module(
+        "tests.kaiano.google.test_sheets_facade"
+    ).FakeSheetsService
 
     svc = FakeSheetsService()
     sheets = SheetsFacade(svc)
@@ -48,7 +50,9 @@ def test_drive_facade_exercises_remaining_helpers(monkeypatch, tmp_path):
     from kaiano.google.drive import DriveFacade
     from kaiano.google.types import DriveFile
 
-    FakeDriveService = importlib.import_module("test_drive_facade").FakeDriveService
+    FakeDriveService = importlib.import_module(
+        "tests.kaiano.google.test_drive_facade"
+    ).FakeDriveService
 
     svc = FakeDriveService()
 

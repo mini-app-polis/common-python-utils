@@ -5,30 +5,40 @@ import os
 from collections.abc import Mapping
 from typing import Any
 
+from ..models import TagSnapshot
+
+music_tag: Any | None
+_music_tag_err: Exception | None
 try:
-    import music_tag  # type: ignore
+    import music_tag as _music_tag
 except Exception as e:  # pragma: no cover
     music_tag = None
     _music_tag_err = e
 else:
+    music_tag = _music_tag
     _music_tag_err = None
 
+ID3: Any | None
+TDRC: Any | None
+TYER: Any | None
+ID3NoHeaderError: Any | None
+_mutagen_err: Exception | None
 try:
-    from mutagen.id3 import ID3, TDRC, TYER, ID3NoHeaderError  # type: ignore
+    from mutagen.id3 import ID3, TDRC, TYER, ID3NoHeaderError
 except Exception as e:  # pragma: no cover
-    ID3 = TDRC = TYER = ID3NoHeaderError = None  # type: ignore
+    ID3 = TDRC = TYER = ID3NoHeaderError = None
     _mutagen_err = e
 else:
     _mutagen_err = None
 
 try:
-    import kaiano.logger as log  # type: ignore
+    import kaiano.logger as logger_mod
 except Exception:  # pragma: no cover
     import logging
 
     log = logging.getLogger(__name__)
-
-from ..models import TagSnapshot
+else:
+    log = logger_mod.get_logger()
 
 # Curated keys for debug dumping
 TAG_FIELDS = [
@@ -64,7 +74,9 @@ class MusicTagIO:
     def _save_virtualdj_id3_compat(self, path: str, year: str | None) -> None:
         """Best-effort: ensure VirtualDJ-friendly ID3v2.3 save (mp3 only)."""
         try:
-            if ID3 is None:  # pragma: no cover
+            if (
+                ID3 is None or ID3NoHeaderError is None or TYER is None or TDRC is None
+            ):  # pragma: no cover
                 return
             ext = os.path.splitext(path)[1].lower().lstrip(".")
             if ext != "mp3":
@@ -72,7 +84,7 @@ class MusicTagIO:
 
             try:
                 id3 = ID3(path)
-            except ID3NoHeaderError:
+            except Exception:
                 id3 = ID3()
 
             normalized_year = self._normalize_year_for_tag(year)

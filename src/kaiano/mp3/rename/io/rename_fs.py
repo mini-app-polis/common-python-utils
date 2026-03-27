@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 try:
-    import kaiano.helpers as helpers  # type: ignore
+    import kaiano.helpers as helpers
 except Exception:  # pragma: no cover
     helpers = None
 
@@ -77,7 +77,7 @@ def safe_filename_component(v: Any) -> str:
 
 def _safe_component(value: str | None) -> str:
     if helpers is not None and hasattr(helpers, "safe_filename_component"):
-        return helpers.safe_filename_component(value)  # type: ignore[attr-defined]
+        return helpers.safe_filename_component(value)
     return _safe_filename_component_fallback(value)
 
 
@@ -120,12 +120,8 @@ class RenameFacade:
 
         if metadata is not None:
             # Mapping-like; prefer explicit args and fall back to metadata.
-            title = title or (
-                metadata.get("title") if hasattr(metadata, "get") else None
-            )  # type: ignore[arg-type]
-            artist = artist or (
-                metadata.get("artist") if hasattr(metadata, "get") else None
-            )  # type: ignore[arg-type]
+            title = title or metadata.get("title")
+            artist = artist or metadata.get("artist")
 
         original_name = os.path.basename(path)
         _, ext = os.path.splitext(original_name)

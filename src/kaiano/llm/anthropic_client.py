@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, cast
 
 from kaiano import logger as logger_mod
 
@@ -28,7 +28,7 @@ class AnthropicLLM(LLMClient):
             )
 
         try:
-            from anthropic import Anthropic  # type: ignore
+            from anthropic import Anthropic
         except Exception as e:  # noqa: BLE001
             raise LLMError(
                 "anthropic SDK not installed. Add dependency 'anthropic' or install kaiano with the llm extra."
@@ -114,17 +114,24 @@ class AnthropicLLM(LLMClient):
             raise LLMError("Anthropic messages require at least one non-system message")
 
         system_prompt = "\n\n".join(system_parts) if system_parts else None
+        anthropic_messages = [
+            cast(
+                dict[str, str],
+                {"role": cast(Any, m.role), "content": m.content},
+            )
+            for m in non_system_messages
+        ]
+        create_kwargs: dict[str, Any] = {
+            "model": self._cfg.model,
+            "max_tokens": 8192,
+            "messages": anthropic_messages,
+            "temperature": 0.2,
+        }
+        if system_prompt is not None:
+            create_kwargs["system"] = system_prompt
 
         try:
-            resp = self._client.messages.create(
-                model=self._cfg.model,
-                max_tokens=8192,
-                system=system_prompt,
-                messages=[
-                    {"role": m.role, "content": m.content} for m in non_system_messages
-                ],
-                temperature=0.2,
-            )
+            resp = self._client.messages.create(**create_kwargs)
         except Exception as e:  # noqa: BLE001
             raise LLMError(f"Anthropic request failed: {e}") from e
 

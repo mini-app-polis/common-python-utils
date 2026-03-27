@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -13,13 +12,14 @@ from kaiano.llm.base import LLMConfig
 from kaiano.llm.errors import LLMError, LLMValidationError
 from kaiano.llm.openai_client import OpenAILLM
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _cfg(provider: str = "openai") -> LLMConfig:
-    return LLMConfig(provider=provider, model="test-model", api_key_env="FAKE_KEY")
+    api_key_env = "ANTHROPIC_API_KEY" if provider == "anthropic" else "OPENAI_API_KEY"
+    return LLMConfig(provider=provider, model="test-model", api_key_env=api_key_env)
 
 
 def _messages() -> list[LLMMessage]:
@@ -39,6 +39,7 @@ _SCHEMA = {
 # ---------------------------------------------------------------------------
 # parse_json / validate_json
 # ---------------------------------------------------------------------------
+
 
 class TestParseJson:
     def test_valid_json(self) -> None:
@@ -72,23 +73,32 @@ class TestValidateJson:
 # build_llm factory
 # ---------------------------------------------------------------------------
 
+
 class TestBuildLlm:
     def test_openai_provider(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-        with patch("kaiano.llm.anthropic_client.AnthropicLLM.__init__", return_value=None), \
-             patch("kaiano.llm.openai_client.OpenAILLM.__init__", return_value=None):
+        with (
+            patch(
+                "kaiano.llm.anthropic_client.AnthropicLLM.__init__", return_value=None
+            ),
+            patch("kaiano.llm.openai_client.OpenAILLM.__init__", return_value=None),
+        ):
             client = build_llm(provider="openai", model="gpt-4o")
             assert isinstance(client, OpenAILLM)
 
     def test_anthropic_provider(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
-        with patch("kaiano.llm.anthropic_client.AnthropicLLM.__init__", return_value=None):
+        with patch(
+            "kaiano.llm.anthropic_client.AnthropicLLM.__init__", return_value=None
+        ):
             client = build_llm(provider="anthropic", model="claude-3-5-sonnet-20241022")
             assert isinstance(client, AnthropicLLM)
 
     def test_claude_alias(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
-        with patch("kaiano.llm.anthropic_client.AnthropicLLM.__init__", return_value=None):
+        with patch(
+            "kaiano.llm.anthropic_client.AnthropicLLM.__init__", return_value=None
+        ):
             client = build_llm(provider="claude", model="claude-3-5-sonnet-20241022")
             assert isinstance(client, AnthropicLLM)
 
@@ -101,6 +111,7 @@ class TestBuildLlm:
 # AnthropicLLM
 # ---------------------------------------------------------------------------
 
+
 class TestAnthropicLLM:
     def _make_client(self, monkeypatch: pytest.MonkeyPatch) -> AnthropicLLM:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
@@ -112,15 +123,19 @@ class TestAnthropicLLM:
 
     def test_missing_api_key_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-        with patch.dict("sys.modules", {"anthropic": MagicMock()}):
-            with pytest.raises(LLMError, match="Missing env var"):
-                AnthropicLLM(_cfg("anthropic"))
+        with (
+            patch.dict("sys.modules", {"anthropic": MagicMock()}),
+            pytest.raises(LLMError, match="Missing env var"),
+        ):
+            AnthropicLLM(_cfg("anthropic"))
 
     def test_missing_sdk_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
-        with patch.dict("sys.modules", {"anthropic": None}):
-            with pytest.raises(LLMError, match="anthropic SDK not installed"):
-                AnthropicLLM(_cfg("anthropic"))
+        with (
+            patch.dict("sys.modules", {"anthropic": None}),
+            pytest.raises(LLMError, match="anthropic SDK not installed"),
+        ):
+            AnthropicLLM(_cfg("anthropic"))
 
     def test_generate_json_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client = self._make_client(monkeypatch)
@@ -138,7 +153,9 @@ class TestAnthropicLLM:
         assert result.output_json == {"name": "Alice"}
         assert result.provider == "anthropic"
 
-    def test_generate_json_strips_markdown_fence(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_generate_json_strips_markdown_fence(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         client = self._make_client(monkeypatch)
 
         block = SimpleNamespace(type="text", text='```json\n{"name": "Bob"}\n```')
@@ -148,7 +165,9 @@ class TestAnthropicLLM:
         result = client.generate_json(messages=_messages(), json_schema=_SCHEMA)
         assert result.output_json == {"name": "Bob"}
 
-    def test_generate_json_empty_response_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_generate_json_empty_response_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         client = self._make_client(monkeypatch)
 
         mock_resp = SimpleNamespace(message=SimpleNamespace(content=[]))
@@ -157,7 +176,9 @@ class TestAnthropicLLM:
         with pytest.raises(LLMError):
             client.generate_json(messages=_messages(), json_schema=_SCHEMA)
 
-    def test_generate_json_schema_violation_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_generate_json_schema_violation_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         client = self._make_client(monkeypatch)
 
         block = SimpleNamespace(type="text", text='{"wrong": "field"}')
@@ -186,6 +207,7 @@ class TestAnthropicLLM:
 # OpenAILLM
 # ---------------------------------------------------------------------------
 
+
 class TestOpenAILLM:
     def _make_client(self, monkeypatch: pytest.MonkeyPatch) -> OpenAILLM:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
@@ -197,17 +219,23 @@ class TestOpenAILLM:
 
     def test_missing_api_key_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        with patch.dict("sys.modules", {"openai": MagicMock()}):
-            with pytest.raises(LLMError, match="Missing env var"):
-                OpenAILLM(_cfg("openai"))
+        with (
+            patch.dict("sys.modules", {"openai": MagicMock()}),
+            pytest.raises(LLMError, match="Missing env var"),
+        ):
+            OpenAILLM(_cfg("openai"))
 
     def test_missing_sdk_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-        with patch.dict("sys.modules", {"openai": None}):
-            with pytest.raises(LLMError, match="openai SDK not installed"):
-                OpenAILLM(_cfg("openai"))
+        with (
+            patch.dict("sys.modules", {"openai": None}),
+            pytest.raises(LLMError, match="openai SDK not installed"),
+        ):
+            OpenAILLM(_cfg("openai"))
 
-    def test_generate_json_structured_output_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_generate_json_structured_output_success(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         client = self._make_client(monkeypatch)
 
         mock_resp = SimpleNamespace(output_text='{"name": "Carol"}')
@@ -217,20 +245,28 @@ class TestOpenAILLM:
         assert result.output_json == {"name": "Carol"}
         assert result.provider == "openai"
 
-    def test_generate_json_falls_back_to_chat(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_generate_json_falls_back_to_chat(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         client = self._make_client(monkeypatch)
 
         # Responses API fails
         client._client.responses.create.side_effect = RuntimeError("not available")
 
         # Chat completions fallback succeeds
-        mock_choice = SimpleNamespace(message=SimpleNamespace(content='{"name": "Dave"}'))
-        client._client.chat.completions.create.return_value = SimpleNamespace(choices=[mock_choice])
+        mock_choice = SimpleNamespace(
+            message=SimpleNamespace(content='{"name": "Dave"}')
+        )
+        client._client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[mock_choice]
+        )
 
         result = client.generate_json(messages=_messages(), json_schema=_SCHEMA)
         assert result.output_json == {"name": "Dave"}
 
-    def test_generate_json_schema_violation_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_generate_json_schema_violation_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         client = self._make_client(monkeypatch)
 
         mock_resp = SimpleNamespace(output_text='{"wrong": "field"}')

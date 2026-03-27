@@ -10,11 +10,13 @@ from collections.abc import Iterable
 import acoustid
 
 try:
-    import kaiano.logger as log  # type: ignore
+    import kaiano.logger as logger_mod
 except Exception:  # pragma: no cover
     import logging
 
     log = logging.getLogger(__name__)
+else:
+    log = logger_mod.get_logger()
 
 from ..identifier import TrackId
 

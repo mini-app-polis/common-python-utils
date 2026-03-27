@@ -15,20 +15,30 @@ class DummyLogger:
     def _log(self, level: str, msg: str):
         self.records.append((level, str(msg)))
 
-    def info(self, msg: str):
-        self._log("info", msg)
+    def info(self, msg: str, *args):
+        if args:
+            msg = msg % args
+        self._log("info", str(msg))
 
-    def warning(self, msg: str):
-        self._log("warning", msg)
+    def warning(self, msg: str, *args):
+        if args:
+            msg = msg % args
+        self._log("warning", str(msg))
 
-    def error(self, msg: str):
-        self._log("error", msg)
+    def error(self, msg: str, *args):
+        if args:
+            msg = msg % args
+        self._log("error", str(msg))
 
-    def debug(self, msg: str):
-        self._log("debug", msg)
+    def debug(self, msg: str, *args):
+        if args:
+            msg = msg % args
+        self._log("debug", str(msg))
 
-    def critical(self, msg: str):
-        self._log("critical", msg)
+    def critical(self, msg: str, *args):
+        if args:
+            msg = msg % args
+        self._log("critical", str(msg))
 
 
 def _install_stub_module(name: str, module: types.ModuleType) -> None:

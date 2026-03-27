@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import time
 
-import requests
+import requests  # type: ignore[import-untyped]  # requests does not ship typing stubs
 import spotipy
 from spotipy import Spotify
 from spotipy.exceptions import SpotifyException, SpotifyOauthError
 from spotipy.oauth2 import CacheHandler, SpotifyOAuth
 
-from kaiano import config
-from kaiano import logger as log
+import kaiano.config as config
+from kaiano import logger as logger_mod
 
-log = log.get_logger()
+log = logger_mod.get_logger()
 
 
 # --- Centralized retry helpers ---
@@ -452,6 +452,8 @@ def create_playlist(
 
 
 def add_tracks_to_playlist(uris: list[str], allowDuplicates: bool = False) -> None:
+    if not config.SPOTIFY_PLAYLIST_ID:
+        raise ValueError("SPOTIFY_PLAYLIST_ID is not set")
     _get_api().add_tracks_to_specific_playlist(
         config.SPOTIFY_PLAYLIST_ID, uris, allowDuplicates=allowDuplicates
     )

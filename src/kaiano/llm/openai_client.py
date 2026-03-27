@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 import os
-from typing import Any
+from typing import Any, cast
 
 from kaiano import logger as logger_mod
 
@@ -62,7 +62,7 @@ class OpenAILLM(LLMClient):
             raise LLMError(f"Missing env var {config.api_key_env} for OpenAI API key")
 
         try:
-            from openai import OpenAI  # type: ignore
+            from openai import OpenAI
         except Exception as e:  # noqa: BLE001
             raise LLMError(
                 "openai SDK not installed. Add dependency 'openai' or install kaiano with the llm extra."
@@ -125,15 +125,17 @@ class OpenAILLM(LLMClient):
             )
 
         # Fallback: JSON-only response
+        fallback_messages = [
+            {"role": m.role, "content": m.content} for m in messages
+        ] + [
+            {
+                "role": "system",
+                "content": "Return ONLY valid JSON matching the requested schema. No markdown, no prose.",
+            }
+        ]
         resp2 = self._client.chat.completions.create(
             model=self._cfg.model,
-            messages=[{"role": m.role, "content": m.content} for m in messages]
-            + [
-                {
-                    "role": "system",
-                    "content": "Return ONLY valid JSON matching the requested schema. No markdown, no prose.",
-                }
-            ],
+            messages=cast(Any, fallback_messages),
             temperature=0.2,
             timeout=self._cfg.timeout_s,
         )

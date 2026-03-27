@@ -9,7 +9,10 @@ from kaiano.api import KaianoApiClient
 from kaiano.api.errors import KaianoApiError
 
 
-def test_post_returns_parsed_json_on_200_response() -> None:
+def test_post_returns_parsed_json_on_200_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KAIANO_API_CLERK_TOKEN", raising=False)
     response = MagicMock()
     response.status_code = 200
     response.text = "ok"
@@ -39,7 +42,10 @@ def test_post_returns_parsed_json_on_200_response() -> None:
     response.json.assert_called_once()
 
 
-def test_post_raises_kaiano_api_error_on_4xx_response() -> None:
+def test_post_raises_kaiano_api_error_on_4xx_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KAIANO_API_CLERK_TOKEN", raising=False)
     response = MagicMock()
     response.status_code = 404
     response.text = "not found"
@@ -69,7 +75,10 @@ def test_post_raises_kaiano_api_error_on_4xx_response() -> None:
     assert "not found" in err.message
 
 
-def test_post_raises_kaiano_api_error_on_5xx_response() -> None:
+def test_post_raises_kaiano_api_error_on_5xx_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KAIANO_API_CLERK_TOKEN", raising=False)
     response = MagicMock()
     response.status_code = 500
     response.text = "boom"
@@ -99,7 +108,10 @@ def test_post_raises_kaiano_api_error_on_5xx_response() -> None:
     assert "boom" in err.message
 
 
-def test_post_retries_on_connection_error_and_raises_after_max_retries() -> None:
+def test_post_retries_on_connection_error_and_raises_after_max_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KAIANO_API_CLERK_TOKEN", raising=False)
     transport_exc = httpx.TransportError("connection reset")
 
     mock_http_client = MagicMock()
@@ -133,6 +145,7 @@ def test_post_retries_on_connection_error_and_raises_after_max_retries() -> None
 def test_from_env_uses_environment_variables(monkeypatch) -> None:
     monkeypatch.delenv("KAIANO_API_BASE_URL", raising=False)
     monkeypatch.delenv("KAIANO_API_OWNER_ID", raising=False)
+    monkeypatch.delenv("KAIANO_API_CLERK_TOKEN", raising=False)
     monkeypatch.delenv("OWNER_ID", raising=False)
 
     from_env = KaianoApiClient.from_env()
@@ -141,13 +154,17 @@ def test_from_env_uses_environment_variables(monkeypatch) -> None:
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://internal.example.com/")
     monkeypatch.setenv("OWNER_ID", "env-owner")
     monkeypatch.delenv("KAIANO_API_OWNER_ID", raising=False)
+    monkeypatch.delenv("KAIANO_API_CLERK_TOKEN", raising=False)
 
     client = KaianoApiClient.from_env()
     assert client.base_url == "https://internal.example.com"
     assert client.owner_id == "env-owner"
 
 
-def test_headers_include_content_type_and_owner_id() -> None:
+def test_headers_include_content_type_and_owner_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KAIANO_API_CLERK_TOKEN", raising=False)
     client = KaianoApiClient(
         base_url="https://example.com",
         owner_id="owner-123",
@@ -157,4 +174,35 @@ def test_headers_include_content_type_and_owner_id() -> None:
     assert client._headers() == {
         "Content-Type": "application/json",
         "X-Owner-Id": "owner-123",
+    }
+
+
+def test_headers_use_clerk_bearer_when_clerk_token_passed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KAIANO_API_CLERK_TOKEN", raising=False)
+    client = KaianoApiClient(
+        base_url="https://example.com",
+        owner_id="owner-123",
+        clerk_token="jwt-from-arg",
+        timeout=10.0,
+        max_retries=3,
+    )
+    assert client._headers() == {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer jwt-from-arg",
+    }
+
+
+def test_headers_use_clerk_bearer_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KAIANO_API_CLERK_TOKEN", "jwt-from-env")
+    client = KaianoApiClient(
+        base_url="https://example.com",
+        owner_id="owner-123",
+        timeout=10.0,
+        max_retries=3,
+    )
+    assert client._headers() == {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer jwt-from-env",
     }

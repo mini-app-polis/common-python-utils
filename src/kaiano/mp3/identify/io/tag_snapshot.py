@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from typing import Any
+
+music_tag: Any | None
+_import_err: Exception | None
 try:
-    import music_tag  # type: ignore
+    import music_tag as _music_tag
 except Exception as e:  # pragma: no cover
     music_tag = None
     _import_err = e
 else:
+    music_tag = _music_tag
     _import_err = None
 
 
