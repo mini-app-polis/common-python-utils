@@ -1,3 +1,10 @@
+# [2.1.0](https://github.com/mini-app-polis/common-python-utils/compare/v2.0.0...v2.1.0) (2026-03-27)
+
+
+### Features
+
+* add music normalization module ([9ca9bfb](https://github.com/mini-app-polis/common-python-utils/commit/9ca9bfbd15d75f1ca7277b21924b280b46857e47))
+
 # [2.0.0](https://github.com/mini-app-polis/common-python-utils/compare/v1.3.0...v2.0.0) (2026-03-27)
 
 
