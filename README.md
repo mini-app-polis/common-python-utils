@@ -13,7 +13,7 @@ Pin to a specific release tag in your `pyproject.toml`:
 
 ```toml
 [tool.uv.sources]
-kaiano = { git = "https://github.com/kaianolevine/common-python-utils", tag = "v2.0.0" }
+kaiano = { git = "https://github.com/mini-app-polis/common-python-utils", tag = "v1.0.0" }
 
 [project]
 dependencies = [
@@ -36,6 +36,7 @@ dependencies = [
 | Module | Import | Description |
 |--------|--------|-------------|
 | `api/` | `from kaiano.api import KaianoApiClient` | HTTP client for internal FastAPI services |
+| `config.py` | `from kaiano import config` | Env-var driven shared config (Spotify, Google, VDJ) |
 | `google/` | `from kaiano.google import GoogleAPI` | Drive + Sheets facade |
 | `llm/` | `from kaiano.llm import build_llm, LLMMessage` | OpenAI + Anthropic clients (optional extra) |
 | `mp3/` | `from kaiano.mp3 import ...` | AcoustID identification, tagging, renaming |
@@ -51,8 +52,9 @@ dependencies = [
 ```python
 from kaiano.api import KaianoApiClient
 
+# Set KAIANO_API_BASE_URL and KAIANO_API_CLERK_TOKEN in environment
+# Falls back to KAIANO_API_OWNER_ID if no Clerk token is set
 client = KaianoApiClient.from_env()
-# KAIANO_API_BASE_URL and KAIANO_API_OWNER_ID must be set in environment
 result = client.post("/sets", {"name": "My Set"})
 ```
 
@@ -118,10 +120,26 @@ uv run pre-commit install
 
 Releases are automated via semantic-release on push to `main`.
 
-Commit message format:
-- `fix: ...` → patch bump (v2.0.0 → v2.0.1)
-- `feat: ...` → minor bump (v2.0.0 → v2.1.0)
-- `feat!: ...` or `BREAKING CHANGE:` in body → major bump (v2.0.0 → v3.0.0)
+| Commit format | Bump | Example result |
+|---|---|---|
+| `fix: ...` | patch | v1.0.0 -> v1.0.1 |
+| `feat: ...` | minor | v1.0.0 -> v1.1.0 |
+| `feat!: ...` | major | v1.0.0 -> v2.0.0 |
+
+**Important:** Semantic-release only recognizes [Conventional Commits](https://www.conventionalcommits.org/) format. These will NOT trigger a release:
+- `breaking change: ...` - unrecognized type
+- `feat: breaking change ...` - the word "breaking" in the message does not count
+- Free-form messages with no type prefix
+
+For major bumps, prefer the `BREAKING CHANGE` footer in the commit body as it is more reliably parsed than `feat!`:
+
+```text
+feat: your message here
+
+BREAKING CHANGE: description of what changed and why it breaks
+```
+
+The footer format (`BREAKING CHANGE:` in the body) is the more battle-tested path across different versions of semantic-release. `feat!` should work per spec but has been known to behave inconsistently depending on plugin versions. Document both and lean on the footer.
 
 ---
 
