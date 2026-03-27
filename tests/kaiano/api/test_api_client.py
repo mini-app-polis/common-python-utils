@@ -169,6 +169,7 @@ def test_headers_include_content_type_and_owner_id(
         "X-Owner-Id": "owner-123",
     }
 
+
 def test_headers_return_x_owner_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
