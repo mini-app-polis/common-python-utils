@@ -15,23 +15,14 @@ class KaianoApiClient:
     Reads configuration from environment variables:
       KAIANO_API_BASE_URL — base URL of the target service
                             e.g. https://deejay-marvel-api.up.railway.app
-      CLERK_API_KEY — optional Clerk machine-to-machine API key; when set (or
-                      passed via ``clerk_api_key``), requests use
-                      ``Authorization: Bearer <key>``.
-      KAIANO_API_OWNER_ID — owner ID passed as X-Owner-Id header when no Clerk
-                            API key is configured; falls back to OWNER_ID if not set
-
-    Auth: Prefer Clerk M2M auth when ``CLERK_API_KEY`` is set (or when
-    ``clerk_api_key`` is passed). Otherwise use ``X-Owner-Id`` for local dev and
-    backward compatibility with internal service-to-service calls. Do not expose
-    this client to untrusted callers.
+      KAIANO_API_OWNER_ID — owner ID passed as X-Owner-Id header;
+                            falls back to OWNER_ID if not set
     """
 
     def __init__(
         self,
         base_url: str | None = None,
         owner_id: str | None = None,
-        clerk_api_key: str | None = None,
         timeout: float = 30.0,
         max_retries: int = 3,
     ):
@@ -43,7 +34,6 @@ class KaianoApiClient:
             or os.environ.get("KAIANO_API_OWNER_ID")
             or os.environ.get("OWNER_ID", "dev-owner")
         )
-        self.clerk_api_key = clerk_api_key or os.environ.get("CLERK_API_KEY")
         self.timeout = timeout
         self.max_retries = max_retries
 
@@ -52,11 +42,16 @@ class KaianoApiClient:
         return cls()
 
     def _headers(self) -> dict[str, str]:
-        if self.clerk_api_key:
-            return {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.clerk_api_key}",
-            }
+        # CURRENT: X-Owner-Id header for internal processor-to-API calls.
+        # No real security — intended for trusted internal use only.
+        #
+        # FUTURE: Replace with Clerk M2M token when real user auth is needed:
+        #   1. Create a JWT Template in the Clerk dashboard
+        #   2. Use Clerk Backend SDK to issue short-lived tokens
+        #   3. Cache the token until expiry (typically 1 hour)
+        #   4. Send as Authorization: Bearer <token> instead of X-Owner-Id
+        #
+        # See: https://clerk.com/docs/backend-requests/making/jwt-templates
         return {
             "Content-Type": "application/json",
             "X-Owner-Id": self.owner_id,
