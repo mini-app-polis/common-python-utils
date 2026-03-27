@@ -1,3 +1,15 @@
+# [1.3.0](https://github.com/mini-app-polis/common-python-utils/compare/v1.2.0...v1.3.0) (2026-03-27)
+
+
+### Bug Fixes
+
+* build ([f0573b3](https://github.com/mini-app-polis/common-python-utils/commit/f0573b31d7265d744b114396db5341e07f8c7f8a))
+
+
+### Features
+
+* reverting auth ([6e6d013](https://github.com/mini-app-polis/common-python-utils/commit/6e6d013b0e6abb90920f85d77073165891da9338))
+
 # [1.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v1.1.2...v1.2.0) (2026-03-27)
 
 
