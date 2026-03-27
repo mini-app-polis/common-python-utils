@@ -99,20 +99,79 @@ Set `LOGGING_LEVEL=INFO` (or DEBUG/WARNING/ERROR) in your environment.
 
 ## Development
 
+### Prerequisites
+
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) — Python package manager
 ```bash
-# Install with all extras
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### First-time setup
+
+Clone the repo and run these commands once in order:
+```bash
+# 1. Install all dependencies including dev and optional extras
 uv sync --all-extras
 
+# 2. Install pre-commit hooks into git
+uv run pre-commit install
+```
+
+That's it. Pre-commit will now run automatically on every `git commit`.
+
+### Daily workflow
+```bash
 # Run tests
 uv run pytest
 
-# Lint + format
-uv run ruff check src/ tests/
+# Run tests with coverage detail
+uv run pytest --cov=kaiano --cov-report=term-missing
+
+# Lint (auto-fix where possible)
+uv run ruff check src/ tests/ --fix
+
+# Format
 uv run ruff format src/ tests/
 
-# Pre-commit hooks
-uv run pre-commit install
+# Type check
+uv run mypy src/
+
+# Run all pre-commit hooks manually against all files
+uv run pre-commit run --all-files
 ```
+
+### What pre-commit does
+
+On every `git commit`, the following run automatically:
+
+- **ruff** — lints and auto-fixes what it can
+- **ruff-format** — formats code
+- **python-check-mock-methods** — catches incorrect mock usage
+- **python-use-type-annotations** — flags old-style type comments
+
+If any hook fails, the commit is blocked. Ruff will auto-fix in place — just `git add .` and re-commit.
+
+### Environment variables
+
+No `.env` file is required to run tests. For local development against real services, copy `.env.example` to `.env` and fill in values:
+```bash
+cp .env.example .env
+```
+
+Key variables:
+
+| Variable | Used by | Required for |
+|---|---|---|
+| `KAIANO_API_BASE_URL` | `KaianoApiClient` | Calling internal FastAPI services |
+| `KAIANO_API_CLERK_TOKEN` | `KaianoApiClient` | Clerk JWT auth (falls back to `KAIANO_API_OWNER_ID`) |
+| `KAIANO_API_OWNER_ID` | `KaianoApiClient` | Local dev fallback auth |
+| `LOGGING_LEVEL` | `logger` | Log verbosity (`DEBUG` default) |
+| `GOOGLE_CREDENTIALS_JSON` | `GoogleAPI` | Google Drive + Sheets access |
+| `SPOTIPY_CLIENT_ID` | `SpotifyAPI` | Spotify operations |
+| `SPOTIPY_CLIENT_SECRET` | `SpotifyAPI` | Spotify operations |
+| `SPOTIPY_REFRESH_TOKEN` | `SpotifyAPI` | Spotify operations |
+| `ANTHROPIC_API_KEY` | `llm` extra | Anthropic LLM calls |
+| `OPENAI_API_KEY` | `llm` extra | OpenAI LLM calls |
 
 ---
 
