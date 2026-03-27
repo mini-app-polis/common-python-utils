@@ -1,3 +1,15 @@
+# [2.0.0](https://github.com/mini-app-polis/common-python-utils/compare/v1.3.0...v2.0.0) (2026-03-27)
+
+
+* feat!: rename import namespace from kaiano to mini_app_polis ([642cafa](https://github.com/mini-app-polis/common-python-utils/commit/642cafa2ebe37e96704a350ebec1708abd4dd54b))
+
+
+### BREAKING CHANGES
+
+* all imports change from `from kaiano.x` to `from mini_app_polis.x`
+
+Made-with: Cursor
+
 # [2.0.0] — Breaking: import namespace renamed kaiano → mini_app_polis
 
 All imports change from `from kaiano.x` to `from mini_app_polis.x`.
