@@ -1,3 +1,11 @@
+# [1.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v1.1.2...v1.2.0) (2026-03-27)
+
+
+### Features
+
+* adding clerk functionality ([02bb6bf](https://github.com/mini-app-polis/common-python-utils/commit/02bb6bf3aee963570c10282374b8ec784c6431d4))
+* adding clerk functionality ([fb5abe6](https://github.com/mini-app-polis/common-python-utils/commit/fb5abe6871b689afa613a63548f230cd76bd5c2b))
+
 ## [1.1.2](https://github.com/mini-app-polis/common-python-utils/compare/v1.1.1...v1.1.2) (2026-03-27)
 
 
