@@ -1,0 +1,6 @@
+[run]
+branch = True
+source = kaiano
+
+[report]
+show_missing = True
