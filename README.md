@@ -2,8 +2,8 @@
 
 Common Python utilities shared across Kaiano's projects.
 
-> **Import namespace:** `kaiano`
-> **Replaces:** `kaiano-common-utils` (v1.x — frozen, no new features)
+> **Import namespace:** `mini_app_polis`
+> **Note:** Import using `mini_app_polis` (for example, `from mini_app_polis.google import GoogleAPI`)
 
 ---
 
@@ -13,11 +13,11 @@ Pin to a specific release tag in your `pyproject.toml`:
 
 ```toml
 [tool.uv.sources]
-kaiano = { git = "https://github.com/mini-app-polis/common-python-utils", tag = "v1.0.0" }
+mini_app_polis = { git = "https://github.com/mini-app-polis/common-python-utils", tag = "v1.0.0" }
 
 [project]
 dependencies = [
-  "kaiano",
+  "mini_app_polis",
 ]
 ```
 
@@ -25,7 +25,7 @@ To use the LLM module, add the `llm` extra:
 
 ```toml
 dependencies = [
-  "kaiano[llm]",
+  "mini_app_polis[llm]",
 ]
 ```
 
@@ -35,13 +35,13 @@ dependencies = [
 
 | Module | Import | Description |
 |--------|--------|-------------|
-| `api/` | `from kaiano.api import KaianoApiClient` | HTTP client for internal FastAPI services |
-| `config.py` | `from kaiano import config` | Env-var driven shared config (Spotify, Google, VDJ) |
-| `google/` | `from kaiano.google import GoogleAPI` | Drive + Sheets facade |
-| `llm/` | `from kaiano.llm import build_llm, LLMMessage` | OpenAI + Anthropic clients (optional extra) |
-| `mp3/` | `from kaiano.mp3 import ...` | AcoustID identification, tagging, renaming |
-| `spotify/` | `from kaiano.spotify import SpotifyAPI` | Spotipy wrapper |
-| `vdj/` | `from kaiano.vdj.m3u import ParseFacade` | VirtualDJ M3U parsing |
+| `api/` | `from mini_app_polis.api import KaianoApiClient` | HTTP client for internal FastAPI services |
+| `config.py` | `from mini_app_polis import config` | Env-var driven shared config (Spotify, Google, VDJ) |
+| `google/` | `from mini_app_polis.google import GoogleAPI` | Drive + Sheets facade |
+| `llm/` | `from mini_app_polis.llm import build_llm, LLMMessage` | OpenAI + Anthropic clients (optional extra) |
+| `mp3/` | `from mini_app_polis.mp3 import ...` | AcoustID identification, tagging, renaming |
+| `spotify/` | `from mini_app_polis.spotify import SpotifyAPI` | Spotipy wrapper |
+| `vdj/` | `from mini_app_polis.vdj.m3u import ParseFacade` | VirtualDJ M3U parsing |
 
 ---
 
@@ -50,7 +50,7 @@ dependencies = [
 ### KaianoApiClient
 
 ```python
-from kaiano.api import KaianoApiClient
+from mini_app_polis.api import KaianoApiClient
 
 # Set KAIANO_API_BASE_URL and KAIANO_API_CLERK_TOKEN in environment
 # Falls back to KAIANO_API_OWNER_ID if no Clerk token is set
@@ -61,7 +61,7 @@ result = client.post("/sets", {"name": "My Set"})
 ### LLM (requires `llm` extra)
 
 ```python
-from kaiano.llm import build_llm, LLMMessage
+from mini_app_polis.llm import build_llm, LLMMessage
 
 llm = build_llm(provider="anthropic", model="claude-3-5-sonnet-20241022")
 result = llm.generate_json(
@@ -84,7 +84,7 @@ print(result.output_json)  # {"artist": "...", "title": "..."}
 ### Logger
 
 ```python
-from kaiano import logger
+from mini_app_polis import logger
 
 logger.info("Starting pipeline")
 logger.error("Something went wrong: %s", err)
@@ -125,7 +125,7 @@ That's it. Pre-commit will now run automatically on every `git commit`.
 uv run pytest
 
 # Run tests with coverage detail
-uv run pytest --cov=kaiano --cov-report=term-missing
+uv run pytest --cov=mini_app_polis --cov-report=term-missing
 
 # Lint (auto-fix where possible)
 uv run ruff check src/ tests/ --fix
@@ -202,8 +202,6 @@ The footer format (`BREAKING CHANGE:` in the body) is the more battle-tested pat
 
 ---
 
-## Migration from kaiano-common-utils
+## Import Namespace
 
-This repo replaces `kaiano-common-utils` (v1.x). The import namespace (`kaiano`) is unchanged — no consumer code changes needed, only the install source changes.
-
-`kaiano-common-utils` is frozen at v1.1.0 and will receive security patches only.
+Use `mini_app_polis` as the import namespace across all modules (for example, `from mini_app_polis.api import KaianoApiClient`).

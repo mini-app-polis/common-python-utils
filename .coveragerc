@@ -1,6 +1,6 @@
 [run]
 branch = True
-source = kaiano
+source = mini_app_polis
 
 [report]
 show_missing = True

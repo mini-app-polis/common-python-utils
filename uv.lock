@@ -322,7 +322,7 @@ wheels = [
 
 [[package]]
 name = "common-python-utils"
-version = "1.2.0"
+version = "2.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "google-api-python-client" },

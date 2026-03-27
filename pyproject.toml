@@ -1,6 +1,6 @@
 [project]
 name = "common-python-utils"
-version = "1.3.0"
+version = "2.0.0"
 description = "Common utility functions shared across Kaiano's projects."
 authors = [{ name = "Kaiano Levine", email = "kaiano@example.com" }]
 license = { text = "MIT" }
@@ -41,11 +41,11 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/kaiano"]
+packages = ["src/mini_app_polis"]
 
 [tool.coverage.run]
 branch = true
-source = ["kaiano"]
+source = ["mini_app_polis"]
 
 [tool.coverage.report]
 show_missing = true
@@ -60,7 +60,7 @@ select = ["E", "W", "F", "I", "B", "C4", "UP", "ARG", "SIM"]
 ignore = ["E501", "B008", "ARG001"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["kaiano"]
+known-first-party = ["mini_app_polis"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -73,5 +73,5 @@ warn_unused_ignores = true
 warn_return_any = false
 
 [tool.pytest.ini_options]
-addopts = "--cov=kaiano --cov-report=term-missing"
+addopts = "--cov=mini_app_polis --cov-report=term-missing"
 testpaths = ["tests"]

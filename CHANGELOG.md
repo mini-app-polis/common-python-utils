@@ -1,3 +1,7 @@
+# [2.0.0] — Breaking: import namespace renamed kaiano → mini_app_polis
+
+All imports change from `from kaiano.x` to `from mini_app_polis.x`.
+
 # [1.3.0](https://github.com/mini-app-polis/common-python-utils/compare/v1.2.0...v1.3.0) (2026-03-27)
 
 
