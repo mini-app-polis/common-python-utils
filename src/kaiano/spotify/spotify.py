@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-import requests  # type: ignore[import-untyped]  # requests does not ship typing stubs
+import requests
 import spotipy
 from spotipy import Spotify
 from spotipy.exceptions import SpotifyException, SpotifyOauthError

@@ -206,3 +206,106 @@ def test_headers_use_clerk_bearer_from_env(monkeypatch: pytest.MonkeyPatch) -> N
         "Content-Type": "application/json",
         "Authorization": "Bearer jwt-from-env",
     }
+
+
+def test_headers_return_x_owner_id_when_no_clerk_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KAIANO_API_CLERK_TOKEN", raising=False)
+    client = KaianoApiClient(
+        base_url="https://example.com",
+        owner_id="owner-xyz",
+        timeout=10.0,
+        max_retries=3,
+    )
+    h = client._headers()
+    assert h.get("X-Owner-Id") == "owner-xyz"
+    assert "Authorization" not in h
+
+
+def test_get_returns_parsed_json_on_200_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KAIANO_API_CLERK_TOKEN", raising=False)
+    response = MagicMock()
+    response.status_code = 200
+    response.text = "ok"
+    response.json.return_value = {"items": []}
+
+    mock_http_client = MagicMock()
+    mock_http_client.get.return_value = response
+
+    with patch("kaiano.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+
+        client = KaianoApiClient(
+            base_url="https://example.com",
+            owner_id="owner-123",
+            timeout=10.0,
+            max_retries=3,
+        )
+        out = client.get("/v1/sets")
+
+    mock_http_client.get.assert_called_once_with(
+        "https://example.com/v1/sets",
+        params={},
+        headers={"Content-Type": "application/json", "X-Owner-Id": "owner-123"},
+    )
+    assert out == {"items": []}
+
+
+def test_get_passes_query_params(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("KAIANO_API_CLERK_TOKEN", raising=False)
+    response = MagicMock()
+    response.status_code = 200
+    response.text = "ok"
+    response.json.return_value = {"n": 1}
+
+    mock_http_client = MagicMock()
+    mock_http_client.get.return_value = response
+
+    with patch("kaiano.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+
+        client = KaianoApiClient(
+            base_url="https://example.com",
+            owner_id="owner-123",
+            timeout=10.0,
+            max_retries=3,
+        )
+        client.get("/v1/search", params={"q": "test", "limit": "10"})
+
+    mock_http_client.get.assert_called_once_with(
+        "https://example.com/v1/search",
+        params={"q": "test", "limit": "10"},
+        headers={"Content-Type": "application/json", "X-Owner-Id": "owner-123"},
+    )
+
+
+def test_get_retries_on_connection_error_and_raises_after_max_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KAIANO_API_CLERK_TOKEN", raising=False)
+    transport_exc = httpx.TransportError("connection reset")
+
+    mock_http_client = MagicMock()
+    mock_http_client.get.side_effect = transport_exc
+
+    with patch("kaiano.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+
+        client = KaianoApiClient(
+            base_url="https://example.com",
+            owner_id="owner-123",
+            timeout=10.0,
+            max_retries=3,
+        )
+
+        with pytest.raises(KaianoApiError) as excinfo:
+            client.get("/v1/sets")
+
+    assert mock_client_cls.call_count == 3
+    err = excinfo.value
+    assert err.status_code == 0
+    assert err.path == "/v1/sets"
+    assert "Connection failed after 3 attempts" in err.message

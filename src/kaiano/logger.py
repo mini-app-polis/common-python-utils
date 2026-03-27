@@ -1,3 +1,16 @@
+"""Kaiano logging setup and ecosystem log conventions.
+
+Key lifecycle log lines (info/warning/error) should use a leading emoji so
+operators can scan logs quickly:
+
+- ``LOG_START`` — pipeline or long-running job started
+- ``LOG_SUCCESS`` — completed successfully
+- ``LOG_FAILURE`` — terminal failure
+- ``LOG_WARNING`` — recoverable issue or degraded path
+
+Use :func:`with_log_prefix` when building messages so spacing stays consistent.
+"""
+
 from __future__ import annotations
 
 import datetime
@@ -7,6 +20,12 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Ecosystem log prefix conventions
+LOG_START = "🚀"
+LOG_SUCCESS = "✅"
+LOG_FAILURE = "❌"
+LOG_WARNING = "⚠️"
 
 _level = os.getenv("LOGGING_LEVEL", "DEBUG").upper()
 
@@ -28,6 +47,11 @@ exception = _logger.exception
 
 def get_logger() -> logging.Logger:
     return _logger
+
+
+def with_log_prefix(emoji: str, message: str) -> str:
+    """Return ``message`` with one leading emoji and a single space after it."""
+    return f"{emoji} {message}".strip()
 
 
 def format_date(dt: datetime.datetime) -> str:

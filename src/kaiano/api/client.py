@@ -105,3 +105,45 @@ class KaianoApiClient:
             message=f"Connection failed after {self.max_retries} attempts: {last_exc}",
             path=path,
         )
+
+    def get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """
+        Make a synchronous GET request to the API.
+
+        Retries up to max_retries times on connection errors.
+        Raises KaianoApiError on non-2xx responses.
+        """
+
+        url = f"{self.base_url}{path}"
+        last_exc: Exception | None = None
+        query = params or {}
+
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                with httpx.Client(timeout=self.timeout) as client:
+                    response = client.get(
+                        url,
+                        params=query,
+                        headers=self._headers(),
+                    )
+
+                if response.status_code >= 400:
+                    raise KaianoApiError(
+                        status_code=response.status_code,
+                        message=response.text,
+                        path=path,
+                    )
+
+                return response.json()
+
+            except httpx.TransportError as exc:
+                last_exc = exc
+                if attempt == self.max_retries:
+                    break
+                continue
+
+        raise KaianoApiError(
+            status_code=0,
+            message=f"Connection failed after {self.max_retries} attempts: {last_exc}",
+            path=path,
+        )
