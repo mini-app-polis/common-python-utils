@@ -40,6 +40,7 @@ dependencies = [
 | `google/` | `from mini_app_polis.google import GoogleAPI` | Drive + Sheets facade |
 | `llm/` | `from mini_app_polis.llm import build_llm, LLMMessage` | OpenAI + Anthropic clients (optional extra) |
 | `mp3/` | `from mini_app_polis.mp3 import ...` | AcoustID identification, tagging, renaming |
+| `music/` | `from mini_app_polis.music import normalize_for_matching` | Music data normalization utilities |
 | `spotify/` | `from mini_app_polis.spotify import SpotifyAPI` | Spotipy wrapper |
 | `vdj/` | `from mini_app_polis.vdj.m3u import ParseFacade` | VirtualDJ M3U parsing |
 
