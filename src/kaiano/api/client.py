@@ -43,10 +43,7 @@ class KaianoApiClient:
             or os.environ.get("KAIANO_API_OWNER_ID")
             or os.environ.get("OWNER_ID", "dev-owner")
         )
-        self.clerk_api_key = (
-            clerk_api_key
-            or os.environ.get("CLERK_API_KEY")
-        )
+        self.clerk_api_key = clerk_api_key or os.environ.get("CLERK_API_KEY")
         self.timeout = timeout
         self.max_retries = max_retries
 
