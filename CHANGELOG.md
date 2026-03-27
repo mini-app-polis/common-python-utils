@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/mini-app-polis/common-python-utils/compare/v1.1.1...v1.1.2) (2026-03-27)
+
+
+### Bug Fixes
+
+* removing warning ([cfe5206](https://github.com/mini-app-polis/common-python-utils/commit/cfe52063457137b3d0058804c3a125e4eb70db0f))
+
 ## [1.1.1](https://github.com/mini-app-polis/common-python-utils/compare/v1.1.0...v1.1.1) (2026-03-27)
 
 
