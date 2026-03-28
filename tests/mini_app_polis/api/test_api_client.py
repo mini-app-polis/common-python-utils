@@ -267,3 +267,9 @@ def test_get_retries_on_connection_error_and_raises_after_max_retries(
     assert err.status_code == 0
     assert err.path == "/v1/sets"
     assert "Connection failed after 3 attempts" in err.message
+
+
+def test_kaiano_api_error_importable_from_api_module() -> None:
+    from mini_app_polis.api import KaianoApiError
+
+    assert issubclass(KaianoApiError, Exception)
