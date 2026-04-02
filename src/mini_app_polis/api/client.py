@@ -42,7 +42,7 @@ class KaianoApiClient:
 
     Reads configuration from environment variables:
       KAIANO_API_BASE_URL — base URL of the target service
-                            e.g. https://deejay-marvel-api.up.railway.app
+                            (set via environment, no default)
       KAIANO_API_OWNER_ID — owner ID passed as X-Owner-Id header;
                             falls back to OWNER_ID if not set
 
