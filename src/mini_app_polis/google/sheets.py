@@ -38,6 +38,8 @@ class SheetsFacade:
     def get_metadata(
         self, spreadsheet_id: str, *, fields: str | None = None, max_retries: int = 6
     ) -> dict[str, Any]:
+        """Fetch spreadsheet metadata with optional field selection."""
+
         def _do_get() -> dict[str, Any]:
             if fields:
                 return (
@@ -57,6 +59,7 @@ class SheetsFacade:
         )
 
     def batch_update(self, spreadsheet_id: str, requests: list[dict]) -> dict[str, Any]:
+        """Apply one or more batchUpdate requests to a spreadsheet."""
         body = {"requests": requests}
         return execute_with_retry(
             lambda: (
@@ -69,6 +72,7 @@ class SheetsFacade:
         )
 
     def read_values(self, spreadsheet_id: str, a1_range: str) -> list[list[str]]:
+        """Read values from an A1 range and return normalized string cells."""
         result = execute_with_retry(
             lambda: (
                 self._service.spreadsheets()
@@ -90,6 +94,7 @@ class SheetsFacade:
         *,
         value_input_option: str = "RAW",
     ) -> dict:
+        """Write a 2D value matrix to an A1 range."""
         body = {"values": values}
         return execute_with_retry(
             lambda: (
@@ -115,6 +120,7 @@ class SheetsFacade:
         *,
         value_input_option: str = "RAW",
     ) -> dict:
+        """Append rows to an A1 range using INSERT_ROWS behavior."""
         body = {"values": values}
         return execute_with_retry(
             lambda: (
@@ -134,6 +140,7 @@ class SheetsFacade:
         )
 
     def clear(self, spreadsheet_id: str, a1_range: str) -> dict:
+        """Clear all values in an A1 range."""
         return execute_with_retry(
             lambda: (
                 self._service.spreadsheets()
@@ -152,6 +159,7 @@ class SheetsFacade:
     def ensure_sheet_exists(
         self, spreadsheet_id: str, sheet_name: str, headers: list[str] | None = None
     ) -> None:
+        """Create a sheet if missing and optionally initialize its header row."""
         meta = self.get_metadata(spreadsheet_id)
         titles = [s["properties"]["title"] for s in meta.get("sheets", [])]
 
@@ -172,6 +180,7 @@ class SheetsFacade:
                 )
 
     def get_sheet_id(self, spreadsheet_id: str, sheet_name: str) -> int:
+        """Return the numeric sheet ID for a sheet title."""
         meta = self.get_metadata(spreadsheet_id)
         for sheet in meta.get("sheets", []):
             props = sheet.get("properties", {})
@@ -276,6 +285,7 @@ class SheetsFacade:
         start_row: int = 2,
         end_row: int | None = None,
     ) -> dict:
+        """Sort sheet rows by a column index within the selected row window."""
         sheet_id = self.get_sheet_id(spreadsheet_id, sheet_name)
 
         sort_range: dict = {"sheetId": sheet_id, "startRowIndex": start_row - 1}
@@ -308,8 +318,10 @@ class SheetsFacade:
 
     @staticmethod
     def normalize_cell(v: Any) -> str:
+        """Convert a cell value to a trimmed string with None mapped to empty."""
         return "" if v is None else str(v).strip()
 
     @staticmethod
     def normalize_row(row: Sequence[Any]) -> list[str]:
+        """Normalize every cell in a row to string form."""
         return [SheetsFacade.normalize_cell(v) for v in row]

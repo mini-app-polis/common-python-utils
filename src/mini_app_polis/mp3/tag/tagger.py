@@ -23,6 +23,7 @@ class Mp3Tagger:
         self._io = io or MusicTagIO()
 
     def read(self, path: str) -> TagSnapshot:
+        """Read tags from a local file into a TagSnapshot."""
         return self._io.read(path)
 
     def write(
@@ -32,13 +33,16 @@ class Mp3Tagger:
         *,
         ensure_virtualdj_compat: bool = False,
     ) -> None:
+        """Write metadata tags to a local file."""
         self._io.write(path, metadata, ensure_virtualdj_compat=ensure_virtualdj_compat)
 
     def dump(self, path: str) -> dict[str, str]:
+        """Return a debug-friendly mapping of all readable tags."""
         return self._io.dump_tags(path)
 
     @staticmethod
     def sanitize_string(v: Any) -> str:
+        """Normalize an arbitrary value into a trimmed string token."""
         if v is None:
             return ""
         return str(v).strip()
@@ -83,6 +87,7 @@ class Mp3Tagger:
         routine_name: str,
         personal_descriptor: str,
     ) -> str:
+        """Build the artist tag string for routine metadata fields."""
         base = f"v{Mp3Tagger.sanitize_string(version)} | {Mp3Tagger.sanitize_string(division)} {Mp3Tagger.sanitize_string(season_year)}".strip()
         parts = [base]
         rn = Mp3Tagger.sanitize_string(routine_name)

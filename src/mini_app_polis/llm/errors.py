@@ -1,4 +1,6 @@
 class LLMError(RuntimeError):
+    """Represent a generic runtime failure in the LLM layer."""
+
     pass
 
 

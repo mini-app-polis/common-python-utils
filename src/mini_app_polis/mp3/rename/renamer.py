@@ -29,6 +29,7 @@ class Mp3Renamer:
         template: str = "{title}_{artist}",
         fallback_to_original: bool = True,
     ) -> str:
+        """Return a destination filename computed from metadata and template inputs."""
         if metadata is not None:
             title = title or metadata.get("title")
             artist = artist or metadata.get("artist")

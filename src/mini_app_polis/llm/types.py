@@ -8,6 +8,8 @@ Role = Literal["system", "user", "assistant"]
 
 @dataclass(frozen=True)
 class LLMMessage:
+    """Represent one chat message passed to an LLM provider."""
+
     role: Role
     content: str
 

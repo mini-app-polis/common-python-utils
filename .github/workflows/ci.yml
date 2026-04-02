@@ -34,7 +34,7 @@ jobs:
         run: uv run mypy src/
 
       - name: Test
-        run: uv run pytest
+        run: uv run pytest --cov=mini_app_polis --cov-report=term-missing
 
   release:
     needs: test

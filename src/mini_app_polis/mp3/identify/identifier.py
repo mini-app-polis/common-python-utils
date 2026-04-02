@@ -8,6 +8,8 @@ from typing import Any
 
 @dataclass(frozen=True)
 class TrackId:
+    """Represent one candidate track identifier from an external provider."""
+
     provider: str
     id: str
     confidence: float = 0.0
@@ -27,6 +29,8 @@ class IdentificationPolicy:
 
 @dataclass(frozen=True)
 class IdentificationResult:
+    """Represent identification candidates, selected match, and optional metadata."""
+
     path: str
     candidates: list[TrackId]
     chosen: TrackId | None
@@ -106,6 +110,7 @@ class Mp3Identifier:
     def identify(
         self, path: str, *, fetch_metadata: bool = True
     ) -> IdentificationResult:
+        """Identify a local audio file and optionally fetch metadata for the best match."""
         snapshot: dict[str, str] = {}
         if self._snapshot_reader is not None:
             try:

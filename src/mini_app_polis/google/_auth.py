@@ -59,12 +59,15 @@ def load_credentials(config: AuthConfig | None = None):
 
 
 def build_sheets_service(creds) -> Any:
+    """Build an authenticated Google Sheets API service client."""
     return build("sheets", "v4", credentials=creds)
 
 
 def build_drive_service(creds) -> Any:
+    """Build an authenticated Google Drive API service client."""
     return build("drive", "v3", credentials=creds)
 
 
 def build_gspread_client(creds) -> gspread.Client:
+    """Build an authenticated gspread client from service account credentials."""
     return gspread.authorize(creds)

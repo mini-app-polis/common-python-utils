@@ -99,6 +99,7 @@ class MusicTagIO:
             return
 
     def read(self, path: str) -> TagSnapshot:
+        """Read local audio tags into a normalized TagSnapshot."""
         if music_tag is None:  # pragma: no cover
             raise ImportError(
                 "music-tag is required for tagging. Install music-tag to use Mp3Tagger."

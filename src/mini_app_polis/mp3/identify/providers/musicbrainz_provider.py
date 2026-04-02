@@ -52,6 +52,7 @@ class MusicBrainzRecordingProvider:
         return None
 
     def fetch(self, track_id: TrackId) -> TrackMetadata:
+        """Fetch normalized metadata for a MusicBrainz recording track ID."""
         if track_id.provider != "musicbrainz":
             raise ValueError(
                 "MusicBrainzRecordingProvider only supports provider='musicbrainz', "

@@ -36,6 +36,7 @@ class MusicTagSnapshotReader:
     ]
 
     def read(self, path: str) -> dict[str, str]:
+        """Read a lightweight tag snapshot from a local audio file."""
         if music_tag is None:  # pragma: no cover
             raise ImportError(
                 "music-tag is required for tag snapshots. Install music-tag to enable this."

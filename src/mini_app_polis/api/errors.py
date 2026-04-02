@@ -1,4 +1,6 @@
 class KaianoApiError(Exception):
+    """Represent an HTTP failure returned by a Kaiano API endpoint."""
+
     def __init__(self, status_code: int, message: str, path: str):
         self.status_code = status_code
         self.message = message

@@ -25,6 +25,8 @@ _VERSION_RE = re.compile(r"_v(\d+)$")
 
 @dataclass(frozen=True)
 class DownloadedFile:
+    """Represent an in-memory file download and its Drive metadata."""
+
     file_id: str
     name: str
     mime_type: str
@@ -51,6 +53,7 @@ class DriveFacade:
 
     @property
     def service(self) -> Any:
+        """Return the underlying Google Drive service client."""
         return self._service
 
     def find_file_in_folder(
@@ -96,6 +99,7 @@ class DriveFacade:
         trashed: bool = False,
         include_folders: bool = True,
     ) -> list[DriveFile]:
+        """List Drive files in a folder with optional filtering."""
         query = f"'{parent_id}' in parents"
         if not include_folders:
             query += " and mimeType != 'application/vnd.google-apps.folder'"
@@ -141,6 +145,7 @@ class DriveFacade:
         return files
 
     def ensure_folder(self, parent_id: str, name: str) -> str:
+        """Return an existing child folder ID or create the folder if missing."""
         cache_key = f"{parent_id}/{name}"
         if cache_key in FOLDER_CACHE:
             return FOLDER_CACHE[cache_key]
@@ -263,6 +268,7 @@ class DriveFacade:
     def move_file(
         self, file_id: str, *, new_parent_id: str, remove_from_parents: bool = True
     ) -> None:
+        """Move a Drive file into a target folder and optionally detach old parents."""
         file_meta = execute_with_retry(
             lambda: (
                 self._service.files()
@@ -294,6 +300,7 @@ class DriveFacade:
         )
 
     def download_file(self, file_id: str, destination_path: str) -> None:
+        """Download a Drive file to a local filesystem path."""
         # Chunked downloads happen client-side, but the initial request creation can fail.
         request = execute_with_retry(
             lambda: self._service.files().get_media(fileId=file_id),
@@ -340,6 +347,7 @@ class DriveFacade:
         dest_name: str | None = None,
         mime_type: str | None = None,
     ) -> str:
+        """Upload a local file to Drive and return the created file ID."""
         upload_name = dest_name or os.path.basename(filepath)
         file_metadata = {"name": upload_name, "parents": [parent_id]}
         media = MediaFileUpload(filepath, mimetype=mime_type, resumable=True)

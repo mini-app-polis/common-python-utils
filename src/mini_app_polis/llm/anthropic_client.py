@@ -95,6 +95,7 @@ class AnthropicLLM(LLMClient):
         json_schema: dict[str, Any],
         schema_name: str = "output",
     ) -> LLMResult:
+        """Generate schema-validated JSON from Anthropic model responses."""
         # Anthropic messages: system prompt is a separate field; messages cannot
         # include role="system". We split them here.
         system_parts: list[str] = []

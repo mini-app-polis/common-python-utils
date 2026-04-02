@@ -46,6 +46,7 @@ exception = _logger.exception
 
 
 def get_logger() -> logging.Logger:
+    """Return the shared mini_app_polis logger instance."""
     return _logger
 
 

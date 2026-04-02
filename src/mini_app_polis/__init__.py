@@ -1,34 +1,15 @@
-"""mini_app_polis — shared Python utilities (import namespace).
+"""mini_app_polis — common Python utilities for the MiniAppPolis ecosystem.
 
-**Package identity**
+Install name:  common-python-utils
+Import name:   mini_app_polis
 
-* **PyPI / dependency name:** ``common-python-utils``
-* **Import namespace:** ``mini_app_polis``
-* **Repository:** https://github.com/mini-app-polis/common-python-utils
+Install via uv:
+    mini_app_polis = { git = "https://github.com/mini-app-polis/common-python-utils", tag = "v2.x.x" }
 
-**Pinning in pyproject.toml** (example)::
-
-    [tool.uv.sources]
-    common-python-utils = {
-        git = "https://github.com/mini-app-polis/common-python-utils.git",
-        tag = "v2.1.0",
-    }
-
-    [project]
-    dependencies = [
-        "common-python-utils",
-    ]
-
-**Imports** (examples)::
-
+Import:
     from mini_app_polis.api import KaianoApiClient
     from mini_app_polis.google import GoogleAPI
-
-**Naming:** The ``mini_app_polis`` package name is a legacy artefact. Renaming to
-something like ``kaiano-common-utils`` / ``kaiano_common_utils`` would better
-match ecosystem convention but requires a **semver major** and coordinated
-updates across consumers (``kaianolevine-api``, ``deejay-set-processor-dev``,
-``evaluator-cog``, etc.). Do not rename in a patch or minor release.
+    from mini_app_polis import logger
 """
 
 from __future__ import annotations

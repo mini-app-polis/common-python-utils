@@ -23,6 +23,7 @@ class M3UEntry:
     last_play: str = ""
 
     def dedup_key(self) -> str:
+        """Return a normalized key used to deduplicate parsed M3U entries."""
         return "||".join(
             [
                 self.dt.strip().lower(),
@@ -37,6 +38,7 @@ class ParseFacade:
 
     @staticmethod
     def parse_time_str(time_str: str) -> int:
+        """Convert an HH:MM timestamp into minutes from midnight."""
         try:
             h, m = map(int, str(time_str).split(":"))
             return h * 60 + m
@@ -45,6 +47,7 @@ class ParseFacade:
 
     @staticmethod
     def extract_tag_value(line: str, tag: str) -> str:
+        """Extract an XML-like tag value from a VirtualDJ EXTVDJ line."""
         match = re.search(rf"<{tag}>(.*?)</{tag}>", line, re.I)
         return match.group(1).strip() if match else ""
 
@@ -54,6 +57,7 @@ class ParseFacade:
         existing_keys: set[str],
         file_date_str: str,
     ) -> list[M3UEntry]:
+        """Parse EXTVDJ lines into ordered, deduplicated M3UEntry records."""
         tz = ZoneInfo(config.TIMEZONE)
         year, month, day = map(int, file_date_str.split("-"))
         base_date = datetime.datetime(year, month, day, 0, 0, tzinfo=tz)

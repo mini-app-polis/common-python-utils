@@ -5,6 +5,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class DriveFile:
+    """Represent a lightweight Drive file listing record."""
+
     id: str
     name: str
     mime_type: str | None = None

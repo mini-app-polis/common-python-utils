@@ -38,10 +38,14 @@ _spotify_api: SpotifyAPI | None = None
 
 
 class NoopCacheHandler(CacheHandler):
+    """Disable token cache persistence for refresh-token authentication flows."""
+
     def get_cached_token(self):
+        """Always bypass Spotipy token cache reads."""
         return None
 
     def save_token_to_cache(self, token_info):
+        """Ignore Spotipy token cache writes."""
         pass
 
 
@@ -60,10 +64,12 @@ class SpotifyAPI:
 
     @classmethod
     def from_env(cls) -> SpotifyAPI:
+        """Create a Spotify facade configured from environment variables."""
         return cls()
 
     @property
     def client(self) -> Spotify:
+        """Return an authenticated Spotify client, initializing it lazily."""
         if self._client is not None:
             return self._client
 
@@ -173,6 +179,7 @@ class SpotifyAPI:
     # --- Public facade methods ---
 
     def search_track(self, artist: str, title: str) -> str | None:
+        """Search Spotify for an artist/title pair and return the best track URI."""
         sp = self.client
         query = f"artist:{artist} track:{title}"
 
@@ -212,6 +219,7 @@ class SpotifyAPI:
         return tracks[0]["uri"]
 
     def create_playlist(self, name: str, description: str) -> str | None:
+        """Create a Spotify playlist and return its playlist ID."""
         sp = self.client
         try:
             user_id = self._call_with_retry(
@@ -233,6 +241,7 @@ class SpotifyAPI:
     def add_tracks_to_specific_playlist(
         self, playlist_id: str, uris: list[str], allowDuplicates: bool = False
     ) -> None:
+        """Add track URIs to a playlist with optional duplicate preservation."""
         if not playlist_id:
             raise ValueError("Missing playlist_id parameter.")
         if not uris:
@@ -291,6 +300,7 @@ class SpotifyAPI:
         log.info(f"Added {len(uris_to_add)} track(s) to playlist {playlist_id}.")
 
     def get_playlist_tracks(self, playlist_id: str) -> list[str]:
+        """Return all track URIs currently present in a playlist."""
         if not playlist_id:
             return []
 
@@ -354,6 +364,7 @@ class SpotifyAPI:
             log.error(f"❌ Failed to clear playlist {playlist_id}: {e}")
 
     def find_playlist_by_name(self, name: str):
+        """Find a user playlist by exact name and return its ID payload."""
         try:
             sp = (
                 self._client_from_refresh()
@@ -381,6 +392,7 @@ class SpotifyAPI:
             return None
 
     def trim_playlist_to_limit(self, limit: int = 200) -> None:
+        """Remove oldest playlist items until the playlist is at or under the limit."""
         if not config.SPOTIFY_PLAYLIST_ID:
             raise OSError("Missing SPOTIFY_PLAYLIST_ID environment variable.")
 
@@ -420,6 +432,7 @@ def get_spotify_client() -> Spotify:
 
 
 def get_spotify_client_from_refresh() -> Spotify:
+    """Return a Spotify client authenticated through refresh-token flow."""
     global _spotify_api
     if _spotify_api is None:
         _spotify_api = SpotifyAPI.from_env()
@@ -437,10 +450,12 @@ def _get_api() -> SpotifyAPI:
 
 
 def search_track(artist: str, title: str) -> str | None:
+    """Search Spotify for an artist/title pair and return the best track URI."""
     return _get_api().search_track(artist, title)
 
 
 def trim_playlist_to_limit(limit: int = 200) -> None:
+    """Trim the configured playlist to a maximum number of tracks."""
     _get_api().trim_playlist_to_limit(limit)
 
 
@@ -448,10 +463,12 @@ def create_playlist(
     name: str,
     description: str = "Generated automatically by Deejay Marvel Automation Tools. Spreadsheets of history, and song not found on Spotify can be found at www.mini_app_polislevine.com/dj-marvel",
 ) -> str | None:
+    """Create a Spotify playlist and return its playlist ID."""
     return _get_api().create_playlist(name, description)
 
 
 def add_tracks_to_playlist(uris: list[str], allowDuplicates: bool = False) -> None:
+    """Add tracks to the configured default Spotify playlist."""
     if not config.SPOTIFY_PLAYLIST_ID:
         raise ValueError("SPOTIFY_PLAYLIST_ID is not set")
     _get_api().add_tracks_to_specific_playlist(
@@ -462,18 +479,22 @@ def add_tracks_to_playlist(uris: list[str], allowDuplicates: bool = False) -> No
 def add_tracks_to_specific_playlist(
     playlist_id: str, uris: list[str], allowDuplicates: bool = False
 ) -> None:
+    """Add tracks to a specific Spotify playlist ID."""
     _get_api().add_tracks_to_specific_playlist(
         playlist_id, uris, allowDuplicates=allowDuplicates
     )
 
 
 def find_playlist_by_name(name: str):
+    """Find a playlist by exact name in the current Spotify account."""
     return _get_api().find_playlist_by_name(name)
 
 
 def get_playlist_tracks(playlist_id: str) -> list[str]:
+    """Return all track URIs in a specific Spotify playlist."""
     return _get_api().get_playlist_tracks(playlist_id)
 
 
 def clear_playlist(playlist_id: str) -> None:
+    """Remove all tracks from a specific Spotify playlist."""
     _get_api().clear_playlist(playlist_id)

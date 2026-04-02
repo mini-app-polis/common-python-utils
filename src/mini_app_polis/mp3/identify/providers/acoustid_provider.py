@@ -44,6 +44,7 @@ class AcoustIdIdentifier:
         self.retry_sleep_s = float(retry_sleep_s)
 
     def identify(self, path: str) -> Iterable[TrackId]:
+        """Return high-confidence MusicBrainz candidates for a local audio file."""
         basename = os.path.basename(path)
 
         for attempt in range(1, self.retries + 1):

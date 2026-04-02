@@ -97,6 +97,7 @@ class OpenAILLM(LLMClient):
         json_schema: dict[str, Any],
         schema_name: str = "output",
     ) -> LLMResult:
+        """Generate schema-validated JSON using OpenAI structured output with fallback."""
         # Prefer Responses API Structured Outputs (use strict schema so API accepts it)
         try:
             strict_schema = _schema_strict_for_api(json_schema)

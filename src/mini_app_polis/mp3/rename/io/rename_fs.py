@@ -83,6 +83,8 @@ def _safe_component(value: str | None) -> str:
 
 @dataclass
 class RenameProposal:
+    """Describe a proposed local rename operation."""
+
     src_path: str
     dest_path: str
     dest_name: str

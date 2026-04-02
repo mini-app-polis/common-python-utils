@@ -70,6 +70,7 @@ class KaianoApiClient:
 
     @classmethod
     def from_env(cls) -> KaianoApiClient:
+        """Build a client using environment-based configuration defaults."""
         return cls()
 
     def _headers(self) -> dict[str, str]:

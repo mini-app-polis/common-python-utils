@@ -22,6 +22,7 @@ def parse_json(text: str) -> dict[str, Any]:
 
 
 def validate_json(instance: dict[str, Any], schema: dict[str, Any]) -> None:
+    """Validate parsed JSON data against the provided JSON schema."""
     try:
         validate(instance=instance, schema=schema)
     except _SchemaValidationError as e:

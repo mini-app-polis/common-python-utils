@@ -8,6 +8,8 @@ from .types import LLMMessage, LLMResult
 
 @dataclass(frozen=True)
 class LLMConfig:
+    """Define provider and runtime settings for an LLM client."""
+
     provider: str
     model: str
     api_key_env: str
@@ -24,4 +26,5 @@ class LLMClient(Protocol):
         json_schema: dict[str, Any],
         schema_name: str = "output",
     ) -> LLMResult:
+        """Generate structured JSON output validated against a schema."""
         raise NotImplementedError
