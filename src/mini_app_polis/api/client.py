@@ -1,3 +1,31 @@
+"""HTTP client for Kaiano internal APIs (X-Owner-Id era).
+
+**Current auth:** Every request sends ``X-Owner-Id`` derived from
+``KAIANO_API_OWNER_ID`` (falling back to ``OWNER_ID``). This is appropriate only
+for Railway service-to-service calls on a private network.
+
+**``KAIANO_API_CLERK_TOKEN`` is not read:** The variable appears in ``.env.example``
+and the README as a forward reference, but ``KaianoApiClient._headers`` does
+not use it. Setting it today has **no** effect — this is intentional
+documentation debt until Clerk M2M ships, not an oversight in ``_headers``.
+
+**Clerk M2M upgrade path:**
+
+1. Add ``clerk-backend-api`` (or the maintained Clerk Python SDK) to package
+   dependencies.
+2. Issue and cache a short-lived token using a JWT Template in the Clerk
+   dashboard.
+3. Change ``_headers()`` to send ``Authorization: Bearer <token>`` and stop
+   sending ``X-Owner-Id`` for authenticated calls.
+4. Remove ``KAIANO_API_OWNER_ID`` / ``OWNER_ID`` from the client constructor
+   surface; add ``CLERK_SECRET_KEY`` (or equivalent) for machine auth.
+
+**Cross-repo coupling:** ``kaianolevine-api`` and this client must migrate
+together. If the API enables ``CLERK_AUTH_ENABLED=true`` while this client still
+sends only ``X-Owner-Id``, pipeline writes will return 401. Deploy updated clients
+first, then flip the API flag.
+"""
+
 from __future__ import annotations
 
 import os
@@ -17,6 +45,9 @@ class KaianoApiClient:
                             e.g. https://deejay-marvel-api.up.railway.app
       KAIANO_API_OWNER_ID — owner ID passed as X-Owner-Id header;
                             falls back to OWNER_ID if not set
+
+    ``KAIANO_API_CLERK_TOKEN`` is documented for future Clerk M2M use but is
+    **not** read by this class today; see the module docstring.
     """
 
     def __init__(
@@ -42,15 +73,10 @@ class KaianoApiClient:
         return cls()
 
     def _headers(self) -> dict[str, str]:
-        # CURRENT: X-Owner-Id header for internal processor-to-API calls.
-        # No real security — intended for trusted internal use only.
+        # X-Owner-Id only; KAIANO_API_CLERK_TOKEN is intentionally not read here
+        # (see module docstring — forward reference until Clerk M2M lands).
         #
-        # FUTURE: Replace with Clerk M2M token when real user auth is needed:
-        #   1. Create a JWT Template in the Clerk dashboard
-        #   2. Use Clerk Backend SDK to issue short-lived tokens
-        #   3. Cache the token until expiry (typically 1 hour)
-        #   4. Send as Authorization: Bearer <token> instead of X-Owner-Id
-        #
+        # Future: Clerk Backend SDK + JWT Template → Authorization: Bearer <token>.
         # See: https://clerk.com/docs/backend-requests/making/jwt-templates
         return {
             "Content-Type": "application/json",
