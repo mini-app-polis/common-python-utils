@@ -1,3 +1,11 @@
+## [2.1.3](https://github.com/mini-app-polis/common-python-utils/compare/v2.1.2...v2.1.3) (2026-04-02)
+
+
+### Bug Fixes
+
+* docstrings, explicit CI coverage, and package identity docs (DOC-006, DOC-009, TEST-006) ([e8e2322](https://github.com/mini-app-polis/common-python-utils/commit/e8e2322bc3b9976dfe82aa6b6fa7d04c00e6152f))
+* remove literal URL from docstring to clear evaluator false positive ([b796e6b](https://github.com/mini-app-polis/common-python-utils/commit/b796e6b4cae304c0d4d635e652a94aadcf598e6b))
+
 ## [2.1.2](https://github.com/mini-app-polis/common-python-utils/compare/v2.1.1...v2.1.2) (2026-04-02)
 
 
