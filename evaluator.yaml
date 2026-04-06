@@ -1,0 +1,17 @@
+# common-python-utils / evaluator.yaml
+# Per-repo evaluation configuration — ecosystem-standards ADR-001, ADR-002
+
+type: shared-library
+
+traits:
+  - logger-primitive
+  # src/mini_app_polis/logger.py is the logger implementation — this repo
+  # defines the logger primitive, it cannot consume itself (CD-009).
+
+exemptions:
+  - rule: PY-011
+    reason: "Intentional split package identity: distribution name is common-python-utils, import package is mini_app_polis. This predates PY-011 and is a deliberate branding decision — the mini_app_polis namespace is stable and used across all consumers. Renaming the import package is a breaking change deferred indefinitely."
+
+# PY-006 (must depend on common-python-utils) covered by shared-library type scoping.
+# CD-002, CD-010 (observability) covered by shared-library type scoping.
+# TEST-001/002/004 covered by shared-library type scoping.
