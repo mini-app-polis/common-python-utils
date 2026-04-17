@@ -1,6 +1,6 @@
 [project]
 name = "common-python-utils"
-version = "2.4.1"
+version = "2.4.2"
 description = "Common utility functions shared across Kaiano's projects."
 authors = [{ name = "Kaiano Levine", email = "kaiano@example.com" }]
 license = { text = "MIT" }
