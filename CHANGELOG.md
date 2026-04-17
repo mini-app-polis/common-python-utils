@@ -1,3 +1,10 @@
+# [2.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v2.1.3...v2.2.0) (2026-04-17)
+
+
+### Features
+
+* upgrading auth to m2m clerk pattern ([9512b0c](https://github.com/mini-app-polis/common-python-utils/commit/9512b0c4c7ad8c28405389ba1795f84f809eb0ea))
+
 ## [2.1.3](https://github.com/mini-app-polis/common-python-utils/compare/v2.1.2...v2.1.3) (2026-04-02)
 
 
