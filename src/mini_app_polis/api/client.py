@@ -11,6 +11,7 @@ cached until 60 seconds before expiry and refreshed automatically.
 
 from __future__ import annotations
 
+import logging as _logging
 import os
 import threading
 import time
@@ -19,6 +20,8 @@ from typing import Any
 import httpx
 
 from .errors import KaianoApiError
+
+_log = _logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Clerk M2M token cache (module-level, thread-safe)
@@ -32,12 +35,20 @@ _REFRESH_BUFFER_SECS = 60.0  # refresh this many seconds before expiry
 
 def _create_clerk_m2m_token(machine_secret: str) -> tuple[str, float]:
     """
-    Exchange the machine secret key for a short-lived Clerk M2M JWT.
-
+    Exchange the machine secret key for a short-lived Clerk M2M token.
     Returns (token_string, expires_at_monotonic).
     Raises KaianoApiError on failure.
     """
     url = "https://api.clerk.com/v1/m2m_tokens"
+    request_body = {"tokenFormat": "jwt"}
+
+    _log.info(
+        "[m2m] creating token url=%s body=%s secret_prefix=%s",
+        url,
+        request_body,
+        machine_secret[:8] + "..." if machine_secret else "MISSING",
+    )
+
     with httpx.Client(timeout=10.0) as client:
         resp = client.post(
             url,
@@ -45,8 +56,14 @@ def _create_clerk_m2m_token(machine_secret: str) -> tuple[str, float]:
                 "Authorization": f"Bearer {machine_secret}",
                 "Content-Type": "application/json",
             },
-            json={"tokenFormat": "jwt"},
+            json=request_body,
         )
+
+    _log.info(
+        "[m2m] response status=%s body=%s",
+        resp.status_code,
+        resp.text[:500],
+    )
 
     if resp.status_code >= 400:
         raise KaianoApiError(
@@ -58,24 +75,22 @@ def _create_clerk_m2m_token(machine_secret: str) -> tuple[str, float]:
     data = resp.json()
     token: str = data["token"]
 
-    # Parse expiry from the JWT payload (base64url middle segment)
     import base64
     import json as _json
 
     parts = token.split(".")
     if len(parts) == 3:
-        # Add padding
         padded = parts[1] + "=" * (-len(parts[1]) % 4)
         payload = _json.loads(base64.urlsafe_b64decode(padded))
         exp: int = payload.get("exp", 0)
-        # Convert unix timestamp to monotonic equivalent
         unix_now = time.time()
         mono_now = time.monotonic()
         expires_at = mono_now + max(0.0, exp - unix_now)
+        _log.info("[m2m] got JWT token sub=%s exp=%s", payload.get("sub"), exp)
     else:
-        # Opaque token — Clerk returns expiry separately
         expires_in: int = data.get("expires_in", 3600)
         expires_at = time.monotonic() + expires_in
+        _log.info("[m2m] got opaque token expires_in=%s", expires_in)
 
     return token, expires_at
 
