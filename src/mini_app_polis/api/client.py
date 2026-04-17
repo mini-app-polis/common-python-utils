@@ -42,7 +42,7 @@ def _create_clerk_m2m_token(machine_secret: str) -> tuple[str, float]:
     url = "https://api.clerk.com/v1/m2m_tokens"
     request_body = {"tokenFormat": "jwt"}
 
-    _log.info(
+    _log.warning(
         "[m2m] creating token url=%s body=%s secret_prefix=%s",
         url,
         request_body,
@@ -59,7 +59,7 @@ def _create_clerk_m2m_token(machine_secret: str) -> tuple[str, float]:
             json=request_body,
         )
 
-    _log.info(
+    _log.warning(
         "[m2m] response status=%s body=%s",
         resp.status_code,
         resp.text[:500],
@@ -86,11 +86,11 @@ def _create_clerk_m2m_token(machine_secret: str) -> tuple[str, float]:
         unix_now = time.time()
         mono_now = time.monotonic()
         expires_at = mono_now + max(0.0, exp - unix_now)
-        _log.info("[m2m] got JWT token sub=%s exp=%s", payload.get("sub"), exp)
+        _log.warning("[m2m] got JWT token sub=%s exp=%s", payload.get("sub"), exp)
     else:
         expires_in: int = data.get("expires_in", 3600)
         expires_at = time.monotonic() + expires_in
-        _log.info("[m2m] got opaque token expires_in=%s", expires_in)
+        _log.warning("[m2m] got opaque token expires_in=%s", expires_in)
 
     return token, expires_at
 
