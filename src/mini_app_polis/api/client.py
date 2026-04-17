@@ -53,7 +53,7 @@ def _create_clerk_m2m_token(machine_secret: str) -> tuple[str, float]:
                 "Authorization": f"Bearer {machine_secret}",
                 "Content-Type": "application/json",
             },
-            json={"format": "jwt"},
+            json={},
         )
 
     if resp.status_code >= 400:
