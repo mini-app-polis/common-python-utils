@@ -1,3 +1,10 @@
+## [2.4.1](https://github.com/mini-app-polis/common-python-utils/compare/v2.4.0...v2.4.1) (2026-04-17)
+
+
+### Bug Fixes
+
+* debug ([6c9b474](https://github.com/mini-app-polis/common-python-utils/commit/6c9b474602e6fe6f546e270e58fc387753b25a92))
+
 # [2.4.0](https://github.com/mini-app-polis/common-python-utils/compare/v2.3.0...v2.4.0) (2026-04-17)
 
 
