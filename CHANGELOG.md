@@ -1,3 +1,10 @@
+# [2.3.0](https://github.com/mini-app-polis/common-python-utils/compare/v2.2.0...v2.3.0) (2026-04-17)
+
+
+### Features
+
+* updating m2m auth ([bdafc21](https://github.com/mini-app-polis/common-python-utils/commit/bdafc218ae267f73c6685e438d884b0bfc4ddc8e))
+
 # [2.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v2.1.3...v2.2.0) (2026-04-17)
 
 
