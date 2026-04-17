@@ -1,20 +1,12 @@
 """HTTP client for Kaiano internal APIs.
 
-**Current auth (Project Keystone Phase 2):**
-Sends ``Authorization: Bearer <m2m_jwt>`` when ``KAIANO_API_CLERK_MACHINE_SECRET``
-is set. The JWT is created via Clerk's M2M token API using the machine secret key
-for the ``miniappolis-cogs`` machine, cached until 60 seconds before expiry,
-and refreshed automatically.
-
-Falls back to ``X-Owner-Id`` (legacy) when the machine secret is not configured.
-This fallback is removed in Phase 3 when ``flags.keystone.legacy_auth_enabled``
-is flipped to FALSE.
+**Auth:** Sends ``Authorization: Bearer <m2m_jwt>`` using a Clerk M2M JWT
+created from the ``miniappolis-cogs`` machine secret key. The token is
+cached until 60 seconds before expiry and refreshed automatically.
 
 **Env vars:**
   KAIANO_API_BASE_URL             — base URL of the target API service
-  KAIANO_API_CLERK_MACHINE_SECRET — ak_xxx secret for miniappolis-cogs machine
-  KAIANO_API_OWNER_ID             — legacy fallback owner ID (X-Owner-Id era)
-  OWNER_ID                        — legacy fallback owner ID (older convention)
+  KAIANO_API_CLERK_MACHINE_SECRET — machine secret key for miniappolis-cogs
 """
 
 from __future__ import annotations
@@ -53,7 +45,7 @@ def _create_clerk_m2m_token(machine_secret: str) -> tuple[str, float]:
                 "Authorization": f"Bearer {machine_secret}",
                 "Content-Type": "application/json",
             },
-            json={},
+            json={"tokenFormat": "jwt"},
         )
 
     if resp.status_code >= 400:
@@ -112,26 +104,18 @@ class KaianoApiClient:
 
     Reads configuration from environment variables:
       KAIANO_API_BASE_URL             — base URL of the target service
-      KAIANO_API_CLERK_MACHINE_SECRET — Clerk M2M machine secret (preferred)
-      KAIANO_API_OWNER_ID             — legacy X-Owner-Id fallback
-      OWNER_ID                        — legacy X-Owner-Id fallback (older)
+      KAIANO_API_CLERK_MACHINE_SECRET — Clerk M2M machine secret
     """
 
     def __init__(
         self,
         base_url: str | None = None,
-        owner_id: str | None = None,
         machine_secret: str | None = None,
         timeout: float = 30.0,
         max_retries: int = 3,
     ):
         self.base_url = (base_url or os.environ.get("KAIANO_API_BASE_URL", "")).rstrip(
             "/"
-        )
-        self.owner_id = (
-            owner_id
-            or os.environ.get("KAIANO_API_OWNER_ID")
-            or os.environ.get("OWNER_ID", "dev-owner")
         )
         self.machine_secret = machine_secret or os.environ.get(
             "KAIANO_API_CLERK_MACHINE_SECRET"
@@ -145,22 +129,17 @@ class KaianoApiClient:
         return cls()
 
     def _headers(self) -> dict[str, str]:
-        """
-        Returns auth headers for API requests.
-
-        Prefers Clerk M2M JWT (Authorization: Bearer) when machine secret is
-        available. Falls back to X-Owner-Id for legacy compatibility.
-        """
-        if self.machine_secret:
-            token = _get_m2m_token(self.machine_secret)
-            return {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {token}",
-            }
-        # Legacy fallback — remove when flags.keystone.legacy_auth_enabled = FALSE
+        """Returns auth headers for API requests."""
+        if not self.machine_secret:
+            raise KaianoApiError(
+                status_code=0,
+                message="KAIANO_API_CLERK_MACHINE_SECRET is not set",
+                path="",
+            )
+        token = _get_m2m_token(self.machine_secret)
         return {
             "Content-Type": "application/json",
-            "X-Owner-Id": self.owner_id,
+            "Authorization": f"Bearer {token}",
         }
 
     def post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
