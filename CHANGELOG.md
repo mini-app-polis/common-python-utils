@@ -1,3 +1,10 @@
+# [2.4.0](https://github.com/mini-app-polis/common-python-utils/compare/v2.3.0...v2.4.0) (2026-04-17)
+
+
+### Features
+
+* finishing the proper implementation of auth through clerk ([5ec090e](https://github.com/mini-app-polis/common-python-utils/commit/5ec090ec2c63fe6907a4f5ecf144e263d7379498))
+
 # [2.3.0](https://github.com/mini-app-polis/common-python-utils/compare/v2.2.0...v2.3.0) (2026-04-17)
 
 
