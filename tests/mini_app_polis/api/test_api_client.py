@@ -142,6 +142,7 @@ def test_from_env_uses_environment_variables(monkeypatch) -> None:
     monkeypatch.delenv("KAIANO_API_BASE_URL", raising=False)
     monkeypatch.delenv("KAIANO_API_OWNER_ID", raising=False)
     monkeypatch.delenv("OWNER_ID", raising=False)
+    monkeypatch.delenv("KAIANO_API_CLERK_MACHINE_SECRET", raising=False)
 
     from_env = KaianoApiClient.from_env()
     assert from_env.base_url == ""
@@ -158,6 +159,7 @@ def test_from_env_uses_environment_variables(monkeypatch) -> None:
 def test_headers_include_content_type_and_owner_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Without machine secret — legacy X-Owner-Id path
     client = KaianoApiClient(
         base_url="https://example.com",
         owner_id="owner-123",
@@ -173,6 +175,7 @@ def test_headers_include_content_type_and_owner_id(
 def test_headers_return_x_owner_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Without machine secret — legacy path
     client = KaianoApiClient(
         base_url="https://example.com",
         owner_id="owner-xyz",
@@ -182,6 +185,89 @@ def test_headers_return_x_owner_id(
     h = client._headers()
     assert h.get("X-Owner-Id") == "owner-xyz"
     assert "Authorization" not in h
+
+
+def test_headers_return_bearer_token_when_machine_secret_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with patch(
+        "mini_app_polis.api.client._get_m2m_token", return_value="test-jwt"
+    ) as mock_get:
+        client = KaianoApiClient(
+            base_url="https://example.com",
+            owner_id="owner-123",
+            machine_secret="ak_test",
+            timeout=10.0,
+            max_retries=3,
+        )
+        h = client._headers()
+
+    mock_get.assert_called_once_with("ak_test")
+    assert h.get("Authorization") == "Bearer test-jwt"
+    assert "X-Owner-Id" not in h
+
+
+def test_post_sends_bearer_token_when_machine_secret_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = MagicMock()
+    response.status_code = 200
+    response.text = "ok"
+    response.json.return_value = {"ok": True}
+
+    mock_http_client = MagicMock()
+    mock_http_client.post.return_value = response
+
+    with (
+        patch("mini_app_polis.api.client.httpx.Client") as mock_client_cls,
+        patch("mini_app_polis.api.client._get_m2m_token", return_value="test-jwt"),
+    ):
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+
+        client = KaianoApiClient(
+            base_url="https://example.com",
+            owner_id="owner-123",
+            machine_secret="ak_test",
+            timeout=10.0,
+            max_retries=3,
+        )
+        out = client.post("/v1/ingest", payload={"x": 1})
+
+    mock_http_client.post.assert_called_once_with(
+        "https://example.com/v1/ingest",
+        json={"x": 1},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": "Bearer test-jwt",
+        },
+    )
+    assert out == {"ok": True}
+
+
+def test_m2m_token_cached_across_calls(monkeypatch: pytest.MonkeyPatch) -> None:
+    import mini_app_polis.api.client as client_mod
+
+    # Reset module-level cache
+    client_mod._cached_token = None
+    client_mod._token_expires_at = 0.0
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {"token": "cached-jwt", "expires_in": 3600}
+
+    with patch("mini_app_polis.api.client.httpx.Client") as mock_cls:
+        mock_cls.return_value.__enter__.return_value.post.return_value = mock_token_resp
+
+        t1 = client_mod._get_m2m_token("ak_test")
+        t2 = client_mod._get_m2m_token("ak_test")
+
+    # Token endpoint called only once despite two calls
+    assert mock_cls.return_value.__enter__.return_value.post.call_count == 1
+    assert t1 == t2 == "cached-jwt"
+
+    # Cleanup
+    client_mod._cached_token = None
+    client_mod._token_expires_at = 0.0
 
 
 def test_get_returns_parsed_json_on_200_response(
