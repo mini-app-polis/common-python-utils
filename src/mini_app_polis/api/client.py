@@ -1,8 +1,8 @@
 """HTTP client for Kaiano internal APIs.
 
-**Auth:** Sends ``Authorization: Bearer <m2m_jwt>`` using a Clerk M2M JWT
-created from the ``miniappolis-cogs`` machine secret key. The token is
-cached until 60 seconds before expiry and refreshed automatically.
+**Auth:** Sends ``Authorization: Bearer <token>`` using a Clerk M2M opaque
+token created from the ``miniappolis-cogs`` machine secret key. The token
+is cached until 60 seconds before expiry and refreshed automatically.
 
 **Env vars:**
   KAIANO_API_BASE_URL             — base URL of the target API service
@@ -35,20 +35,12 @@ _REFRESH_BUFFER_SECS = 60.0  # refresh this many seconds before expiry
 
 def _create_clerk_m2m_token(machine_secret: str) -> tuple[str, float]:
     """
-    Exchange the machine secret key for a short-lived Clerk M2M token.
+    Exchange the machine secret key for a Clerk M2M opaque token.
+
     Returns (token_string, expires_at_monotonic).
     Raises KaianoApiError on failure.
     """
     url = "https://api.clerk.com/v1/m2m_tokens"
-    request_body = {"tokenFormat": "jwt"}
-
-    _log.warning(
-        "[m2m] creating token url=%s body=%s secret_prefix=%s",
-        url,
-        request_body,
-        machine_secret[:8] + "..." if machine_secret else "MISSING",
-    )
-
     with httpx.Client(timeout=10.0) as client:
         resp = client.post(
             url,
@@ -56,16 +48,16 @@ def _create_clerk_m2m_token(machine_secret: str) -> tuple[str, float]:
                 "Authorization": f"Bearer {machine_secret}",
                 "Content-Type": "application/json",
             },
-            json=request_body,
+            json={},
         )
 
-    _log.warning(
-        "[m2m] response status=%s body=%s",
-        resp.status_code,
-        resp.text[:500],
-    )
-
     if resp.status_code >= 400:
+        _log.warning(
+            "[m2m] token creation failed status=%s body=%s secret_prefix=%s",
+            resp.status_code,
+            resp.text[:300],
+            machine_secret[:8] + "..." if machine_secret else "MISSING",
+        )
         raise KaianoApiError(
             status_code=resp.status_code,
             message=f"Clerk M2M token creation failed: {resp.text}",
@@ -75,28 +67,16 @@ def _create_clerk_m2m_token(machine_secret: str) -> tuple[str, float]:
     data = resp.json()
     token: str = data["token"]
 
-    import base64
-    import json as _json
+    # Opaque token — Clerk returns expiry as expires_in seconds
+    expires_in: int = data.get("expires_in", 3600)
+    expires_at = time.monotonic() + expires_in
 
-    parts = token.split(".")
-    if len(parts) == 3:
-        padded = parts[1] + "=" * (-len(parts[1]) % 4)
-        payload = _json.loads(base64.urlsafe_b64decode(padded))
-        exp: int = payload.get("exp", 0)
-        unix_now = time.time()
-        mono_now = time.monotonic()
-        expires_at = mono_now + max(0.0, exp - unix_now)
-        _log.warning("[m2m] got JWT token sub=%s exp=%s", payload.get("sub"), exp)
-    else:
-        expires_in: int = data.get("expires_in", 3600)
-        expires_at = time.monotonic() + expires_in
-        _log.warning("[m2m] got opaque token expires_in=%s", expires_in)
-
+    _log.info("[m2m] token created expires_in=%s", expires_in)
     return token, expires_at
 
 
 def _get_m2m_token(machine_secret: str) -> str:
-    """Return a cached M2M JWT, refreshing if within the buffer window."""
+    """Return a cached M2M token, refreshing if within the buffer window."""
     global _cached_token, _token_expires_at
 
     with _token_lock:
