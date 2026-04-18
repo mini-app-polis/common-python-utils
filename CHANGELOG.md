@@ -1,3 +1,10 @@
+# [2.5.0](https://github.com/mini-app-polis/common-python-utils/compare/v2.4.2...v2.5.0) (2026-04-18)
+
+
+### Features
+
+* finalizing on opaque m2m tokens ([93fac4d](https://github.com/mini-app-polis/common-python-utils/commit/93fac4d82f47d402cbda57da8864f55b08db628c))
+
 ## [2.4.2](https://github.com/mini-app-polis/common-python-utils/compare/v2.4.1...v2.4.2) (2026-04-17)
 
 
