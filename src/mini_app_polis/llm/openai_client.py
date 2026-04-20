@@ -27,6 +27,7 @@ def _schema_strict_for_api(schema: dict[str, Any]) -> dict[str, Any]:
     out["additionalProperties"] = False
 
     def fix(o: Any) -> None:
+        """TODO: describe this function."""
         if isinstance(o, dict):
             if "oneOf" in o and isinstance(o["oneOf"], list) and o["oneOf"]:
                 first = copy.deepcopy(o["oneOf"][0])

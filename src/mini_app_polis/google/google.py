@@ -68,6 +68,7 @@ class GoogleAPI:
         scopes: tuple[str, ...] | None = None,
         retry: RetryConfig | None = None,
     ) -> GoogleAPI:
+        """TODO: describe this function."""
         auth = AuthConfig(
             credentials_file=credentials_file, scopes=scopes or AuthConfig().scopes
         )

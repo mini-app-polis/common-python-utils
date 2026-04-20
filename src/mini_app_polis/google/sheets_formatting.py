@@ -37,6 +37,7 @@ class SheetsFormatter:
 
     @property
     def sheets_service(self) -> Any:
+        """TODO: describe this function."""
         if self._sheets_service is None:
             creds = load_credentials(self._auth)
             self._sheets_service = build_sheets_service(creds)
