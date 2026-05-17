@@ -60,9 +60,38 @@ _log = logger_mod.get_logger()
 Severity = Literal["SUCCESS", "WARN", "ERROR"]
 """Severities a cog may self-report.
 
-The API also accepts ``INFO`` for LLM-evaluator paths, but cogs reporting
-their own status don't need it — SUCCESS/WARN/ERROR is the full ladder
-of "did the run do its job?".
+The Kaiano API accepts five severities in ``/v1/evaluations``:
+``CRITICAL``, ``ERROR``, ``WARN``, ``INFO``, and ``SUCCESS``. This
+library deliberately exposes only the three that map cleanly to "did
+this flow run do its job?" — the question every self-reporting cog is
+answering:
+
+  SUCCESS — run completed end-to-end; nothing for a human to review.
+  WARN    — run completed but produced something worth a look.
+  ERROR   — flow itself crashed or terminally failed.
+
+``INFO`` and ``CRITICAL`` are intentionally absent from this enum:
+
+- **INFO** belongs to the LLM-evaluator and webhook paths, where a
+  neutral observation ("flow entered Running state", "config snapshot
+  recorded") is a useful signal. For a self-report at end-of-run there
+  is no informational outcome distinct from SUCCESS — a clean
+  "nothing to do" run is still a success. Collapsing INFO into SUCCESS
+  keeps the cog's mental model "did I do my job?" rather than "what
+  category of event was this?".
+
+- **CRITICAL** is reserved for cross-cog signals that no single flow
+  run can authoritatively raise — fleet-wide silence, repeated cluster
+  failures, security incidents. A cog that is critically broken
+  typically can't reach this code path at all (it died before
+  reporting); a cog that is healthy enough to post is at most ERROR.
+  Leaving CRITICAL out of the self-report enum prevents it from being
+  used as "ERROR but I really mean it", which would dilute the signal.
+
+If a future cog has a concrete need for INFO or CRITICAL as a
+self-report (not an LLM-evaluator finding), expand this Literal and
+extend the regression tests in ``test_pipeline_status.py``. The API
+already accepts the strings, so the change is library-only.
 """
 
 DEFAULT_DIMENSION = "pipeline_consistency"
