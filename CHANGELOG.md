@@ -1,3 +1,10 @@
+## [2.6.1](https://github.com/mini-app-polis/common-python-utils/compare/v2.6.0...v2.6.1) (2026-05-17)
+
+
+### Bug Fixes
+
+* updated for transcript cof eval support ([b04e024](https://github.com/mini-app-polis/common-python-utils/commit/b04e024ce49014937612d100d698490c6ed6fbfc))
+
 # [2.6.0](https://github.com/mini-app-polis/common-python-utils/compare/v2.5.0...v2.6.0) (2026-05-17)
 
 
