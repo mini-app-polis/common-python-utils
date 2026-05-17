@@ -1,3 +1,10 @@
+# [2.6.0](https://github.com/mini-app-polis/common-python-utils/compare/v2.5.0...v2.6.0) (2026-05-17)
+
+
+### Features
+
+* common pipeline eval structure moving to common ([d15df57](https://github.com/mini-app-polis/common-python-utils/commit/d15df575557bb1ff6c3b71195a27c2cb59f2cce4))
+
 # [2.5.0](https://github.com/mini-app-polis/common-python-utils/compare/v2.4.2...v2.5.0) (2026-04-18)
 
 
