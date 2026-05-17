@@ -50,8 +50,8 @@ from __future__ import annotations
 
 import contextlib
 import os
-from collections.abc import Callable
-from typing import Any, Literal
+from collections.abc import Callable, Iterable
+from typing import Any, Literal, TypedDict
 
 from mini_app_polis import logger as logger_mod
 
@@ -71,6 +71,27 @@ DEFAULT_DIMENSION = "pipeline_consistency"
 Cogs can override via the ``dimension`` keyword if they want to report
 on a different axis (e.g. ``data_quality``, ``freshness``).
 """
+
+
+class Finding(TypedDict, total=False):
+    """One row passed to :func:`post_findings`.
+
+    Required keys:
+
+    - ``severity`` — one of ``"SUCCESS"``, ``"WARN"``, ``"ERROR"``.
+    - ``finding`` — the human-readable finding text.
+
+    Optional keys:
+
+    - ``dimension`` — defaults to :data:`DEFAULT_DIMENSION` when omitted.
+    - ``suggestion`` — short remediation hint surfaced in the Pipeline
+      Health UI alongside the finding.
+    """
+
+    severity: Severity
+    finding: str
+    dimension: str
+    suggestion: str | None
 
 
 def get_prefect_logger() -> Any:
@@ -180,6 +201,111 @@ def _post_evaluation(payload: dict[str, Any]) -> None:
         )
 
 
+def post_findings(
+    *,
+    repo: str,
+    flow_name: str,
+    findings: Iterable[Finding],
+    source: str = "flow_inline",
+    production_only: bool = True,
+) -> None:
+    """Post one or more self-reported findings to ``/v1/evaluations``.
+
+    Each row is POSTed independently — one failed POST does not drop the
+    others. Used directly by cogs that emit multiple findings per run
+    (e.g. transcription-cog's voicenotes flow, which translates per-file
+    failure dicts into one row each); single-row callers should use the
+    :func:`post_run_finding` sugar instead.
+
+    Parameters
+    ----------
+    repo:
+        Name of the cog (e.g. ``"transcription-cog"``).
+    flow_name:
+        Name of the flow as it appears in Prefect.
+    findings:
+        Iterable of :class:`Finding` dicts. Each must have ``severity``
+        and ``finding``; may carry ``dimension`` and ``suggestion``.
+    source:
+        ``"flow_inline"`` for end-of-flow calls, ``"flow_hook"`` for
+        Prefect on_failure/on_crashed hook calls. Free-form otherwise.
+        Applied to **all** rows in this batch.
+    production_only:
+        When False, this call is a no-op regardless of env vars — used
+        by local-only or WIP flows that should never write to the
+        production evaluations table.
+
+    Best-effort: exceptions inside the HTTP layer are logged, never
+    raised. Rows with empty ``finding`` text are skipped with a warning.
+    """
+    logger = get_prefect_logger()
+    rows = list(findings)
+
+    if not _should_post(production_only):
+        logger.debug(
+            "pipeline_status: batch suppressed "
+            "(repo=%s flow=%s rows=%d production_only=%s)",
+            repo,
+            flow_name,
+            len(rows),
+            production_only,
+        )
+        return
+
+    if not rows:
+        logger.debug(
+            "pipeline_status: empty findings batch (repo=%s flow=%s)",
+            repo,
+            flow_name,
+        )
+        return
+
+    run_id = get_run_id()
+    for row in rows:
+        severity = row.get("severity", "WARN")
+        finding_text = (row.get("finding") or "").strip()
+        if not finding_text:
+            logger.warning(
+                "pipeline_status: skipping row with empty finding text "
+                "(repo=%s flow=%s severity=%s)",
+                repo,
+                flow_name,
+                severity,
+            )
+            continue
+
+        payload: dict[str, Any] = {
+            "run_id": run_id,
+            "repo": repo,
+            "flow_name": flow_name,
+            "dimension": row.get("dimension") or DEFAULT_DIMENSION,
+            "severity": severity,
+            "finding": finding_text,
+            "source": source,
+        }
+        suggestion = row.get("suggestion")
+        if suggestion is not None:
+            payload["suggestion"] = suggestion
+
+        try:
+            _post_evaluation(payload)
+        except Exception:
+            # Defense in depth: _post_evaluation already handles its own
+            # exceptions, but post_findings must never propagate to flow
+            # code. Per-row error isolation: one bad POST does not abort
+            # the rest of the batch. Logging is itself best-effort —
+            # some test stubs ship logger objects without .exception(),
+            # and a crash in the error-reporting path would defeat the
+            # whole guarantee.
+            with contextlib.suppress(Exception):
+                logger.exception(
+                    "pipeline_status: row POST raised unexpectedly "
+                    "(should be best-effort) repo=%s flow=%s",
+                    repo,
+                    flow_name,
+                )
+
+
 def post_run_finding(
     flow_name: str,
     severity: Severity,
@@ -187,11 +313,16 @@ def post_run_finding(
     *,
     repo: str,
     dimension: str = DEFAULT_DIMENSION,
+    suggestion: str | None = None,
     production_only: bool = True,
     source: str = "flow_inline",
     **extras: Any,
 ) -> None:
     """Emit exactly one self-reported finding for this run.
+
+    Single-row convenience wrapper around :func:`post_findings` for the
+    common end-of-run case: one severity, one finding text, a sprinkle
+    of counters that get appended to the text as ``k=v`` pairs.
 
     Parameters
     ----------
@@ -207,6 +338,9 @@ def post_run_finding(
         Name of the cog (e.g. ``"deejay-cog"``). Required.
     dimension:
         Evaluation dimension; defaults to ``"pipeline_consistency"``.
+    suggestion:
+        Optional remediation hint surfaced alongside the finding in
+        the Pipeline Health UI.
     production_only:
         When False, this call is a no-op regardless of env vars — used
         by local-only or WIP flows that should never write to the
@@ -223,56 +357,25 @@ def post_run_finding(
     Best-effort: exceptions inside the HTTP layer are logged, never
     raised.
     """
-    logger = get_prefect_logger()
-
     if severity == "SUCCESS" and text is None:
         text = "Run completed successfully."
 
     text_final = _merge_extras_into_text(text or "", extras).strip()
-
-    if not _should_post(production_only):
-        logger.debug(
-            "pipeline_status finding suppressed "
-            "(repo=%s flow=%s severity=%s production_only=%s)",
-            repo,
-            flow_name,
-            severity,
-            production_only,
-        )
-        return
-
-    if not text_final:
-        logger.warning(
-            "pipeline_status: refusing to post finding with empty text "
-            "(repo=%s flow=%s severity=%s)",
-            repo,
-            flow_name,
-            severity,
-        )
-        return
-
-    payload = {
-        "run_id": get_run_id(),
-        "repo": repo,
-        "flow_name": flow_name,
-        "dimension": dimension,
+    row: Finding = {
         "severity": severity,
         "finding": text_final,
-        "source": source,
+        "dimension": dimension,
     }
-    try:
-        _post_evaluation(payload)
-    except Exception:
-        # Defense in depth: _post_evaluation already handles its own
-        # exceptions, but post_run_finding must never propagate to flow
-        # code. Logging here is itself best-effort — some test stubs
-        # ship logger objects without .exception(), and a crash in the
-        # error-reporting path would defeat the whole guarantee.
-        with contextlib.suppress(Exception):
-            logger.exception(
-                "pipeline_status: self-reported finding post raised "
-                "unexpectedly (should be best-effort)"
-            )
+    if suggestion is not None:
+        row["suggestion"] = suggestion
+
+    post_findings(
+        repo=repo,
+        flow_name=flow_name,
+        findings=[row],
+        source=source,
+        production_only=production_only,
+    )
 
 
 def make_failure_hook(
@@ -342,9 +445,11 @@ def make_failure_hook(
 
 __all__ = [
     "DEFAULT_DIMENSION",
+    "Finding",
     "Severity",
     "get_prefect_logger",
     "get_run_id",
     "make_failure_hook",
+    "post_findings",
     "post_run_finding",
 ]

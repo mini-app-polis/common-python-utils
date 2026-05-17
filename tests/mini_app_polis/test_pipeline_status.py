@@ -279,3 +279,204 @@ def test_failure_hook_swallows_post_run_finding_exception(monkeypatch) -> None:
     ):
         hook(None, None, state)
     mock_log.exception.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# post_findings (multi-row)
+# ---------------------------------------------------------------------------
+
+
+def test_post_findings_posts_each_row(monkeypatch) -> None:
+    """Every row in the batch becomes its own /v1/evaluations POST."""
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    findings = [
+        {"severity": "WARN", "finding": "first issue"},
+        {"severity": "WARN", "finding": "second issue"},
+        {"severity": "ERROR", "finding": "third issue"},
+    ]
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_findings(
+            repo="my-cog",
+            flow_name="my-flow",
+            findings=findings,
+            production_only=True,
+        )
+    assert post.call_count == 3
+    posted_findings = [c.args[0]["finding"] for c in post.call_args_list]
+    assert posted_findings == ["first issue", "second issue", "third issue"]
+
+
+def test_post_findings_shared_fields_applied_to_every_row(monkeypatch) -> None:
+    """run_id, repo, flow_name, and source are constant across the batch."""
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    monkeypatch.setenv("PREFECT_FLOW_RUN_ID", "abc-123")
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_findings(
+            repo="my-cog",
+            flow_name="my-flow",
+            findings=[
+                {"severity": "WARN", "finding": "a"},
+                {"severity": "ERROR", "finding": "b"},
+            ],
+            source="flow_hook",
+            production_only=True,
+        )
+    for call in post.call_args_list:
+        payload = call.args[0]
+        assert payload["repo"] == "my-cog"
+        assert payload["flow_name"] == "my-flow"
+        assert payload["source"] == "flow_hook"
+        assert payload["run_id"] == "abc-123"
+
+
+def test_post_findings_per_row_dimension_override(monkeypatch) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_findings(
+            repo="my-cog",
+            flow_name="my-flow",
+            findings=[
+                {"severity": "WARN", "finding": "a", "dimension": "data_quality"},
+                {"severity": "ERROR", "finding": "b"},  # default dimension
+            ],
+            production_only=True,
+        )
+    assert post.call_args_list[0].args[0]["dimension"] == "data_quality"
+    assert post.call_args_list[1].args[0]["dimension"] == "pipeline_consistency"
+
+
+def test_post_findings_suggestion_passed_through(monkeypatch) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_findings(
+            repo="my-cog",
+            flow_name="my-flow",
+            findings=[
+                {
+                    "severity": "WARN",
+                    "finding": "the bad thing",
+                    "suggestion": "do the thing differently",
+                }
+            ],
+            production_only=True,
+        )
+    payload = post.call_args.args[0]
+    assert payload["suggestion"] == "do the thing differently"
+
+
+def test_post_findings_suggestion_omitted_when_none(monkeypatch) -> None:
+    """Rows without a suggestion don't ship a key=None — keep payload minimal."""
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_findings(
+            repo="my-cog",
+            flow_name="my-flow",
+            findings=[{"severity": "WARN", "finding": "a"}],
+            production_only=True,
+        )
+    assert "suggestion" not in post.call_args.args[0]
+
+
+def test_post_findings_per_row_error_isolation(monkeypatch) -> None:
+    """One row's POST failure does not prevent later rows from being attempted."""
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    seen: list[dict] = []
+
+    def fake_post(payload):
+        seen.append(payload)
+        if payload["finding"] == "boom":
+            raise RuntimeError("API exploded")
+
+    with patch.object(ps, "_post_evaluation", side_effect=fake_post):
+        ps.post_findings(
+            repo="my-cog",
+            flow_name="my-flow",
+            findings=[
+                {"severity": "WARN", "finding": "first"},
+                {"severity": "ERROR", "finding": "boom"},
+                {"severity": "WARN", "finding": "third"},
+            ],
+            production_only=True,
+        )
+    assert [p["finding"] for p in seen] == ["first", "boom", "third"]
+
+
+def test_post_findings_skips_empty_finding_text(monkeypatch) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_findings(
+            repo="my-cog",
+            flow_name="my-flow",
+            findings=[
+                {"severity": "WARN", "finding": "   "},  # whitespace-only
+                {"severity": "WARN", "finding": ""},  # truly empty
+                {"severity": "WARN", "finding": "valid"},
+            ],
+            production_only=True,
+        )
+    assert post.call_count == 1
+    assert post.call_args.args[0]["finding"] == "valid"
+
+
+def test_post_findings_empty_batch_is_noop(monkeypatch) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_findings(
+            repo="my-cog",
+            flow_name="my-flow",
+            findings=[],
+            production_only=True,
+        )
+    post.assert_not_called()
+
+
+def test_post_findings_production_only_false_no_post(monkeypatch) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_findings(
+            repo="my-cog",
+            flow_name="my-flow",
+            findings=[{"severity": "WARN", "finding": "a"}],
+            production_only=False,
+        )
+    post.assert_not_called()
+
+
+def test_post_findings_no_base_url_no_post(monkeypatch) -> None:
+    monkeypatch.delenv("KAIANO_API_BASE_URL", raising=False)
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_findings(
+            repo="my-cog",
+            flow_name="my-flow",
+            findings=[{"severity": "WARN", "finding": "a"}],
+            production_only=True,
+        )
+    post.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# post_run_finding ↔ suggestion plumbing
+# ---------------------------------------------------------------------------
+
+
+def test_post_run_finding_forwards_suggestion(monkeypatch) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_run_finding(
+            "my-flow",
+            "WARN",
+            text="something off",
+            repo="my-cog",
+            suggestion="check the logs",
+            production_only=True,
+        )
+    payload = post.call_args.args[0]
+    assert payload["suggestion"] == "check the logs"
+
+
+def test_post_run_finding_no_suggestion_means_field_absent(monkeypatch) -> None:
+    """suggestion=None must not appear in the payload at all."""
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_run_finding("f", "SUCCESS", repo="my-cog", production_only=True)
+    assert "suggestion" not in post.call_args.args[0]
