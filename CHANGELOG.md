@@ -1,3 +1,27 @@
+# [3.0.0](https://github.com/mini-app-polis/common-python-utils/compare/v2.6.1...v3.0.0) (2026-05-27)
+
+
+### Bug Fixes
+
+* pipeline status ([ce10f25](https://github.com/mini-app-polis/common-python-utils/commit/ce10f25f632231bfa0da6e0711e5a96ba75a27ab))
+* pipeline status ([1eb932a](https://github.com/mini-app-polis/common-python-utils/commit/1eb932a6343be57882cee517027bb35bf4d5ae2d))
+
+
+### Features
+
+* configurable max_tokens with truncation detection in LLM clients ([131fbd7](https://github.com/mini-app-polis/common-python-utils/commit/131fbd7765abfb76225650c986fdf8a9fb2784cc))
+
+
+### BREAKING CHANGES
+
+* callers that previously caught LLMValidationError for
+truncation will need to catch LLMTruncationError instead. The base
+LLMError still catches both. The default max_tokens has doubled from
+8192 to 16384, which may affect API costs for callers that were
+relying on the implicit cap.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+
 ## [2.6.1](https://github.com/mini-app-polis/common-python-utils/compare/v2.6.0...v2.6.1) (2026-05-17)
 
 
