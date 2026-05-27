@@ -5,10 +5,11 @@ import os
 from typing import Any, cast
 
 from mini_app_polis import logger as logger_mod
+from mini_app_polis.logger import LOG_WARNING, with_log_prefix
 
 from ._json import parse_json, validate_json
 from .base import LLMClient, LLMConfig
-from .errors import LLMError
+from .errors import LLMError, LLMTruncationError
 from .types import LLMMessage, LLMResult
 
 log = logger_mod.get_logger()
@@ -91,6 +92,37 @@ class OpenAILLM(LLMClient):
 
         raise LLMError("Unable to extract text from OpenAI response")
 
+    def _raise_if_truncated_response(self, resp: Any) -> None:
+        status = getattr(resp, "status", None)
+        if status != "incomplete":
+            return
+        incomplete = getattr(resp, "incomplete_details", None)
+        reason = getattr(incomplete, "reason", None) if incomplete is not None else None
+        if reason != "max_output_tokens":
+            return
+        msg = (
+            f"OpenAI response truncated at max_tokens={self._cfg.max_tokens}. "
+            f"Increase LLMConfig.max_tokens and retry, or reduce input density. "
+            f"Model: {self._cfg.model}."
+        )
+        log.warning(with_log_prefix(LOG_WARNING, msg))
+        raise LLMTruncationError(msg)
+
+    def _raise_if_truncated_chat(self, resp: Any) -> None:
+        choices = getattr(resp, "choices", None) or []
+        if not choices:
+            return
+        finish_reason = getattr(choices[0], "finish_reason", None)
+        if finish_reason != "length":
+            return
+        msg = (
+            f"OpenAI response truncated at max_tokens={self._cfg.max_tokens}. "
+            f"Increase LLMConfig.max_tokens and retry, or reduce input density. "
+            f"Model: {self._cfg.model}."
+        )
+        log.warning(with_log_prefix(LOG_WARNING, msg))
+        raise LLMTruncationError(msg)
+
     def generate_json(
         self,
         *,
@@ -105,6 +137,7 @@ class OpenAILLM(LLMClient):
             resp = self._client.responses.create(
                 model=self._cfg.model,
                 input=[{"role": m.role, "content": m.content} for m in messages],
+                max_output_tokens=self._cfg.max_tokens,
                 text={
                     "format": {
                         "type": "json_schema",
@@ -115,12 +148,15 @@ class OpenAILLM(LLMClient):
                 },
                 timeout=self._cfg.timeout_s,
             )
+            self._raise_if_truncated_response(resp)
             raw = self._extract_output_text(resp)
             data = parse_json(raw)
             validate_json(data, json_schema)
             return LLMResult(
                 provider="openai", model=self._cfg.model, output_json=data, raw_text=raw
             )
+        except LLMTruncationError:
+            raise
         except Exception as e:  # noqa: BLE001
             log.warning(
                 "OpenAI structured output failed; falling back to JSON-only. err=%s", e
@@ -138,9 +174,11 @@ class OpenAILLM(LLMClient):
         resp2 = self._client.chat.completions.create(
             model=self._cfg.model,
             messages=cast(Any, fallback_messages),
+            max_completion_tokens=self._cfg.max_tokens,
             temperature=0.2,
             timeout=self._cfg.timeout_s,
         )
+        self._raise_if_truncated_chat(resp2)
         raw2 = (resp2.choices[0].message.content or "").strip()
         data2 = parse_json(raw2)
         validate_json(data2, json_schema)

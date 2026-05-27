@@ -9,7 +9,7 @@ from mini_app_polis.llm import LLMMessage, LLMResult, build_llm
 from mini_app_polis.llm._json import parse_json, validate_json
 from mini_app_polis.llm.anthropic_client import AnthropicLLM
 from mini_app_polis.llm.base import LLMConfig
-from mini_app_polis.llm.errors import LLMError, LLMValidationError
+from mini_app_polis.llm.errors import LLMError, LLMTruncationError, LLMValidationError
 from mini_app_polis.llm.openai_client import OpenAILLM
 
 # ---------------------------------------------------------------------------
@@ -207,6 +207,75 @@ class TestAnthropicLLM:
         with pytest.raises(LLMError, match="Anthropic request failed"):
             client.generate_json(messages=_messages(), json_schema=_SCHEMA)
 
+    def test_max_tokens_from_config_passed_to_sdk(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+        cfg = LLMConfig(
+            provider="anthropic",
+            model="claude-test",
+            api_key_env="ANTHROPIC_API_KEY",
+            max_tokens=32768,
+        )
+        mock_anthropic = MagicMock()
+        with patch.dict("sys.modules", {"anthropic": mock_anthropic}):
+            client = AnthropicLLM(cfg)
+        client._client = MagicMock()
+
+        block = SimpleNamespace(type="text", text='{"name": "Alice"}')
+        mock_resp = SimpleNamespace(
+            stop_reason="end_turn",
+            message=SimpleNamespace(content=[block]),
+        )
+        client._client.messages.create.return_value = mock_resp
+
+        client.generate_json(messages=_messages(), json_schema=_SCHEMA)
+
+        assert client._client.messages.create.call_args.kwargs["max_tokens"] == 32768
+
+    def test_truncation_raises_llm_truncation_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+        cfg = LLMConfig(
+            provider="anthropic",
+            model="claude-test",
+            api_key_env="ANTHROPIC_API_KEY",
+            max_tokens=32768,
+        )
+        mock_anthropic = MagicMock()
+        with patch.dict("sys.modules", {"anthropic": mock_anthropic}):
+            client = AnthropicLLM(cfg)
+        client._client = MagicMock()
+
+        block = SimpleNamespace(type="text", text='{"name": "partial')
+        mock_resp = SimpleNamespace(
+            stop_reason="max_tokens",
+            message=SimpleNamespace(content=[block]),
+        )
+        client._client.messages.create.return_value = mock_resp
+
+        with pytest.raises(LLMTruncationError) as exc_info:
+            client.generate_json(messages=_messages(), json_schema=_SCHEMA)
+
+        assert "32768" in str(exc_info.value)
+        assert "claude-test" in str(exc_info.value)
+
+    def test_end_turn_does_not_raise_truncation(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = self._make_client(monkeypatch)
+
+        block = SimpleNamespace(type="text", text='{"name": "Alice"}')
+        mock_resp = SimpleNamespace(
+            stop_reason="end_turn",
+            message=SimpleNamespace(content=[block]),
+        )
+        client._client.messages.create.return_value = mock_resp
+
+        result = client.generate_json(messages=_messages(), json_schema=_SCHEMA)
+        assert result.output_json == {"name": "Alice"}
+
 
 # ---------------------------------------------------------------------------
 # OpenAILLM
@@ -279,3 +348,103 @@ class TestOpenAILLM:
 
         with pytest.raises(LLMValidationError):
             client.generate_json(messages=_messages(), json_schema=_SCHEMA)
+
+    def test_max_tokens_from_config_passed_to_responses_api(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        cfg = LLMConfig(
+            provider="openai",
+            model="gpt-test",
+            api_key_env="OPENAI_API_KEY",
+            max_tokens=32768,
+        )
+        mock_openai = MagicMock()
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            client = OpenAILLM(cfg)
+        client._client = MagicMock()
+
+        mock_resp = SimpleNamespace(output_text='{"name": "Carol"}', status="completed")
+        client._client.responses.create.return_value = mock_resp
+
+        client.generate_json(messages=_messages(), json_schema=_SCHEMA)
+
+        assert (
+            client._client.responses.create.call_args.kwargs["max_output_tokens"]
+            == 32768
+        )
+
+    def test_truncation_raises_llm_truncation_error_on_responses_api(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        cfg = LLMConfig(
+            provider="openai",
+            model="gpt-test",
+            api_key_env="OPENAI_API_KEY",
+            max_tokens=32768,
+        )
+        mock_openai = MagicMock()
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            client = OpenAILLM(cfg)
+        client._client = MagicMock()
+
+        mock_resp = SimpleNamespace(
+            output_text='{"name": "partial',
+            status="incomplete",
+            incomplete_details=SimpleNamespace(reason="max_output_tokens"),
+        )
+        client._client.responses.create.return_value = mock_resp
+
+        with pytest.raises(LLMTruncationError) as exc_info:
+            client.generate_json(messages=_messages(), json_schema=_SCHEMA)
+
+        assert "32768" in str(exc_info.value)
+        assert "gpt-test" in str(exc_info.value)
+
+    def test_completed_response_does_not_raise_truncation(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = self._make_client(monkeypatch)
+
+        mock_resp = SimpleNamespace(output_text='{"name": "Carol"}', status="completed")
+        client._client.responses.create.return_value = mock_resp
+
+        result = client.generate_json(messages=_messages(), json_schema=_SCHEMA)
+        assert result.output_json == {"name": "Carol"}
+
+    def test_truncation_raises_on_chat_fallback_length(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        cfg = LLMConfig(
+            provider="openai",
+            model="gpt-test",
+            api_key_env="OPENAI_API_KEY",
+            max_tokens=32768,
+        )
+        mock_openai = MagicMock()
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            client = OpenAILLM(cfg)
+        client._client = MagicMock()
+
+        client._client.responses.create.side_effect = RuntimeError("not available")
+        mock_choice = SimpleNamespace(
+            message=SimpleNamespace(content='{"name": "partial'),
+            finish_reason="length",
+        )
+        client._client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[mock_choice]
+        )
+
+        with pytest.raises(LLMTruncationError) as exc_info:
+            client.generate_json(messages=_messages(), json_schema=_SCHEMA)
+
+        assert "32768" in str(exc_info.value)
+        assert "gpt-test" in str(exc_info.value)
+        assert (
+            client._client.chat.completions.create.call_args.kwargs[
+                "max_completion_tokens"
+            ]
+            == 32768
+        )

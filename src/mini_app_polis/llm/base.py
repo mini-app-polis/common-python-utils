@@ -14,6 +14,10 @@ class LLMConfig:
     model: str
     api_key_env: str
     timeout_s: float = 60.0
+    # Per-request output token cap for both Anthropic and OpenAI clients.
+    # Anthropic Sonnet 4.6 supports up to 64K; OpenAI limits vary by model.
+    # 16384 is a safe default that fits both without being wasteful.
+    max_tokens: int = 16384
 
 
 class LLMClient(Protocol):

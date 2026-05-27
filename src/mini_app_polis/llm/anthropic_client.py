@@ -4,10 +4,11 @@ import os
 from typing import Any, cast
 
 from mini_app_polis import logger as logger_mod
+from mini_app_polis.logger import LOG_WARNING, with_log_prefix
 
 from ._json import parse_json, validate_json
 from .base import LLMClient, LLMConfig
-from .errors import LLMError
+from .errors import LLMError, LLMTruncationError
 from .types import LLMMessage, LLMResult
 
 log = logger_mod.get_logger()
@@ -124,7 +125,7 @@ class AnthropicLLM(LLMClient):
         ]
         create_kwargs: dict[str, Any] = {
             "model": self._cfg.model,
-            "max_tokens": 8192,
+            "max_tokens": self._cfg.max_tokens,
             "messages": anthropic_messages,
             "temperature": 0.2,
         }
@@ -135,6 +136,16 @@ class AnthropicLLM(LLMClient):
             resp = self._client.messages.create(**create_kwargs)
         except Exception as e:  # noqa: BLE001
             raise LLMError(f"Anthropic request failed: {e}") from e
+
+        stop_reason = getattr(resp, "stop_reason", None)
+        if stop_reason == "max_tokens":
+            msg = (
+                f"Anthropic response truncated at max_tokens={self._cfg.max_tokens}. "
+                f"Increase LLMConfig.max_tokens and retry, or reduce input density. "
+                f"Model: {self._cfg.model}."
+            )
+            log.warning(with_log_prefix(LOG_WARNING, msg))
+            raise LLMTruncationError(msg)
 
         raw = self._extract_output_text(resp)
         if not raw or not raw.strip():

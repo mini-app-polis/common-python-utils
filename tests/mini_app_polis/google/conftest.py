@@ -79,6 +79,13 @@ def pytest_configure():
     mini_app_polis_logger.error = _logger.error  # type: ignore[attr-defined]
     mini_app_polis_logger.debug = _logger.debug  # type: ignore[attr-defined]
     mini_app_polis_logger.critical = _logger.critical  # type: ignore[attr-defined]
+    mini_app_polis_logger.LOG_WARNING = "⚠️"  # type: ignore[attr-defined]
+
+    def with_log_prefix(emoji: str, message: str) -> str:
+        clean_message = " ".join(str(message).split())
+        return f"{emoji.strip()} {clean_message}".strip()
+
+    mini_app_polis_logger.with_log_prefix = with_log_prefix  # type: ignore[attr-defined]
     # set a default (tests will patch as needed)
     mini_app_polis_config.VDJ_HISTORY_FOLDER_ID = None
 
