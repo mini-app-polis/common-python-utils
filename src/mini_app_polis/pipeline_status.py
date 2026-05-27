@@ -51,6 +51,8 @@ from __future__ import annotations
 import contextlib
 import os
 from collections.abc import Callable, Iterable
+from functools import cache
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Literal, TypedDict
 
 from mini_app_polis import logger as logger_mod
@@ -206,6 +208,61 @@ def _merge_extras_into_text(text: str, extras: dict[str, Any]) -> str:
     return f"{text} {suffix}" if text else suffix
 
 
+@cache
+def _resolve_processor_version(repo: str) -> str | None:
+    """Return the installed distribution version for ``repo``, else ``None``.
+
+    Pipeline Health findings benefit from carrying the version of the cog
+    that emitted them — operators triaging a recurring WARN want to know
+    which build introduced it. We resolve this once per ``repo`` via
+    :func:`importlib.metadata.version` and cache the result for the
+    lifetime of the process (cog distribution versions don't change
+    in-flight).
+
+    Returns ``None`` (rather than a marker like ``"0.0.0+local"``) when
+    the distribution isn't installed under that name. Pipeline Health
+    previously displayed ``(processor=0.0.0+local)`` on every voicenotes
+    heartbeat because a per-cog helper used the pre-merge distribution
+    name after the ``voicenotes-cog`` → ``transcription-cog`` merge
+    (ADR-004). Centralising the resolution here, and treating "not
+    installed" as "no suffix" rather than "stamp a marker", prevents
+    that class of noise across every cog at once.
+
+    The ``repo`` argument is the same string passed to
+    :func:`post_findings` and :func:`post_run_finding` and must match the
+    cog's ``pyproject.toml`` ``[project] name``. Mismatches (typos,
+    pre-merge names) silently fall through to ``None`` — verify by
+    looking at a real production finding after a release.
+    """
+    try:
+        return version(repo)
+    except PackageNotFoundError:
+        # Editable dev checkouts, ad-hoc invocations, or a typoed repo
+        # name. Better to emit no suffix than a misleading marker.
+        return None
+    except Exception:
+        # importlib.metadata can raise other errors on broken metadata;
+        # never let version lookup interfere with reporting itself.
+        return None
+
+
+def _stamp_processor_version(text: str, repo: str) -> str:
+    """Append ``(processor=X.Y.Z)`` to ``text`` when the version resolves.
+
+    No-op when :func:`_resolve_processor_version` returns ``None`` so
+    Pipeline Health rows stay clean for editable dev checkouts. Also
+    no-op when ``text`` already contains a ``(processor=…)`` fragment so
+    callers that pre-stamp (or legacy emissions that pre-date this
+    library) don't end up double-stamped.
+    """
+    if "(processor=" in text:
+        return text
+    resolved = _resolve_processor_version(repo)
+    if not resolved:
+        return text
+    return f"{text} (processor={resolved})"
+
+
 def _post_evaluation(payload: dict[str, Any]) -> None:
     """POST a self-reported finding to ``/v1/evaluations``. Never raises.
 
@@ -302,6 +359,15 @@ def post_findings(
                 severity,
             )
             continue
+
+        # Stamp the cog's installed distribution version onto the
+        # finding text so the Pipeline Health UI shows operators which
+        # build emitted a row. Done at the library funnel rather than in
+        # each cog's adapter so every cog routing through here gets it
+        # uniformly, and so a typoed cog-side helper can't silently
+        # stamp a marker like "0.0.0+local" instead of a real version
+        # (the original voicenotes regression).
+        finding_text = _stamp_processor_version(finding_text, repo)
 
         payload: dict[str, Any] = {
             "run_id": run_id,

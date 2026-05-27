@@ -480,3 +480,136 @@ def test_post_run_finding_no_suggestion_means_field_absent(monkeypatch) -> None:
     with patch.object(ps, "_post_evaluation") as post:
         ps.post_run_finding("f", "SUCCESS", repo="my-cog", production_only=True)
     assert "suggestion" not in post.call_args.args[0]
+
+
+# ---------------------------------------------------------------------------
+# Processor version stamping
+# ---------------------------------------------------------------------------
+#
+# The library appends ``(processor=X.Y.Z)`` to every finding text so the
+# Pipeline Health UI shows operators which build emitted a row. Stamping
+# happens at the post_findings funnel so every cog routing through the
+# library — voicenotes, deejay-cog flows, transcription-cog WCS flow,
+# anything new — gets it uniformly. The previous per-cog approach
+# (transcription-cog had its own _processor_version helper) stamped
+# ``(processor=0.0.0+local)`` in production because it queried the
+# pre-merge distribution name ``"voicenotes-cog"``; centralising the
+# resolution and treating "not installed" as "no suffix" prevents that
+# class of regression.
+#
+# ``_resolve_processor_version`` is lru_cached on ``repo``, so every
+# test in this block clears the cache to keep monkeypatches honest.
+
+
+def _reset_version_cache() -> None:
+    ps._resolve_processor_version.cache_clear()
+
+
+def test_processor_version_appended_when_resolvable(monkeypatch) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    _reset_version_cache()
+    monkeypatch.setattr(ps, "version", lambda _: "1.2.3")
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_run_finding(
+            "f", "SUCCESS", text="Run completed.", repo="my-cog", production_only=True
+        )
+    assert post.call_args.args[0]["finding"] == "Run completed. (processor=1.2.3)"
+
+
+def test_processor_version_omitted_when_not_installed(monkeypatch) -> None:
+    """No suffix when importlib.metadata can't find the distribution."""
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    _reset_version_cache()
+
+    def _missing(name: str) -> str:
+        raise ps.PackageNotFoundError(name)
+
+    monkeypatch.setattr(ps, "version", _missing)
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_run_finding(
+            "f", "SUCCESS", text="Run completed.", repo="my-cog", production_only=True
+        )
+    assert post.call_args.args[0]["finding"] == "Run completed."
+
+
+def test_processor_version_swallows_unexpected_errors(monkeypatch) -> None:
+    """A broken distribution must not break reporting."""
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    _reset_version_cache()
+
+    def _boom(name: str) -> str:
+        raise RuntimeError("broken metadata")
+
+    monkeypatch.setattr(ps, "version", _boom)
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_run_finding(
+            "f", "SUCCESS", text="Run completed.", repo="my-cog", production_only=True
+        )
+    assert post.call_args.args[0]["finding"] == "Run completed."
+
+
+def test_processor_version_not_double_stamped(monkeypatch) -> None:
+    """Caller-supplied ``(processor=...)`` text is left alone."""
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    _reset_version_cache()
+    monkeypatch.setattr(ps, "version", lambda _: "1.2.3")
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_findings(
+            repo="my-cog",
+            flow_name="f",
+            findings=[
+                {"severity": "WARN", "finding": "Already labeled (processor=9.9.9)"}
+            ],
+            production_only=True,
+        )
+    assert post.call_args.args[0]["finding"] == "Already labeled (processor=9.9.9)"
+
+
+def test_processor_version_applied_to_every_row(monkeypatch) -> None:
+    """Multi-row post_findings stamps every row, not just the first."""
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    _reset_version_cache()
+    monkeypatch.setattr(ps, "version", lambda _: "1.2.3")
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_findings(
+            repo="my-cog",
+            flow_name="f",
+            findings=[
+                {"severity": "WARN", "finding": "first"},
+                {"severity": "ERROR", "finding": "second"},
+            ],
+            production_only=True,
+        )
+    findings = [c.args[0]["finding"] for c in post.call_args_list]
+    assert findings == ["first (processor=1.2.3)", "second (processor=1.2.3)"]
+
+
+def test_processor_version_cached_per_repo(monkeypatch) -> None:
+    """importlib.metadata.version is consulted once per (repo) lookup."""
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    _reset_version_cache()
+    calls: list[str] = []
+
+    def _counting(name: str) -> str:
+        calls.append(name)
+        return "1.2.3"
+
+    monkeypatch.setattr(ps, "version", _counting)
+    with patch.object(ps, "_post_evaluation"):
+        ps.post_run_finding("f", "SUCCESS", repo="my-cog", production_only=True)
+        ps.post_run_finding("f", "SUCCESS", repo="my-cog", production_only=True)
+        ps.post_run_finding("f", "SUCCESS", repo="other-cog", production_only=True)
+    # One call per distinct repo, regardless of post count.
+    assert sorted(calls) == ["my-cog", "other-cog"]
+
+
+def test_processor_version_failure_hook_stamps(monkeypatch) -> None:
+    """Failure hooks emit through the library too — they get stamped."""
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    _reset_version_cache()
+    monkeypatch.setattr(ps, "version", lambda _: "1.2.3")
+    hook = ps.make_failure_hook("fl", repo="my-cog", production_only=True)
+    state = SimpleNamespace(name="Failed", type="FAILED")
+    with patch.object(ps, "_post_evaluation") as post:
+        hook(None, None, state)
+    assert "(processor=1.2.3)" in post.call_args.args[0]["finding"]
