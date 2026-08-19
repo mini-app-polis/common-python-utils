@@ -81,6 +81,7 @@ Design constraints worth knowing before editing this module:
 
 from __future__ import annotations
 
+import contextlib
 import math
 import os
 import time
@@ -192,6 +193,42 @@ side, and retrying a local bug for 30 minutes just delays the finding.
 """
 
 
+def _log(level: str, msg: str, *args: Any) -> None:
+    """Emit a log line, swallowing every failure. Never raises.
+
+    Every logging call in this module sits on a failure path where
+    raising would be worse than staying quiet:
+
+    - The give-up handler logs immediately before ``raise``. An
+      exception there **replaces** the startup error, so the operator
+      sees a logging bug instead of the ``503`` that actually killed the
+      process — the reporting path masking the thing it reports on.
+    - :func:`_make_before_sleep` runs inside tenacity's callback. An
+      exception there aborts the retry loop mid-outage, turning layer 1
+      off at exactly the moment it is needed.
+    - The startup and env-var warnings run before ``serve()`` is called
+      at all, so an exception is a second, dumber way to fail boot.
+
+    This is not hypothetical. ``mini_app_polis.pipeline_status`` already
+    carries the same guard, with the same reasoning: test stubs (and
+    third-party logger shims) ship logger objects missing methods —
+    ``tests/mini_app_polis/google/conftest.py`` installs a ``DummyLogger``
+    with no ``.exception`` via a session-global ``pytest_configure``, and
+    it leaks into every test in the suite.
+
+    Resolution is by :func:`getattr` rather than a direct call so a
+    partial logger degrades instead of raising, and ``exception`` falls
+    back to ``error`` so the message still lands.
+    """
+    with contextlib.suppress(Exception):
+        logger = get_prefect_logger()
+        emit = getattr(logger, level, None)
+        if emit is None and level == "exception":
+            emit = getattr(logger, "error", None)
+        if emit is not None:
+            emit(msg, *args)
+
+
 def _is_retryable(exc: BaseException) -> bool:
     """Return True iff ``exc`` is a transient failure worth retrying.
 
@@ -242,7 +279,8 @@ def _resolve_max_seconds(max_seconds: float | None) -> float:
     try:
         parsed = float(raw)
     except (TypeError, ValueError):
-        get_prefect_logger().warning(
+        _log(
+            "warning",
             "serve_resilience: ignoring unparseable %s=%r; using default %ss",
             MAX_SECONDS_ENV_VAR,
             raw,
@@ -270,7 +308,8 @@ def _validated(value: float, *, source: str) -> float:
         as_float = float("nan")
 
     if not math.isfinite(as_float) or as_float <= 0:
-        get_prefect_logger().warning(
+        _log(
+            "warning",
             "serve_resilience: ignoring non-finite or non-positive %s=%r; "
             "using default %ss",
             source,
@@ -292,18 +331,26 @@ def _make_before_sleep(ceiling: float) -> Any:
     """
 
     def _before_sleep(retry_state: RetryCallState) -> None:
-        outcome = retry_state.outcome
-        exc = outcome.exception() if outcome is not None else None
-        get_prefect_logger().warning(
-            "serve_resilience: Prefect deployment registration failed "
-            "(attempt %s, %.0fs/%.0fs elapsed); retrying in %.0fs. Error: %s: %s",
-            retry_state.attempt_number,
-            retry_state.seconds_since_start or 0.0,
-            ceiling,
-            getattr(retry_state.next_action, "sleep", 0.0),
-            type(exc).__name__ if exc is not None else "unknown",
-            exc,
-        )
+        # The whole body is suppressed, not just the _log call: the
+        # arguments are evaluated first, and this callback runs inside
+        # tenacity's retry loop. An exception raised here propagates out
+        # of Retrying and aborts the loop mid-outage — layer 1 switching
+        # itself off at exactly the moment it is needed, because of a
+        # logging line.
+        with contextlib.suppress(Exception):
+            outcome = retry_state.outcome
+            exc = outcome.exception() if outcome is not None else None
+            _log(
+                "warning",
+                "serve_resilience: Prefect deployment registration failed "
+                "(attempt %s, %.0fs/%.0fs elapsed); retrying in %.0fs. Error: %s: %s",
+                retry_state.attempt_number,
+                retry_state.seconds_since_start or 0.0,
+                ceiling,
+                getattr(retry_state.next_action, "sleep", 0.0),
+                type(exc).__name__ if exc is not None else "unknown",
+                exc,
+            )
 
     return _before_sleep
 
@@ -380,9 +427,10 @@ def _post_startup_failure_finding(
             elapsed_seconds=round(elapsed),
         )
     except Exception:
-        get_prefect_logger().exception(
+        _log(
+            "exception",
             "serve_resilience: failed to post startup finding (best-effort); "
-            "re-raising the original startup failure regardless"
+            "re-raising the original startup failure regardless",
         )
 
 
@@ -447,8 +495,8 @@ def serve_with_retry(
     from prefect import serve  # lazy — Prefect is not a library dependency
 
     ceiling = _resolve_max_seconds(max_seconds)
-    logger = get_prefect_logger()
-    logger.info(
+    _log(
+        "info",
         "serve_resilience: registering %d deployment(s) for %s "
         "(retry ceiling %.0fs, max %d attempts)",
         len(deployments),
@@ -470,9 +518,16 @@ def serve_with_retry(
         retryer(serve, *deployments, **serve_kwargs)
     except Exception as exc:
         elapsed = time.monotonic() - started
-        attempts = int(retryer.statistics.get("attempt_number", 1) or 1)
+        # Everything between here and the `raise` is diagnostics. None of
+        # it may throw: an exception on this path would replace `exc` and
+        # the operator would see a bug in the reporter instead of the 503
+        # that actually killed the process.
+        attempts = 1
+        with contextlib.suppress(Exception):
+            attempts = int(retryer.statistics.get("attempt_number", 1) or 1)
         retryable = _is_retryable(exc)
-        logger.error(
+        _log(
+            "error",
             "serve_resilience: giving up on Prefect deployment registration "
             "for %s after %d attempt(s) over %.0fs (retryable=%s); exiting so "
             "Railway can restart. Error: %s: %s",

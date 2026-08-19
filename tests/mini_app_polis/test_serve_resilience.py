@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import math
 import sys
+import time
 from types import ModuleType
 from unittest.mock import patch
 
@@ -66,10 +67,18 @@ def _noop_serve(*_args, **_kwargs) -> None:
     return None
 
 
-def _raising_serve(exc: BaseException):
-    """Build a ``serve()`` stub that always raises ``exc``."""
+def _raising_serve(exc: BaseException, *, delay: float = 0.0):
+    """Build a ``serve()`` stub that always raises ``exc``.
+
+    ``delay`` makes the attempt itself consume wall clock, which is how
+    the ``stop_after_delay`` test stays deterministic — ``time.sleep``
+    guarantees a minimum duration, so an attempt can be made reliably
+    longer than a ceiling rather than racing it.
+    """
 
     def _serve(*_args, **_kwargs):
+        if delay:
+            time.sleep(delay)
         raise exc
 
     return _serve
@@ -320,30 +329,31 @@ def test_wall_clock_ceiling_stops_retrying(
 ) -> None:
     """The delay ceiling — not the attempt guard — is what ends the loop.
 
-    ``max_attempts`` is left at its default 120 here, so the only thing
-    that can stop this is ``stop_after_delay``. Two calls, not one:
-    tenacity evaluates ``stop`` *after* an attempt, and the first attempt
-    completes faster than the ceiling, so one more attempt happens before
-    the elapsed clock trips.
+    ``max_attempts`` is left at its default 120, so ``stop_after_delay``
+    is the only thing that can stop this.
+
+    The attempt itself burns more wall clock than the ceiling
+    (``time.sleep`` guarantees a *minimum* duration, so 10ms elapsed
+    against a 5ms ceiling is a guarantee, not a race). Tenacity checks
+    ``stop`` *after* an attempt completes, so the ceiling trips on the
+    first check and exactly one call happens.
+
+    Do not rewrite this to use an instant stub and a microscopic ceiling
+    — the count then depends on how many no-op attempts fit inside the
+    ceiling, which varies by machine and by GC timing.
 
     The practical consequence, worth knowing when reading Railway logs:
     the real worst-case wall clock is the ceiling plus one final backoff
     sleep (≤30s) plus one attempt — not the ceiling exactly.
-
-    The bound is a range, not an exact count: whether the very first stop
-    check trips depends on whether that attempt took longer than the
-    microsecond ceiling, which a GC pause can decide. What matters — and
-    what is asserted — is that the loop ended nowhere near
-    ``DEFAULT_MAX_ATTEMPTS``.
     """
-    calls = _install_serve(monkeypatch, _raising_serve(_status_error(503)))
+    slow_failure = _raising_serve(_status_error(503), delay=0.01)
+    calls = _install_serve(monkeypatch, slow_failure)
     with (
         patch.object(ps, "_post_evaluation"),
         pytest.raises(httpx.HTTPStatusError),
     ):
-        sr.serve_with_retry("dep", repo="deejay-cog", max_seconds=0.0001)
-    assert 1 <= len(calls) <= 2
-    assert len(calls) < sr.DEFAULT_MAX_ATTEMPTS
+        sr.serve_with_retry("dep", repo="deejay-cog", max_seconds=0.005)
+    assert len(calls) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -578,3 +588,116 @@ def test_non_finite_ceiling_argument_also_rejected(monkeypatch) -> None:
     monkeypatch.delenv(sr.MAX_SECONDS_ENV_VAR, raising=False)
     assert sr._resolve_max_seconds(float("nan")) == sr.DEFAULT_MAX_SECONDS
     assert sr._resolve_max_seconds(float("inf")) == sr.DEFAULT_MAX_SECONDS
+
+
+def test_unparseable_argument_falls_back_to_default(monkeypatch) -> None:
+    """The argument path is typed ``float | None``, but Python does not enforce it.
+
+    A future caller wiring ``max_seconds`` to a config field or a raw env
+    read could hand this a string. Coercion failure must fall back to the
+    default, not raise — this runs before ``serve()`` is even called, so
+    an exception here would be a second, dumber way to fail startup.
+    """
+    monkeypatch.delenv(sr.MAX_SECONDS_ENV_VAR, raising=False)
+    assert sr._resolve_max_seconds("banana") == sr.DEFAULT_MAX_SECONDS  # type: ignore[arg-type]
+    assert sr._resolve_max_seconds(object()) == sr.DEFAULT_MAX_SECONDS  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# Logging must never mask the failure it reports on
+# ---------------------------------------------------------------------------
+#
+# Every logging call in serve_resilience sits on a failure path. The
+# give-up handler in particular logs immediately before `raise`, so an
+# exception there REPLACES the startup error and the operator sees a
+# logging bug instead of the 503 that killed the process.
+#
+# This is not hypothetical: tests/mini_app_polis/google/conftest.py
+# installs a DummyLogger with no `.exception` via a session-global
+# pytest_configure, and it leaks into every test in the suite — which is
+# how this surfaced. These tests pin the behaviour explicitly rather than
+# depending on that cross-directory leak, so the guard survives a
+# conftest cleanup.
+
+
+class _PartialLogger:
+    """A logger stub missing `.exception`, like the suite's DummyLogger."""
+
+    def __init__(self) -> None:
+        self.records: list[tuple[str, str]] = []
+
+    def _record(self, level: str, msg: str, *args) -> None:
+        self.records.append((level, msg % args if args else msg))
+
+    def info(self, msg, *args):
+        self._record("info", msg, *args)
+
+    def warning(self, msg, *args):
+        self._record("warning", msg, *args)
+
+    def error(self, msg, *args):
+        self._record("error", msg, *args)
+
+
+class _HostileLogger:
+    """Every method raises. The worst case a broken logger shim can be."""
+
+    def __getattr__(self, name):
+        def _boom(*_a, **_k):
+            raise RuntimeError(f"logger.{name} is broken")
+
+        return _boom
+
+
+@pytest.mark.parametrize(
+    "logger_factory", [_PartialLogger, _HostileLogger], ids=["partial", "hostile"]
+)
+def test_broken_logger_does_not_mask_startup_failure(
+    monkeypatch, api_configured, no_backoff, logger_factory
+) -> None:
+    """The 503 must reach the caller, whatever the logger does."""
+    sentinel = _status_error(503)
+    _install_serve(monkeypatch, _raising_serve(sentinel))
+    monkeypatch.setattr(sr, "get_prefect_logger", lambda: logger_factory())
+    with (
+        patch.object(sr, "post_run_finding", side_effect=RuntimeError("api down")),
+        pytest.raises(httpx.HTTPStatusError) as excinfo,
+    ):
+        sr.serve_with_retry("dep", repo="deejay-cog", max_attempts=3)
+    assert excinfo.value is sentinel
+
+
+def test_exception_level_falls_back_to_error_on_partial_logger(monkeypatch) -> None:
+    """A logger without `.exception` still gets the message, via `.error`."""
+    logger = _PartialLogger()
+    monkeypatch.setattr(sr, "get_prefect_logger", lambda: logger)
+    sr._log("exception", "something broke: %s", "detail")
+    assert logger.records == [("error", "something broke: detail")]
+
+
+def test_log_swallows_hostile_logger(monkeypatch) -> None:
+    monkeypatch.setattr(sr, "get_prefect_logger", lambda: _HostileLogger())
+    sr._log("warning", "should not raise")
+    sr._log("exception", "should not raise either")
+
+
+def test_broken_logger_does_not_abort_the_retry_loop(
+    monkeypatch, api_configured, no_backoff
+) -> None:
+    """before_sleep runs inside tenacity — raising there kills layer 1.
+
+    A logging failure must not switch off the retry loop at exactly the
+    moment an outage needs it.
+    """
+    monkeypatch.setattr(sr, "get_prefect_logger", lambda: _HostileLogger())
+    state = {"n": 0}
+
+    def _flaky(*_a, **_k):
+        state["n"] += 1
+        if state["n"] < 3:
+            raise _status_error(503)
+        return None
+
+    calls = _install_serve(monkeypatch, _flaky)
+    sr.serve_with_retry("dep", repo="deejay-cog")
+    assert len(calls) == 3, "retries must continue despite the logger raising"
