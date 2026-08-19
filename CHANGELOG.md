@@ -1,3 +1,15 @@
+# [3.1.0](https://github.com/mini-app-polis/common-python-utils/compare/v3.0.0...v3.1.0) (2026-08-19)
+
+
+### Bug Fixes
+
+* tests ([b7c5ee6](https://github.com/mini-app-polis/common-python-utils/commit/b7c5ee6a45d9138132f7c369e17ceb03ec88a56c))
+
+
+### Features
+
+* **pipeline-status:** allow CRITICAL as a self-reported severity ([5ea69f7](https://github.com/mini-app-polis/common-python-utils/commit/5ea69f7520592bbc24f9a9bc77a8612217904c6d))
+
 # [3.0.0](https://github.com/mini-app-polis/common-python-utils/compare/v2.6.1...v3.0.0) (2026-05-27)
 
 
