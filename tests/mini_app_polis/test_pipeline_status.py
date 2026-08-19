@@ -613,3 +613,80 @@ def test_processor_version_failure_hook_stamps(monkeypatch) -> None:
     with patch.object(ps, "_post_evaluation") as post:
         hook(None, None, state)
     assert "(processor=1.2.3)" in post.call_args.args[0]["finding"]
+
+
+# ---------------------------------------------------------------------------
+# CRITICAL severity
+# ---------------------------------------------------------------------------
+#
+# CRITICAL was added to the Severity Literal for the pre-flow process
+# lifecycle only — serve_resilience.serve_with_retry emits it with
+# source="startup" when a cog cannot register its deployments and is
+# exiting. Before that, the enum was {SUCCESS, WARN, ERROR} and the
+# module docstring argued CRITICAL was unreachable from a self-report
+# ("a cog that is critically broken can't reach this code path").
+#
+# These tests pin the two properties that matter: CRITICAL reaches the
+# API verbatim (no downgrade, the same class of bug as the old
+# evaluator-cog SUCCESS→WARN downgrade), and it remains scoped to
+# startup — the flow-run paths still cap out at ERROR.
+
+
+def test_critical_severity_preserved(monkeypatch) -> None:
+    """Regression: CRITICAL must reach the API unchanged, not downgraded."""
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    _reset_version_cache()
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_run_finding(
+            "startup",
+            "CRITICAL",
+            text="Registration failed",
+            repo="my-cog",
+            production_only=True,
+            source="startup",
+        )
+    payload = post.call_args.args[0]
+    assert payload["severity"] == "CRITICAL"
+    assert payload["source"] == "startup"
+
+
+def test_critical_in_severity_literal() -> None:
+    """The Literal itself is the contract consumers type-check against."""
+    from typing import get_args
+
+    assert set(get_args(ps.Severity)) == {"SUCCESS", "WARN", "ERROR", "CRITICAL"}
+
+
+def test_critical_available_via_post_findings_batch(monkeypatch) -> None:
+    """CRITICAL survives the multi-row funnel as well as the sugar wrapper."""
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    _reset_version_cache()
+    with patch.object(ps, "_post_evaluation") as post:
+        ps.post_findings(
+            repo="my-cog",
+            flow_name="startup",
+            findings=[{"severity": "CRITICAL", "finding": "process is exiting"}],
+            source="startup",
+            production_only=True,
+        )
+    assert post.call_args.args[0]["severity"] == "CRITICAL"
+
+
+def test_failure_hook_never_emits_critical(monkeypatch) -> None:
+    """Scope guard: flow-run outcomes cap at ERROR, however bad the state.
+
+    CRITICAL means "no flow ran at all". If make_failure_hook ever starts
+    emitting it, the one signal that distinguishes a dead process from a
+    crashed run is diluted.
+    """
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    _reset_version_cache()
+    hook = ps.make_failure_hook("fl", repo="my-cog", production_only=True)
+    for state in (
+        SimpleNamespace(name="Crashed", type="CRASHED"),
+        SimpleNamespace(name="Failed", type="FAILED"),
+        SimpleNamespace(name="Weird", type="SOMETHING_ELSE"),
+    ):
+        with patch.object(ps, "_post_evaluation") as post:
+            hook(None, None, state)
+        assert post.call_args.args[0]["severity"] in {"WARN", "ERROR"}

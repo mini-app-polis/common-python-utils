@@ -30,14 +30,19 @@ dependency.
 
 Severity classification:
 
-  SUCCESS — run completed end-to-end; no issues a human needs to review.
-            Includes "nothing to do" (empty input) and intentional skip
-            paths.
-  WARN    — run completed but produced results worth a human look
-            (e.g. some items failed, some inputs malformed). Also used
-            by :func:`make_failure_hook` for Prefect "Failed" state.
-  ERROR   — flow-level crash. Emitted only by :func:`make_failure_hook`
-            when Prefect reports the run as "Crashed".
+  SUCCESS  — run completed end-to-end; no issues a human needs to
+             review. Includes "nothing to do" (empty input) and
+             intentional skip paths.
+  WARN     — run completed but produced results worth a human look
+             (e.g. some items failed, some inputs malformed). Also used
+             by :func:`make_failure_hook` for Prefect "Failed" state.
+  ERROR    — flow-level crash. Emitted only by :func:`make_failure_hook`
+             when Prefect reports the run as "Crashed".
+  CRITICAL — process-level failure with no flow run at all: the cog
+             could not register its deployments and is exiting. Emitted
+             only by :mod:`mini_app_polis.serve_resilience` with
+             ``source="startup"``. See the :data:`Severity` docstring
+             for why this is deliberately narrow.
 
 The Kaiano API's ``PipelineEvaluationCreate`` schema is the source of
 truth for the payload fields; this module sends ``run_id``, ``repo``,
@@ -59,41 +64,62 @@ from mini_app_polis import logger as logger_mod
 
 _log = logger_mod.get_logger()
 
-Severity = Literal["SUCCESS", "WARN", "ERROR"]
+Severity = Literal["SUCCESS", "WARN", "ERROR", "CRITICAL"]
 """Severities a cog may self-report.
 
 The Kaiano API accepts five severities in ``/v1/evaluations``:
 ``CRITICAL``, ``ERROR``, ``WARN``, ``INFO``, and ``SUCCESS``. This
-library deliberately exposes only the three that map cleanly to "did
-this flow run do its job?" — the question every self-reporting cog is
-answering:
+library exposes the four that map cleanly to "did this cog do its
+job?" — the question every self-reporting cog is answering:
 
-  SUCCESS — run completed end-to-end; nothing for a human to review.
-  WARN    — run completed but produced something worth a look.
-  ERROR   — flow itself crashed or terminally failed.
+  SUCCESS  — run completed end-to-end; nothing for a human to review.
+  WARN     — run completed but produced something worth a look.
+  ERROR    — flow itself crashed or terminally failed.
+  CRITICAL — the cog process itself could not start or stay up; no
+             flow run exists to report on. Emitted only from the
+             pre-flow lifecycle (see :mod:`mini_app_polis.serve_resilience`).
 
-``INFO`` and ``CRITICAL`` are intentionally absent from this enum:
+``INFO`` is intentionally absent from this enum. It belongs to the
+LLM-evaluator and webhook paths, where a neutral observation ("flow
+entered Running state", "config snapshot recorded") is a useful
+signal. For a self-report at end-of-run there is no informational
+outcome distinct from SUCCESS — a clean "nothing to do" run is still
+a success. Collapsing INFO into SUCCESS keeps the cog's mental model
+"did I do my job?" rather than "what category of event was this?".
 
-- **INFO** belongs to the LLM-evaluator and webhook paths, where a
-  neutral observation ("flow entered Running state", "config snapshot
-  recorded") is a useful signal. For a self-report at end-of-run there
-  is no informational outcome distinct from SUCCESS — a clean
-  "nothing to do" run is still a success. Collapsing INFO into SUCCESS
-  keeps the cog's mental model "did I do my job?" rather than "what
-  category of event was this?".
+**On CRITICAL.** This enum originally excluded CRITICAL, on the
+reasoning that it is reserved for cross-cog signals no single *flow
+run* can authoritatively raise, and that "a cog that is critically
+broken typically can't reach this code path at all — it died before
+reporting". That reasoning was correct for its scope and is preserved
+here, because it still governs how CRITICAL may be used.
 
-- **CRITICAL** is reserved for cross-cog signals that no single flow
-  run can authoritatively raise — fleet-wide silence, repeated cluster
-  failures, security incidents. A cog that is critically broken
-  typically can't reach this code path at all (it died before
-  reporting); a cog that is healthy enough to post is at most ERROR.
-  Leaving CRITICAL out of the self-report enum prevents it from being
-  used as "ERROR but I really mean it", which would dilute the signal.
+The July 2026 fleet-down incident produced the exception the original
+note anticipated. A transient Prefect Cloud 503 on the deployment-
+registration endpoint killed all four ``serve()``-based cogs at
+startup. The crash happened *before any flow run existed*, so the
+``on_failure`` / ``on_crashed`` hooks — which attach to flow runs —
+could not fire, and the fleet went down silently. With
+:func:`mini_app_polis.serve_resilience.serve_with_retry`, that path is
+now reachable: the process is alive enough to POST one finding on its
+way out. "All four cogs are down and no flow will ever run" is exactly
+the cross-cog, fleet-wide signal CRITICAL was reserved for.
 
-If a future cog has a concrete need for INFO or CRITICAL as a
-self-report (not an LLM-evaluator finding), expand this Literal and
-extend the regression tests in ``test_pipeline_status.py``. The API
-already accepts the strings, so the change is library-only.
+CRITICAL therefore remains **narrowly scoped**, and the original
+prohibition still stands for everything else:
+
+- CRITICAL is for the **pre-flow process lifecycle only** — the cog
+  cannot register, cannot start, and is exiting. It always carries
+  ``source="startup"``.
+- CRITICAL is **never** "ERROR but I really mean it". A flow run that
+  crashed is ERROR, no matter how bad the blast radius. Using CRITICAL
+  for a flow-run outcome dilutes the one signal that means "nothing is
+  running at all".
+
+If a future cog has a concrete need for INFO as a self-report (not an
+LLM-evaluator finding), expand this Literal and extend the regression
+tests in ``test_pipeline_status.py``. The API already accepts the
+string, so the change is library-only.
 """
 
 DEFAULT_DIMENSION = "pipeline_consistency"
