@@ -1,3 +1,10 @@
+## [4.0.1](https://github.com/mini-app-polis/common-python-utils/compare/v4.0.0...v4.0.1) (2026-09-02)
+
+
+### Bug Fixes
+
+* **deps:** re-lock after the 4.0.0 release ([2694b5f](https://github.com/mini-app-polis/common-python-utils/commit/2694b5fb13f3685c5b07d0f47b30645cc44e49ec))
+
 # [4.0.0](https://github.com/mini-app-polis/common-python-utils/compare/v3.2.0...v4.0.0) (2026-09-02)
 
 
