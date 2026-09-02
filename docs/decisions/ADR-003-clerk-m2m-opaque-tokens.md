@@ -4,7 +4,25 @@ Date: 2026-04-18
 
 ## Status
 
-Accepted. Shipped across v2.2.0 - v2.5.0.
+Superseded (Sep 2026) by ecosystem-standards **ADR-008 — Named Machine
+Keys as the Machine Identity**. Shipped across v2.2.0 - v3.x; removed in
+v4.0.0.
+
+The reasoning below still diagnoses the right problem — a static shared
+key gave no per-caller attribution — but the fix did not deliver it.
+Every cog read the same `CLERK_SECRET_KEY` out of one shared Doppler
+config, so every M2M token resolved to the same subject: the sprawl
+moved from one static key to one static secret, and attribution never
+arrived. Verifying an opaque token also required calling Clerk on every
+machine request, putting a third party on the path of every internal
+write.
+
+Machines now hold one named API key each, verified locally by
+constant-time comparison against configuration. `get_m2m_token`,
+`machine_secret` and the token cache were removed from this library in
+v4.0.0 (BREAKING). Human session JWTs are unchanged. The body below is
+kept as the record of why the M2M path was adopted, not as a
+description of current behaviour.
 
 ## Context
 

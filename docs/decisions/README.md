@@ -18,4 +18,4 @@ decision), **Decision** (what change is being made), and
 
 - [ADR-001: Split package identity](./ADR-001-split-package-identity.md)
 - [ADR-002: Namespace rename from kaiano to mini_app_polis](./ADR-002-namespace-rename.md)
-- [ADR-003: Clerk M2M opaque token auth](./ADR-003-clerk-m2m-opaque-tokens.md)
+- [ADR-003: Clerk M2M opaque token auth](./ADR-003-clerk-m2m-opaque-tokens.md) — **superseded** Sep 2026 by ecosystem-standards ADR-008 (named machine keys); the M2M path was removed from this library in v4.0.0

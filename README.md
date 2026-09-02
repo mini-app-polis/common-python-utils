@@ -53,9 +53,12 @@ dependencies = [
 ```python
 from mini_app_polis.api import KaianoApiClient
 
-# Set KAIANO_API_BASE_URL and KAIANO_API_CLERK_TOKEN in environment
-# Falls back to KAIANO_API_OWNER_ID if no Clerk token is set
-client = KaianoApiClient.from_env()
+# Set KAIANO_API_BASE_URL and this machine's own key
+# (deejay-cog -> DEEJAY_COG_API_KEY) in the environment.
+# The machine name is what selects the key variable, and the key is
+# what names this caller to the API. There is no fallback: without it,
+# every call returns 401.
+client = KaianoApiClient.from_env("deejay-cog")
 result = client.post("/sets", {"name": "My Set"})
 ```
 
@@ -164,8 +167,8 @@ Key variables:
 | Variable | Used by | Required for |
 |---|---|---|
 | `KAIANO_API_BASE_URL` | `KaianoApiClient` | Calling internal FastAPI services |
-| `KAIANO_API_CLERK_TOKEN` | `KaianoApiClient` | Clerk JWT auth (falls back to `KAIANO_API_OWNER_ID`) |
-| `KAIANO_API_OWNER_ID` | `KaianoApiClient` | Local dev fallback auth |
+| `<MACHINE_NAME>_API_KEY` | `KaianoApiClient` | This machine's own named key, e.g. `DEEJAY_COG_API_KEY`. Derived from the machine name by `machine_key_env_var()` |
+| `KAIANO_API_KEY` | `KaianoApiClient` | Unnamed fallback for a caller that declares no machine name. Authenticates, but its writes are unattributable |
 | `LOGGING_LEVEL` | `logger` | Log verbosity (`DEBUG` default) |
 | `GOOGLE_CREDENTIALS_JSON` | `GoogleAPI` | Google Drive + Sheets access |
 | `SPOTIPY_CLIENT_ID` | `SpotifyAPI` | Spotify operations |
