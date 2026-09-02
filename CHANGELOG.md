@@ -1,3 +1,10 @@
+## [3.1.1](https://github.com/mini-app-polis/common-python-utils/compare/v3.1.0...v3.1.1) (2026-09-02)
+
+
+### Bug Fixes
+
+* finalizing identity procresses ([dac566d](https://github.com/mini-app-polis/common-python-utils/commit/dac566da76563ca90d3d5c5f89f36b5ea61fc9bb))
+
 # [3.1.0](https://github.com/mini-app-polis/common-python-utils/compare/v3.0.0...v3.1.0) (2026-08-19)
 
 
