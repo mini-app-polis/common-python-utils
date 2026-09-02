@@ -1,3 +1,19 @@
+# [4.0.0](https://github.com/mini-app-polis/common-python-utils/compare/v3.2.0...v4.0.0) (2026-09-02)
+
+
+### Features
+
+* **api:** remove Clerk M2M token minting ([ac5a009](https://github.com/mini-app-polis/common-python-utils/commit/ac5a009102a1c48351623b38434d4690db8a2007))
+
+
+### BREAKING CHANGES
+
+* **api:** KaianoApiClient no longer accepts machine_secret and no
+longer reads KAIANO_API_CLERK_MACHINE_SECRET. Callers must pass machine_name
+(or api_key). A cog without a key now fails rather than falling back to the
+shared fleet identity — that fallback is what made every cog
+indistinguishable in the first place.
+
 # [3.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v3.1.1...v3.2.0) (2026-09-02)
 
 
