@@ -1,8 +1,8 @@
 """HTTP client for Kaiano internal APIs.
 
-**Auth:** Sends ``Authorization: Bearer <token>`` using a Clerk M2M opaque
-token created from the ``miniappolis-cogs`` machine secret key. The token
-is cached until 60 seconds before expiry and refreshed automatically.
+**Auth:** Sends ``Authorization: Bearer <key>`` using this caller's own named
+API key. No token exchange, no issuer on the request path — the key is the
+credential and the receiving service matches it against configuration.
 
 **Identity:** a cog presents its own named API key as a bearer credential.
 The key identifies the machine — the receiving service matches it against the
@@ -13,10 +13,10 @@ The key proves *who* the caller is and never what it may do. Permissions are
 decided by the receiving service from its own declaration, and nothing sent
 here can widen them.
 
-Legacy: ``KAIANO_API_CLERK_MACHINE_SECRET`` mints a Clerk M2M token instead,
-used by cogs that have not yet been given their own key. It authenticates as
-the shared fleet machine, so calls made with it are attributable only to "a
-cog". Prefer ``api_key``.
+The shared Clerk machine secret this replaced is gone. Every cog holding one
+key indistinguishable from every other cog's was the reason the API could tell
+that *a* cog called it and never which one; keeping it as a fallback would
+have kept that ambiguity available.
 
 Pass ``machine_name`` and the client finds that cog's key by convention:
 ``transcription-cog`` -> ``TRANSCRIPTION_COG_API_KEY``. The same convention is
@@ -31,15 +31,12 @@ does, and four of them will be missed.
   KAIANO_API_BASE_URL             — base URL of the target API service
   <MACHINE_NAME>_API_KEY          — this cog's own key (from machine_name)
   KAIANO_API_KEY                  — key for a caller that declares no name
-  KAIANO_API_CLERK_MACHINE_SECRET — legacy shared machine secret
 """
 
 from __future__ import annotations
 
 import logging as _logging
 import os
-import threading
-import time
 from typing import Any
 
 import httpx
@@ -47,15 +44,6 @@ import httpx
 from .errors import KaianoApiError
 
 _log = _logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Clerk M2M token cache (module-level, thread-safe)
-# ---------------------------------------------------------------------------
-
-_token_lock = threading.Lock()
-_cached_token: str | None = None
-_token_expires_at: float = 0.0  # monotonic time
-_REFRESH_BUFFER_SECS = 60.0  # refresh this many seconds before expiry
 
 
 def machine_key_env_var(machine_name: str) -> str:
@@ -81,79 +69,17 @@ def _key_for(machine_name: str | None) -> str | None:
     return (os.environ.get("KAIANO_API_KEY") or "").strip() or None
 
 
-def _create_clerk_m2m_token(machine_secret: str) -> tuple[str, float]:
-    """
-    Exchange the machine secret key for a Clerk M2M opaque token.
-
-    Returns (token_string, expires_at_monotonic).
-    Raises KaianoApiError on failure.
-    """
-    url = "https://api.clerk.com/v1/m2m_tokens"
-    with httpx.Client(timeout=10.0) as client:
-        resp = client.post(
-            url,
-            headers={
-                "Authorization": f"Bearer {machine_secret}",
-                "Content-Type": "application/json",
-            },
-            json={},
-        )
-
-    if resp.status_code >= 400:
-        _log.warning(
-            "[m2m] token creation failed status=%s body=%s secret_prefix=%s",
-            resp.status_code,
-            resp.text[:300],
-            machine_secret[:8] + "..." if machine_secret else "MISSING",
-        )
-        raise KaianoApiError(
-            status_code=resp.status_code,
-            message=f"Clerk M2M token creation failed: {resp.text}",
-            path="/v1/m2m_tokens",
-        )
-
-    data = resp.json()
-    token: str = data["token"]
-
-    # Opaque token — Clerk returns expiry as expires_in seconds
-    expires_in: int = data.get("expires_in", 3600)
-    expires_at = time.monotonic() + expires_in
-
-    _log.info("[m2m] token created expires_in=%s", expires_in)
-    return token, expires_at
-
-
-def _get_m2m_token(machine_secret: str) -> str:
-    """Return a cached M2M token, refreshing if within the buffer window."""
-    global _cached_token, _token_expires_at
-
-    with _token_lock:
-        now = time.monotonic()
-        if _cached_token is None or now >= (_token_expires_at - _REFRESH_BUFFER_SECS):
-            token, expires_at = _create_clerk_m2m_token(machine_secret)
-            _cached_token = token
-            _token_expires_at = expires_at
-        return _cached_token
-
-
-# ---------------------------------------------------------------------------
-# Client
-# ---------------------------------------------------------------------------
-
-
 class KaianoApiClient:
     """
     HTTP client for calling Kaiano's internal FastAPI services.
 
     Reads configuration from environment variables:
       KAIANO_API_BASE_URL             — base URL of the target service
-      KAIANO_API_CLERK_MACHINE_SECRET — Clerk M2M machine secret
     """
 
     def __init__(
         self,
         base_url: str | None = None,
-        machine_secret: str | None = None,
         timeout: float = 30.0,
         max_retries: int = 3,
         api_key: str | None = None,
@@ -161,9 +87,6 @@ class KaianoApiClient:
     ):
         self.base_url = (base_url or os.environ.get("KAIANO_API_BASE_URL", "")).rstrip(
             "/"
-        )
-        self.machine_secret = machine_secret or os.environ.get(
-            "KAIANO_API_CLERK_MACHINE_SECRET"
         )
         self.machine_name = machine_name or os.environ.get("KAIANO_API_MACHINE_NAME")
         self.api_key = api_key or _key_for(self.machine_name)
@@ -181,31 +104,23 @@ class KaianoApiClient:
         return cls(machine_name=machine_name)
 
     def _headers(self) -> dict[str, str]:
-        """Returns auth headers for API requests.
+        """Auth headers for API requests.
 
-        A named API key is preferred and used directly — no token exchange,
-        no network call before the call you wanted to make. The Clerk path
-        remains for cogs still on the shared fleet secret.
+        The key is used directly — no token exchange, so no network call
+        before the call you wanted to make, and nothing to cache or refresh.
         """
-        if self.api_key:
-            return {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-            }
-
-        if not self.machine_secret:
+        if not self.api_key:
             raise KaianoApiError(
                 status_code=0,
                 message=(
-                    "No credential: set KAIANO_API_KEY (preferred) or "
-                    "KAIANO_API_CLERK_MACHINE_SECRET"
+                    "No API key: set this machine's key (see machine_key_env_var) "
+                    "or KAIANO_API_KEY"
                 ),
                 path="",
             )
-        token = _get_m2m_token(self.machine_secret)
         return {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}",
+            "Authorization": f"Bearer {self.api_key}",
         }
 
     def post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
