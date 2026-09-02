@@ -48,3 +48,53 @@ def test_no_credential_at_all_is_an_error(monkeypatch: pytest.MonkeyPatch) -> No
     c = KaianoApiClient(base_url="https://x")
     with pytest.raises(KaianoApiError):
         c._headers()
+
+
+# ---------------------------------------------------------------------------
+# Per-machine key derivation
+# ---------------------------------------------------------------------------
+
+
+def test_env_var_is_derived_from_the_machine_name() -> None:
+    """One convention, shared with the receiving service."""
+    from mini_app_polis.api.client import machine_key_env_var
+
+    assert machine_key_env_var("deejay-cog") == "DEEJAY_COG_API_KEY"
+    assert machine_key_env_var("wiki-curator-cog") == "WIKI_CURATOR_COG_API_KEY"
+
+
+def test_named_machine_uses_its_own_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TRANSCRIPTION_COG_API_KEY", "k_transcribe")
+    monkeypatch.setenv("KAIANO_API_KEY", "k_generic")
+    c = KaianoApiClient(base_url="https://x", machine_name="transcription-cog")
+    assert c._headers()["Authorization"] == "Bearer k_transcribe"
+
+
+def test_one_cogs_key_is_not_used_by_another(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each cog reads only its own variable, from one shared config."""
+    monkeypatch.setenv("DEEJAY_COG_API_KEY", "k_deejay")
+    monkeypatch.delenv("EVALUATOR_COG_API_KEY", raising=False)
+    monkeypatch.delenv("KAIANO_API_KEY", raising=False)
+    monkeypatch.setattr("mini_app_polis.api.client._get_m2m_token", lambda _s: "tok")
+    c = KaianoApiClient(
+        base_url="https://x", machine_name="evaluator-cog", machine_secret="sk"
+    )
+    assert c.api_key is None
+    assert c._headers()["Authorization"] == "Bearer tok"
+
+
+def test_blank_key_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("WATCHER_COG_API_KEY", "   ")
+    monkeypatch.delenv("KAIANO_API_KEY", raising=False)
+    monkeypatch.setattr("mini_app_polis.api.client._get_m2m_token", lambda _s: "tok")
+    c = KaianoApiClient(
+        base_url="https://x", machine_name="watcher-cog", machine_secret="sk"
+    )
+    assert c.api_key is None
+
+
+def test_from_env_accepts_a_machine_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EVALUATOR_COG_API_KEY", "k_eval")
+    assert KaianoApiClient.from_env("evaluator-cog").api_key == "k_eval"

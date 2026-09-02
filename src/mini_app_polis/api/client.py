@@ -18,9 +18,19 @@ used by cogs that have not yet been given their own key. It authenticates as
 the shared fleet machine, so calls made with it are attributable only to "a
 cog". Prefer ``api_key``.
 
+Pass ``machine_name`` and the client finds that cog's key by convention:
+``transcription-cog`` -> ``TRANSCRIPTION_COG_API_KEY``. The same convention is
+used by the receiving service to derive the variable it checks against, so
+there is one rule rather than a mapping to keep in step on both sides.
+
+That derivation lives here, in the shared client, rather than in each cog. A
+helper copied into five repos is five things to change when the convention
+does, and four of them will be missed.
+
 **Env vars:**
   KAIANO_API_BASE_URL             — base URL of the target API service
-  KAIANO_API_KEY                  — this cog's own key, if not passed directly
+  <MACHINE_NAME>_API_KEY          — this cog's own key (from machine_name)
+  KAIANO_API_KEY                  — key for a caller that declares no name
   KAIANO_API_CLERK_MACHINE_SECRET — legacy shared machine secret
 """
 
@@ -46,6 +56,29 @@ _token_lock = threading.Lock()
 _cached_token: str | None = None
 _token_expires_at: float = 0.0  # monotonic time
 _REFRESH_BUFFER_SECS = 60.0  # refresh this many seconds before expiry
+
+
+def machine_key_env_var(machine_name: str) -> str:
+    """Environment variable holding a machine's key.
+
+    ``deejay-cog`` -> ``DEEJAY_COG_API_KEY``. Derived from the name so the
+    caller and the receiving service agree without either one carrying a
+    mapping.
+    """
+    return f"{machine_name.upper().replace('-', '_')}_API_KEY"
+
+
+def _key_for(machine_name: str | None) -> str | None:
+    """This caller's key: its own variable first, then the generic one.
+
+    A variable that exists but is blank counts as unset. It should behave like
+    an absent one rather than an empty credential that fails on first use.
+    """
+    if machine_name:
+        own = (os.environ.get(machine_key_env_var(machine_name)) or "").strip()
+        if own:
+            return own
+    return (os.environ.get("KAIANO_API_KEY") or "").strip() or None
 
 
 def _create_clerk_m2m_token(machine_secret: str) -> tuple[str, float]:
@@ -124,6 +157,7 @@ class KaianoApiClient:
         timeout: float = 30.0,
         max_retries: int = 3,
         api_key: str | None = None,
+        machine_name: str | None = None,
     ):
         self.base_url = (base_url or os.environ.get("KAIANO_API_BASE_URL", "")).rstrip(
             "/"
@@ -131,14 +165,20 @@ class KaianoApiClient:
         self.machine_secret = machine_secret or os.environ.get(
             "KAIANO_API_CLERK_MACHINE_SECRET"
         )
-        self.api_key = api_key or os.environ.get("KAIANO_API_KEY")
+        self.machine_name = machine_name or os.environ.get("KAIANO_API_MACHINE_NAME")
+        self.api_key = api_key or _key_for(self.machine_name)
         self.timeout = timeout
         self.max_retries = max_retries
 
     @classmethod
-    def from_env(cls) -> KaianoApiClient:
-        """Build a client using environment-based configuration defaults."""
-        return cls()
+    def from_env(cls, machine_name: str | None = None) -> KaianoApiClient:
+        """Build a client from the environment.
+
+        Pass ``machine_name`` so this caller presents its own key rather than
+        the shared fleet credential — that is what makes the receiving
+        service's audit trail name which cog called.
+        """
+        return cls(machine_name=machine_name)
 
     def _headers(self) -> dict[str, str]:
         """Returns auth headers for API requests.
