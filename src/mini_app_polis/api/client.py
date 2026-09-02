@@ -4,9 +4,24 @@
 token created from the ``miniappolis-cogs`` machine secret key. The token
 is cached until 60 seconds before expiry and refreshed automatically.
 
+**Identity:** a cog presents its own named API key as a bearer credential.
+The key identifies the machine — the receiving service matches it against the
+keys it holds in configuration — so nothing is asserted by the caller, no
+token is minted, and no identity provider sits on the request path.
+
+The key proves *who* the caller is and never what it may do. Permissions are
+decided by the receiving service from its own declaration, and nothing sent
+here can widen them.
+
+Legacy: ``KAIANO_API_CLERK_MACHINE_SECRET`` mints a Clerk M2M token instead,
+used by cogs that have not yet been given their own key. It authenticates as
+the shared fleet machine, so calls made with it are attributable only to "a
+cog". Prefer ``api_key``.
+
 **Env vars:**
   KAIANO_API_BASE_URL             — base URL of the target API service
-  KAIANO_API_CLERK_MACHINE_SECRET — machine secret key for miniappolis-cogs
+  KAIANO_API_KEY                  — this cog's own key, if not passed directly
+  KAIANO_API_CLERK_MACHINE_SECRET — legacy shared machine secret
 """
 
 from __future__ import annotations
@@ -108,6 +123,7 @@ class KaianoApiClient:
         machine_secret: str | None = None,
         timeout: float = 30.0,
         max_retries: int = 3,
+        api_key: str | None = None,
     ):
         self.base_url = (base_url or os.environ.get("KAIANO_API_BASE_URL", "")).rstrip(
             "/"
@@ -115,6 +131,7 @@ class KaianoApiClient:
         self.machine_secret = machine_secret or os.environ.get(
             "KAIANO_API_CLERK_MACHINE_SECRET"
         )
+        self.api_key = api_key or os.environ.get("KAIANO_API_KEY")
         self.timeout = timeout
         self.max_retries = max_retries
 
@@ -124,11 +141,25 @@ class KaianoApiClient:
         return cls()
 
     def _headers(self) -> dict[str, str]:
-        """Returns auth headers for API requests."""
+        """Returns auth headers for API requests.
+
+        A named API key is preferred and used directly — no token exchange,
+        no network call before the call you wanted to make. The Clerk path
+        remains for cogs still on the shared fleet secret.
+        """
+        if self.api_key:
+            return {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}",
+            }
+
         if not self.machine_secret:
             raise KaianoApiError(
                 status_code=0,
-                message="KAIANO_API_CLERK_MACHINE_SECRET is not set",
+                message=(
+                    "No credential: set KAIANO_API_KEY (preferred) or "
+                    "KAIANO_API_CLERK_MACHINE_SECRET"
+                ),
                 path="",
             )
         token = _get_m2m_token(self.machine_secret)
