@@ -172,7 +172,12 @@ def test_headers_send_the_key_with_no_network_call(
     assert "X-Owner-Id" not in h
 
 
-def test_headers_raises_when_machine_secret_not_set() -> None:
+def test_headers_raise_when_no_api_key_is_configured() -> None:
+    """A caller with no key fails outright rather than falling back.
+
+    There is no shared credential to fall back to: that fallback is what made
+    every cog indistinguishable to the receiving service.
+    """
     client = KaianoApiClient(
         base_url="https://example.com",
         timeout=10.0,
@@ -183,7 +188,7 @@ def test_headers_raises_when_machine_secret_not_set() -> None:
     assert "API key" in excinfo.value.message
 
 
-def test_post_sends_bearer_token_when_machine_secret_set(
+def test_post_sends_the_api_key_as_bearer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     response = MagicMock()
