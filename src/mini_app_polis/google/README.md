@@ -114,7 +114,9 @@ clear(spreadsheet_id, a1_range)
 ```python
 ensure_sheet_exists(spreadsheet_id, sheet_name, headers=None)
 batch_update(spreadsheet_id, requests)
-sort_sheet(spreadsheet_id, sheet_name, column_index, ascending=True, start_row=2, end_row=None)
+sort_sheet(
+    spreadsheet_id, sheet_name, column_index, ascending=True, start_row=2, end_row=None
+)
 ```
 
 ---
@@ -195,6 +197,7 @@ External repos **never** build clients directly.
 ### Old
 ```python
 from mini_app_polis.google.sheets import get_sheets_service, read_sheet
+
 svc = get_sheets_service()
 rows = read_sheet(svc, sid, "Sheet1!A2:C")
 ```
@@ -202,6 +205,7 @@ rows = read_sheet(svc, sid, "Sheet1!A2:C")
 ### New
 ```python
 from mini_app_polis.google import GoogleAPI
+
 g = GoogleAPI.from_env()
 rows = g.sheets.read_values(sid, "Sheet1!A2:C")
 ```

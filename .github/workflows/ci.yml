@@ -7,6 +7,19 @@ on:
     branches: [main]
 
 jobs:
+  # Delegates to the fleet's shared security workflow: gitleaks over
+  # full history, pip-audit against the resolved dependency set, and
+  # semgrep. sbom: false because SEC-005 does not apply to a
+  # shared-library — nothing here is deployed, so there is no build image
+  # for an SBOM to describe. The steps live in mini-app-polis/.github;
+  # see that repo's README for the inputs.
+  security:
+    uses: mini-app-polis/.github/.github/workflows/security.yml@v1
+    with:
+      language: python
+      package-manager: uv
+      sbom: false
+
   test:
     runs-on: ubuntu-latest
 
@@ -37,7 +50,7 @@ jobs:
         run: uv run pytest --cov=mini_app_polis --cov-report=term-missing
 
   release:
-    needs: test
+    needs: [test, security]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
