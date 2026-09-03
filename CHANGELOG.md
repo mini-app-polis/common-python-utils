@@ -1,3 +1,10 @@
+# [4.1.0](https://github.com/mini-app-polis/common-python-utils/compare/v4.0.2...v4.1.0) (2026-09-03)
+
+
+### Features
+
+* **security:** call the shared security workflow, clear 22 advisories ([f4cc791](https://github.com/mini-app-polis/common-python-utils/commit/f4cc791a5671e916b2969b5bdb78937c78ae1189))
+
 ## [4.0.2](https://github.com/mini-app-polis/common-python-utils/compare/v4.0.1...v4.0.2) (2026-09-02)
 
 
