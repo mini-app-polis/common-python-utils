@@ -173,7 +173,23 @@ class KaianoApiClient:
         for attempt in range(1, self.max_retries + 1):
             try:
                 with httpx.Client(timeout=self.timeout) as client:
-                    response = client.get(url, params=query, headers=self._headers())
+                    # `params` is passed only when there is something to
+                    # pass. httpx *replaces* a URL's query string whenever
+                    # the kwarg is supplied at all, so the previous
+                    # unconditional `params=query` — where query was `{}`
+                    # for every caller that had no params — silently
+                    # discarded any query string written into `path`.
+                    #
+                    # A caller asking for `/v1/evaluations?repo=x&limit=1`
+                    # got `/v1/evaluations`: no filter, default limit, the
+                    # newest row across every repo. It returned 200 with
+                    # plausible data, so nothing looked wrong anywhere.
+                    if query:
+                        response = client.get(
+                            url, params=query, headers=self._headers()
+                        )
+                    else:
+                        response = client.get(url, headers=self._headers())
 
                 if response.status_code >= 400:
                     raise KaianoApiError(

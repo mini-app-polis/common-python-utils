@@ -247,9 +247,12 @@ def test_get_returns_parsed_json_on_200_response(
         )
         out = client.get("/v1/sets")
 
+    # No `params` kwarg when there are none to send. This assertion used
+    # to require `params={}`, which pinned the defect: supplying the kwarg
+    # at all makes httpx replace the URL's query string, so any filter
+    # written into the path was discarded before the request left.
     mock_http_client.get.assert_called_once_with(
         "https://example.com/v1/sets",
-        params={},
         headers={
             "Content-Type": "application/json",
             "Authorization": "Bearer k_test",
@@ -324,3 +327,54 @@ def test_kaiano_api_error_importable_from_api_module() -> None:
     from mini_app_polis.api import KaianoApiError
 
     assert issubclass(KaianoApiError, Exception)
+
+
+def test_get_preserves_a_query_string_written_into_the_path() -> None:
+    """A filter in the path must survive the request.
+
+    httpx replaces a URL's query string whenever `params` is supplied at
+    all, and this client used to pass `params=query` unconditionally with
+    query defaulting to `{}`. So `/v1/evaluations?repo=x&limit=1` went out
+    as `/v1/evaluations`: no filter, default limit, newest row across every
+    repo. It returned 200 with plausible-looking data, which is why it went
+    unnoticed — it made the evaluator's duplicate check compare one repo's
+    finding against another repo's most recent row, and silently drop
+    findings that were true.
+    """
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = {"data": []}
+
+    mock_http_client = MagicMock()
+    mock_http_client.get.return_value = response
+
+    with patch("mini_app_polis.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+        client = KaianoApiClient(base_url="https://example.com", api_key="k_test")
+        client.get("/v1/evaluations?repo=deejay-cog&limit=1")
+
+    called_url = mock_http_client.get.call_args[0][0]
+    assert called_url.endswith("/v1/evaluations?repo=deejay-cog&limit=1")
+    # The kwarg must be absent, not empty: passing it at all is what
+    # wiped the query.
+    assert "params" not in mock_http_client.get.call_args.kwargs
+
+
+def test_get_still_sends_explicit_params() -> None:
+    """The normal path is unchanged — params are passed when given."""
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = {"data": []}
+
+    mock_http_client = MagicMock()
+    mock_http_client.get.return_value = response
+
+    with patch("mini_app_polis.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+        client = KaianoApiClient(base_url="https://example.com", api_key="k_test")
+        client.get("/v1/evaluations", params={"repo": "deejay-cog", "limit": 1})
+
+    assert mock_http_client.get.call_args.kwargs["params"] == {
+        "repo": "deejay-cog",
+        "limit": 1,
+    }
