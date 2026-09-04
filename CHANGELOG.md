@@ -1,3 +1,15 @@
+# [4.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v4.1.0...v4.2.0) (2026-09-04)
+
+
+### Bug Fixes
+
+* **api:** stop discarding a query string written into the path ([3b8474b](https://github.com/mini-app-polis/common-python-utils/commit/3b8474b3707dcf37cf2da0530a9e7a4887442716))
+
+
+### Features
+
+* **deps:** automate dependency updates ([3914533](https://github.com/mini-app-polis/common-python-utils/commit/3914533120b6375787960cda39f59ace45a39ef5))
+
 # [4.1.0](https://github.com/mini-app-polis/common-python-utils/compare/v4.0.2...v4.1.0) (2026-09-03)
 
 
