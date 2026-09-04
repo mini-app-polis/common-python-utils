@@ -1,3 +1,10 @@
+## [4.2.1](https://github.com/mini-app-polis/common-python-utils/compare/v4.2.0...v4.2.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* **deps:** bump mypy from 1.20.2 to 2.3.1 ([1de6340](https://github.com/mini-app-polis/common-python-utils/commit/1de634093b6dedc3404eabb166cc01f9e65aef5d))
+
 # [4.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v4.1.0...v4.2.0) (2026-09-04)
 
 
