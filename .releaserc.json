@@ -12,7 +12,8 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "uv version ${nextRelease.version} && uv lock"
+        "prepareCmd": "uv version ${nextRelease.version} && uv lock",
+        "publishCmd": "uv build && uv publish --trusted-publishing always"
       }
     ],
     [

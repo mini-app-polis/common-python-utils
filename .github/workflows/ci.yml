@@ -57,6 +57,11 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+      # PyPI trusted publishing. `uv publish --trusted-publishing always`
+      # exchanges this job's OIDC token for a short-lived PyPI credential,
+      # so there is no API token in Doppler and nothing to rotate. Unlike
+      # the npm path, this is the only credential shape offered here.
+      id-token: write
 
     steps:
       - uses: actions/checkout@v7

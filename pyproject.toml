@@ -1,8 +1,13 @@
 [project]
-name = "common-python-utils"
+# Distribution name, not the import name. The import name stays
+# `mini_app_polis` — renaming that would touch every call site in the fleet
+# for no gain. The namespace prefix is deliberate: this package is public on
+# PyPI, and `common-python-utils` in a public namespace is a name anyone
+# could reasonably want. See docs/pypi-package-publishing.md §6.
+name = "miniapppolis-common-utils"
 version = "4.2.1"
-description = "Common utility functions shared across Kaiano's projects."
-authors = [{ name = "Kaiano Levine", email = "kaiano@example.com" }]
+description = "Common utility functions shared across the MiniAppPolis ecosystem."
+authors = [{ name = "Kaiano Levine" }]
 license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.11"
@@ -34,6 +39,12 @@ dev = [
   "ruff>=0.8.0",
   "types-requests>=2.32.0,<3.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/mini-app-polis/common-python-utils"
+Repository = "https://github.com/mini-app-polis/common-python-utils"
+Changelog = "https://github.com/mini-app-polis/common-python-utils/blob/main/CHANGELOG.md"
+Issues = "https://github.com/mini-app-polis/common-python-utils/issues"
 
 [tool.uv]
 
