@@ -12,6 +12,7 @@
     [
       "@semantic-release/exec",
       {
+        "verifyConditionsCmd": "./scripts/verify-pypi-publishing.sh",
         "prepareCmd": "uv version ${nextRelease.version} && uv lock",
         "publishCmd": "uv build && uv publish --trusted-publishing always"
       }
