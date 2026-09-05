@@ -1,3 +1,20 @@
+# [5.0.0](https://github.com/mini-app-polis/common-python-utils/compare/v4.2.1...v5.0.0) (2026-09-05)
+
+
+* feat!: publish to PyPI as miniapppolis-common-utils ([bd1b5d0](https://github.com/mini-app-polis/common-python-utils/commit/bd1b5d026ee3af19fe751663d7d95073cd6034d8))
+
+
+### Bug Fixes
+
+* **git:** never three-way merge a lockfile ([d763070](https://github.com/mini-app-polis/common-python-utils/commit/d763070263baabb2a5c73ac54d8731ab4c33146d))
+
+
+### BREAKING CHANGES
+
+* the distribution is named miniapppolis-common-utils.
+Anything declaring common-python-utils, including by git ref, must be
+updated. See docs/pypi-package-publishing.md.
+
 ## [4.2.1](https://github.com/mini-app-polis/common-python-utils/compare/v4.2.0...v4.2.1) (2026-09-04)
 
 
