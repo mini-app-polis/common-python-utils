@@ -2,30 +2,35 @@
 
 Common Python utilities shared across Kaiano's projects.
 
-> **Import namespace:** `mini_app_polis`
-> **Note:** Import using `mini_app_polis` (for example, `from mini_app_polis.google import GoogleAPI`)
+> **Install name:** `miniapppolis-common-utils` (PyPI) &nbsp;·&nbsp; **Import namespace:** `mini_app_polis`
+>
+> The distribution and the import namespace differ on purpose: the published
+> name is prefixed because the registry is public, while the import namespace
+> is the one every consumer already writes. Install `miniapppolis-common-utils`,
+> import `mini_app_polis` (for example, `from mini_app_polis.google import GoogleAPI`).
 
 ---
 
 ## Installation
 
-Pin to a specific release tag in your `pyproject.toml`:
+Declare a version range in your `pyproject.toml` and let the lockfile carry
+the exact pin:
 
 ```toml
-[tool.uv.sources]
-mini_app_polis = { git = "https://github.com/mini-app-polis/common-python-utils", tag = "v1.0.0" }
-
 [project]
 dependencies = [
-  "mini_app_polis",
+  "miniapppolis-common-utils>=5.0,<6",
 ]
 ```
+
+Then `uv lock`. To move to a newer release, `uv lock --upgrade-package
+miniapppolis-common-utils` — no edit to this file.
 
 To use the LLM module, add the `llm` extra:
 
 ```toml
 dependencies = [
-  "mini_app_polis[llm]",
+  "miniapppolis-common-utils[llm]>=5.0,<6",
 ]
 ```
 

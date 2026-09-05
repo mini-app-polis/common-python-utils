@@ -1,10 +1,17 @@
 """mini_app_polis — common Python utilities for the MiniAppPolis ecosystem.
 
-Install name:  common-python-utils
-Import name:   mini_app_polis
+Install name:  miniapppolis-common-utils   (the distribution, on PyPI)
+Import name:   mini_app_polis               (the package, in your source)
 
-Install via uv:
-    mini_app_polis = { git = "https://github.com/mini-app-polis/common-python-utils", tag = "v2.x.x" }
+The two differ deliberately. The distribution carries the ecosystem prefix
+because it is published in a public registry, where `common-python-utils`
+is a name anyone could reasonably want. The import namespace is what every
+consumer already writes, so renaming it would break them all and buy
+nothing. Repository: mini-app-polis/common-python-utils.
+
+Install:
+    # pyproject.toml
+    dependencies = ["miniapppolis-common-utils>=5.0,<6"]
 
 Import:
     from mini_app_polis.api import KaianoApiClient
