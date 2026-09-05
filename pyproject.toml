@@ -5,7 +5,7 @@
 # PyPI, and `common-python-utils` in a public namespace is a name anyone
 # could reasonably want. See docs/pypi-package-publishing.md §6.
 name = "miniapppolis-common-utils"
-version = "5.0.0"
+version = "5.0.1"
 description = "Common utility functions shared across the MiniAppPolis ecosystem."
 authors = [{ name = "Kaiano Levine" }]
 license = { text = "MIT" }

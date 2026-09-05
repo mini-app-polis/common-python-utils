@@ -1127,7 +1127,7 @@ wheels = [
 
 [[package]]
 name = "miniapppolis-common-utils"
-version = "5.0.0"
+version = "5.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "google-api-python-client" },

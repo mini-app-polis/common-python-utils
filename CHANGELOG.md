@@ -1,3 +1,10 @@
+## [5.0.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.0.0...v5.0.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* **release:** verify PyPI trusted publishing before bumping the version ([27d2d6b](https://github.com/mini-app-polis/common-python-utils/commit/27d2d6b5f7bede9927fd12781e5e4b19632563c7))
+
 # [5.0.0](https://github.com/mini-app-polis/common-python-utils/compare/v4.2.1...v5.0.0) (2026-09-05)
 
 
