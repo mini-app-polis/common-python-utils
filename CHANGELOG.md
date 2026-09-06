@@ -1,3 +1,10 @@
+## [5.0.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.0.1...v5.0.2) (2026-09-06)
+
+
+### Bug Fixes
+
+* **release:** source the version from a committed file instead of pyproject.toml ([495af33](https://github.com/mini-app-polis/common-python-utils/commit/495af331b64816acca95b4a4e00dc97a53b2167a))
+
 ## [5.0.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.0.0...v5.0.1) (2026-09-05)
 
 
