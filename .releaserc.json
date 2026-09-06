@@ -13,14 +13,14 @@
       "@semantic-release/exec",
       {
         "verifyConditionsCmd": "./scripts/verify-pypi-publishing.sh",
-        "prepareCmd": "uv version ${nextRelease.version} && uv lock",
+        "prepareCmd": "printf '__version__ = \"%s\"\\n' \"${nextRelease.version}\" > src/mini_app_polis/_version.py",
         "publishCmd": "uv build && uv publish --trusted-publishing always"
       }
     ],
     [
       "@semantic-release/git",
       {
-        "assets": ["CHANGELOG.md", "pyproject.toml", "uv.lock"],
+        "assets": ["CHANGELOG.md", "src/mini_app_polis/_version.py"],
         "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }
     ],

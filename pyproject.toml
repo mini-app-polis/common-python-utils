@@ -5,7 +5,7 @@
 # PyPI, and `common-python-utils` in a public namespace is a name anyone
 # could reasonably want. See docs/pypi-package-publishing.md §6.
 name = "miniapppolis-common-utils"
-version = "5.0.1"
+dynamic = ["version"]
 description = "Common utility functions shared across the MiniAppPolis ecosystem."
 authors = [{ name = "Kaiano Levine" }]
 license = { text = "MIT" }
@@ -51,6 +51,9 @@ Issues = "https://github.com/mini-app-polis/common-python-utils/issues"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/mini_app_polis/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mini_app_polis"]

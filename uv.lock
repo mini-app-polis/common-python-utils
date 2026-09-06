@@ -1127,7 +1127,6 @@ wheels = [
 
 [[package]]
 name = "miniapppolis-common-utils"
-version = "5.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "google-api-python-client" },
@@ -1185,7 +1184,7 @@ requires-dist = [
     { name = "tenacity", specifier = ">=8.2,<10.0" },
     { name = "types-requests", marker = "extra == 'dev'", specifier = ">=2.32.0,<3.0.0" },
 ]
-provides-extras = ["llm", "dev"]
+provides-extras = ["dev", "llm"]
 
 [[package]]
 name = "music-tag"

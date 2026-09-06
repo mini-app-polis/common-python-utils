@@ -31,6 +31,8 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING, Any
 
+from ._version import __version__ as __version__
+
 if TYPE_CHECKING:
     from . import config as config
     from .serve_resilience import serve_with_retry as serve_with_retry
