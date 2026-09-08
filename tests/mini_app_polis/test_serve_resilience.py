@@ -247,7 +247,10 @@ def test_success_calls_serve_once_and_posts_nothing(
     monkeypatch, api_configured
 ) -> None:
     calls = _install_serve(monkeypatch, _noop_serve)
-    with patch.object(ps, "_post_evaluation") as post:
+    with (
+        patch.object(ps, "_deliver", return_value=True),
+        patch.object(ps, "_build_message", wraps=ps._build_message) as post,
+    ):
         sr.serve_with_retry("dep-a", repo="deejay-cog")
     assert len(calls) == 1
     post.assert_not_called()
@@ -276,7 +279,10 @@ def test_transient_then_success_posts_nothing(
         return None
 
     calls = _install_serve(monkeypatch, _flaky)
-    with patch.object(ps, "_post_evaluation") as post:
+    with (
+        patch.object(ps, "_deliver", return_value=True),
+        patch.object(ps, "_build_message", wraps=ps._build_message) as post,
+    ):
         sr.serve_with_retry("dep", repo="deejay-cog")
     assert len(calls) == 3
     post.assert_not_called()
@@ -295,19 +301,20 @@ def test_giveup_posts_exactly_one_critical_startup_finding(
 
     calls = _install_serve(monkeypatch, _always_503)
     with (
-        patch.object(ps, "_post_evaluation") as post,
+        patch.object(ps, "_deliver", return_value=True),
+        patch.object(ps, "_build_message", wraps=ps._build_message) as post,
         pytest.raises(httpx.HTTPStatusError),
     ):
         sr.serve_with_retry("dep", repo="deejay-cog", max_attempts=4)
 
     assert len(calls) == 4, "the attempt-count guard must bound the retries"
     assert post.call_count == 1, "exactly one finding, not one per attempt"
-    payload = post.call_args.args[0]
+    payload = post.call_args.kwargs
     assert payload["severity"] == "CRITICAL"
     assert payload["source"] == "startup"
     assert payload["repo"] == "deejay-cog"
     assert payload["flow_name"] == "startup"
-    assert "attempts=4" in payload["finding"]
+    assert "attempts=4" in payload["text"]
 
 
 def test_giveup_reraises_original_exception(
@@ -317,7 +324,7 @@ def test_giveup_reraises_original_exception(
     sentinel = _prefect_status_error(503)
     _install_serve(monkeypatch, _raising_serve(sentinel))
     with (
-        patch.object(ps, "_post_evaluation"),
+        patch.object(ps, "_deliver", return_value=True),
         pytest.raises(httpx.HTTPStatusError) as excinfo,
     ):
         sr.serve_with_retry("dep", repo="deejay-cog", max_attempts=2)
@@ -349,7 +356,7 @@ def test_wall_clock_ceiling_stops_retrying(
     slow_failure = _raising_serve(_status_error(503), delay=0.01)
     calls = _install_serve(monkeypatch, slow_failure)
     with (
-        patch.object(ps, "_post_evaluation"),
+        patch.object(ps, "_deliver", return_value=True),
         pytest.raises(httpx.HTTPStatusError),
     ):
         sr.serve_with_retry("dep", repo="deejay-cog", max_seconds=0.005)
@@ -367,17 +374,18 @@ def test_non_retryable_fails_fast_and_still_posts(
     """401 must not be retried — but the process still dies, so still report."""
     calls = _install_serve(monkeypatch, _raising_serve(_prefect_status_error(401)))
     with (
-        patch.object(ps, "_post_evaluation") as post,
+        patch.object(ps, "_deliver", return_value=True),
+        patch.object(ps, "_build_message", wraps=ps._build_message) as post,
         pytest.raises(httpx.HTTPStatusError),
     ):
         sr.serve_with_retry("dep", repo="deejay-cog", max_attempts=8)
 
     assert len(calls) == 1, "a config error must not burn the retry ceiling"
     assert post.call_count == 1
-    payload = post.call_args.args[0]
+    payload = post.call_args.kwargs
     assert payload["severity"] == "CRITICAL"
     assert payload["source"] == "startup"
-    assert "non-retryable" in payload["finding"]
+    assert "non-retryable" in payload["text"]
     assert "PREFECT_API_KEY" in payload["suggestion"]
 
 
@@ -405,7 +413,8 @@ def test_production_only_false_suppresses_post_but_still_raises(
 ) -> None:
     _install_serve(monkeypatch, _raising_serve(_status_error(503)))
     with (
-        patch.object(ps, "_post_evaluation") as post,
+        patch.object(ps, "_deliver", return_value=True),
+        patch.object(ps, "_build_message", wraps=ps._build_message) as post,
         pytest.raises(httpx.HTTPStatusError),
     ):
         sr.serve_with_retry(
@@ -419,13 +428,14 @@ def test_flow_name_override_reaches_the_finding(
 ) -> None:
     _install_serve(monkeypatch, _raising_serve(_status_error(503)))
     with (
-        patch.object(ps, "_post_evaluation") as post,
+        patch.object(ps, "_deliver", return_value=True),
+        patch.object(ps, "_build_message", wraps=ps._build_message) as post,
         pytest.raises(httpx.HTTPStatusError),
     ):
         sr.serve_with_retry(
             "dep", repo="deejay-cog", flow_name="deejay-cog-boot", max_attempts=2
         )
-    assert post.call_args.args[0]["flow_name"] == "deejay-cog-boot"
+    assert post.call_args.kwargs["flow_name"] == "deejay-cog-boot"
 
 
 # ---------------------------------------------------------------------------
@@ -492,7 +502,8 @@ def test_keyboard_interrupt_propagates_without_posting(
     """
     _install_serve(monkeypatch, _raising_serve(KeyboardInterrupt()))
     with (
-        patch.object(ps, "_post_evaluation") as post,
+        patch.object(ps, "_deliver", return_value=True),
+        patch.object(ps, "_build_message", wraps=ps._build_message) as post,
         pytest.raises(KeyboardInterrupt),
     ):
         sr.serve_with_retry("dep", repo="deejay-cog")
@@ -532,13 +543,14 @@ def test_outage_ending_in_config_error_reports_as_exhausted(
 
     calls = _install_serve(monkeypatch, _degrading)
     with (
-        patch.object(ps, "_post_evaluation") as post,
+        patch.object(ps, "_deliver", return_value=True),
+        patch.object(ps, "_build_message", wraps=ps._build_message) as post,
         pytest.raises(httpx.HTTPStatusError),
     ):
         sr.serve_with_retry("dep", repo="deejay-cog")
 
     assert len(calls) == 3
-    finding = post.call_args.args[0]["finding"]
+    finding = post.call_args.kwargs["text"]
     assert "retries exhausted" in finding
     assert "failed fast without retrying" not in finding
     assert "attempts=3" in finding
@@ -553,11 +565,12 @@ def test_immediate_config_error_still_reports_as_fail_fast(
     """The converse: no retries happened, so "failed fast" is accurate."""
     _install_serve(monkeypatch, _raising_serve(_prefect_status_error(403)))
     with (
-        patch.object(ps, "_post_evaluation") as post,
+        patch.object(ps, "_deliver", return_value=True),
+        patch.object(ps, "_build_message", wraps=ps._build_message) as post,
         pytest.raises(httpx.HTTPStatusError),
     ):
         sr.serve_with_retry("dep", repo="deejay-cog")
-    finding = post.call_args.args[0]["finding"]
+    finding = post.call_args.kwargs["text"]
     assert "failed fast without retrying" in finding
     assert "retries exhausted" not in finding
 

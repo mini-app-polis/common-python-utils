@@ -27,6 +27,10 @@ That derivation lives here, in the shared client, rather than in each cog. A
 helper copied into five repos is five things to change when the convention
 does, and four of them will be missed.
 
+**Notifications:** ``notify()`` wraps ``POST /v1/notify`` so the path and
+body shape live here rather than in each cog. See
+:mod:`mini_app_polis.pipeline_status` for the best-effort layer above it.
+
 **Env vars:**
   KAIANO_API_BASE_URL             — base URL of the target API service
   <MACHINE_NAME>_API_KEY          — this cog's own key (from machine_name)
@@ -158,6 +162,47 @@ class KaianoApiClient:
             message=f"Connection failed after {self.max_retries} attempts: {last_exc}",
             path=path,
         )
+
+    def notify(
+        self,
+        content: str | None = None,
+        *,
+        embeds: list[dict[str, Any]] | None = None,
+        username: str | None = None,
+    ) -> dict[str, Any]:
+        """Send one Discord notification via ``POST /v1/notify``.
+
+        The one place in the fleet that knows the notification path and its
+        body shape. A cog calling ``post("/v1/notify", {...})`` by hand works
+        today and breaks silently the day the route or the payload changes;
+        the whole argument for deriving the key variable in this client
+        rather than in five cogs applies here unchanged.
+
+        Requires ``notify.messages.send``, which every declared machine holds.
+        Build the client with ``machine_name`` so the API's audit trail names
+        which cog sent the message rather than only that one did.
+
+        Raises :class:`KaianoApiError` like every other verb here — the caller
+        decides whether a missed notification matters. Callers for which it
+        does not should use :mod:`mini_app_polis.pipeline_status`, which is
+        best-effort by contract.
+        """
+        if not content and not embeds:
+            raise KaianoApiError(
+                status_code=0,
+                message="notify requires content or embeds",
+                path="/v1/notify",
+            )
+
+        payload: dict[str, Any] = {}
+        if content:
+            payload["content"] = content
+        if embeds:
+            payload["embeds"] = embeds
+        if username:
+            payload["username"] = username
+
+        return self.post("/v1/notify", payload)
 
     def get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """

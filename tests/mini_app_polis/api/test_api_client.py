@@ -378,3 +378,78 @@ def test_get_still_sends_explicit_params() -> None:
         "repo": "deejay-cog",
         "limit": 1,
     }
+
+
+# ---------------------------------------------------------------------------
+# notify
+# ---------------------------------------------------------------------------
+#
+# The notification path lives on the client so the route and body shape are
+# in one place rather than hand-rolled in each cog — the same argument that
+# put the key-variable derivation here.
+
+
+def test_notify_posts_content_to_the_notify_route() -> None:
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = {"data": {"forwarded": True}}
+
+    mock_http_client = MagicMock()
+    mock_http_client.post.return_value = response
+
+    with patch("mini_app_polis.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+        client = KaianoApiClient(base_url="https://example.com", api_key="k_test")
+        out = client.notify("deploy finished")
+
+    assert out == {"data": {"forwarded": True}}
+    assert mock_http_client.post.call_args.args[0] == "https://example.com/v1/notify"
+    assert mock_http_client.post.call_args.kwargs["json"] == {
+        "content": "deploy finished"
+    }
+
+
+def test_notify_sends_embeds_and_username() -> None:
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = {}
+
+    mock_http_client = MagicMock()
+    mock_http_client.post.return_value = response
+    embed = {"title": "CI", "color": 1}
+
+    with patch("mini_app_polis.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+        client = KaianoApiClient(base_url="https://example.com", api_key="k_test")
+        client.notify(embeds=[embed], username="deejay-cog")
+
+    body = mock_http_client.post.call_args.kwargs["json"]
+    assert body == {"embeds": [embed], "username": "deejay-cog"}
+    assert "content" not in body
+
+
+def test_notify_requires_a_body() -> None:
+    """The API rejects an empty message; fail here rather than round-trip it."""
+    client = KaianoApiClient(base_url="https://example.com", api_key="k_test")
+    with pytest.raises(KaianoApiError):
+        client.notify()
+
+
+def test_notify_raises_on_error_response() -> None:
+    """notify is the transport layer — it reports failure by raising.
+
+    pipeline_status is the best-effort layer above it; a caller reaching
+    the client directly has said it wants to know.
+    """
+    response = MagicMock()
+    response.status_code = 502
+    response.text = "discord rejected it"
+
+    mock_http_client = MagicMock()
+    mock_http_client.post.return_value = response
+
+    with patch("mini_app_polis.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+        client = KaianoApiClient(base_url="https://example.com", api_key="k_test")
+        with pytest.raises(KaianoApiError):
+            client.notify("anything")

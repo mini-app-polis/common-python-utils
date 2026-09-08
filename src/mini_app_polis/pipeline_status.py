@@ -1,22 +1,51 @@
 """Shared pipeline-status reporting for Kaiano cogs.
 
 Each cog (deejay-cog, evaluator-cog, retag-cog, …) runs as one or more
-Prefect flows and self-reports the outcome of every run to the Kaiano
-API at ``POST /v1/evaluations``. This module centralises that wiring so
-no cog has to hand-roll the helpers, hooks, or payload shape.
+Prefect flows and reports what happened. This module centralises that
+wiring so no cog has to hand-roll the helpers, hooks, or payload shapes.
+
+**Two sinks, because there are two different things being reported.**
+
+:func:`post_findings` → ``POST /v1/evaluations``. Graded findings: what
+an evaluator judged about a repo against a revision of the standards
+catalog. These are records. They are compared, counted and burned down
+over time, so they are written to a table and stay there.
+
+:func:`post_run_finding` and :func:`make_failure_hook` → ``POST
+/v1/notify``. Run status: this flow finished, this flow crashed. Nothing
+is persisted. It used to travel the findings path, which is why the API
+had to null out ``standards_version`` on those rows to stop Pipeline
+Health claiming they had been evaluated against something — nothing
+graded "the flow crashed" against anything.
+
+The two no longer share a funnel. Sharing one is what let run telemetry
+into the evaluations table in the first place, and a single change to
+"the sink" then moves both.
+
+What run status gives up by not being written down: "did it run" is
+answered by Healthchecks.io, which fires on absence rather than on
+success, and "what went wrong" by the message in the channel and the
+structured log beside it. Counters carried on WARN reports (items
+processed, files failed) accumulate nowhere, so "how many failed last
+month" has no source. Adding a record back later is additive — the
+notification is a fan-out, not a store.
 
 Two entry points cover the common cases:
 
-- :func:`post_run_finding` — called at the end of a successful flow run
-  to emit a single SUCCESS/WARN finding with optional free-form counter
-  extras.
+- :func:`post_run_finding` — called at the end of a flow run to report a
+  single SUCCESS/WARN outcome with optional free-form counter extras.
 - :func:`make_failure_hook` — returns a Prefect ``on_failure`` /
-  ``on_crashed`` hook that posts a WARN (Failed) or ERROR (Crashed)
-  finding when the flow itself dies.
+  ``on_crashed`` hook that reports WARN (Failed) or ERROR (Crashed)
+  when the flow itself dies.
 
 Both are **best-effort** — they swallow every exception they can so a
-broken evaluation post never masks the real failure of the flow it is
-reporting on.
+broken notification never masks the real failure of the flow it is
+reporting on. Best-effort means never raising; it does not mean claiming
+success. Both return a :class:`DeliveryReport` counting what was
+actually delivered, and delivery failures go to Sentry when the host
+process has it initialised. A caller that logs "reported N" from the
+length of what it handed over is the instrument that showed green
+through the September outage.
 
 Posts are gated by ``production_only=True`` (the default) **and** the
 presence of the ``KAIANO_API_BASE_URL`` env var. Local development runs
@@ -45,10 +74,20 @@ Severity classification:
              for why this is deliberately narrow.
 
 The Kaiano API's ``PipelineEvaluationCreate`` schema is the source of
-truth for the payload fields; this module sends ``run_id``, ``repo``,
-``flow_name``, ``dimension``, ``severity``, ``finding``, and ``source``.
-Anything else the API expects must be added here, never tacked on by an
-individual cog.
+truth for the findings payload; :func:`post_findings` sends ``run_id``,
+``repo``, ``flow_name``, ``dimension``, ``severity``, ``finding`` and
+``source``. Run-status messages are built in :func:`_build_message` and
+sent through :meth:`mini_app_polis.api.KaianoApiClient.notify`, which
+owns that path and body shape.
+
+Both build their client with ``machine_name=repo``, so the API's audit
+trail names which cog called rather than only that one did — the cog's
+name, its distribution name and its machine name are the same string by
+convention, so there is nothing to keep in step.
+
+``SUCCESS`` run reports are logged and not sent; see
+:data:`NOTIFY_SEVERITIES`. Findings are never suppressed by severity: a
+SUCCESS finding is a graded result and belongs in the table.
 """
 
 from __future__ import annotations
@@ -56,6 +95,7 @@ from __future__ import annotations
 import contextlib
 import os
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from functools import cache
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Literal, TypedDict
@@ -121,6 +161,43 @@ LLM-evaluator finding), expand this Literal and extend the regression
 tests in ``test_pipeline_status.py``. The API already accepts the
 string, so the change is library-only.
 """
+
+#: Severities that reach the notification channel. SUCCESS is logged and
+#: goes no further: a fleet announcing "ran fine" on every schedule is the
+#: noise problem this path exists to avoid, and Healthchecks.io already
+#: answers "did it run" by firing on absence rather than on success.
+NOTIFY_SEVERITIES: frozenset[str] = frozenset({"WARN", "ERROR", "CRITICAL"})
+
+#: Message colour per severity, so the channel is scannable without reading.
+_SEVERITY_COLORS: dict[str, int] = {
+    "SUCCESS": 0x2EA043,
+    "WARN": 0xD29922,
+    "ERROR": 0xDA3633,
+    "CRITICAL": 0x8B0000,
+}
+_DEFAULT_COLOR = 0x58A6FF
+
+
+@dataclass(frozen=True)
+class DeliveryReport:
+    """What actually happened to a batch of run reports.
+
+    Exists because the alternative is a caller logging "reported N" from
+    the length of the list it handed over. That is what reported green for
+    a day while nothing landed; a return value that counts what was
+    delivered is the fix, and it costs one dataclass.
+    """
+
+    sent: int = 0
+    suppressed: int = 0
+    failed: int = 0
+    skipped: int = 0
+
+    @property
+    def ok(self) -> bool:
+        """True when nothing failed to deliver."""
+        return self.failed == 0
+
 
 DEFAULT_DIMENSION = "pipeline_consistency"
 """Default dimension for self-reported findings.
@@ -289,28 +366,128 @@ def _stamp_processor_version(text: str, repo: str) -> str:
     return f"{text} (processor={resolved})"
 
 
-def _post_evaluation(payload: dict[str, Any]) -> None:
-    """POST a self-reported finding to ``/v1/evaluations``. Never raises.
+def _capture(exc: BaseException) -> None:
+    """Report an exception to Sentry, if the host process has Sentry.
 
-    Uses :class:`mini_app_polis.api.KaianoApiClient` so we share the
-    Clerk M2M auth path the rest of the cog ecosystem uses.
+    Two conditions, both silent when unmet: ``sentry_sdk`` may not be
+    installed — it is not a dependency of this library, and the mp3 and
+    Google helpers should not start paying for one — and even when it is,
+    ``capture_exception`` does nothing unless the process called ``init()``.
+    Both no-op cleanly, so this is safe to call from anywhere, and reports
+    only from cogs that actually wired layer three.
+    """
+    try:
+        import sentry_sdk  # local import: optional dependency
+    except ImportError:
+        return
+    with contextlib.suppress(Exception):
+        sentry_sdk.capture_exception(exc)
+
+
+# ---------------------------------------------------------------------------
+# Sink 1 — graded findings, to POST /v1/evaluations
+# ---------------------------------------------------------------------------
+
+
+def _post_evaluation(payload: dict[str, Any]) -> bool:
+    """POST one finding to ``/v1/evaluations``. Never raises.
+
+    Returns whether the API accepted it. The boolean is the whole point:
+    the previous version returned None, so a caller could not distinguish
+    "delivered" from "swallowed", and for a day nothing did.
     """
     logger = get_prefect_logger()
     try:
         from mini_app_polis.api import KaianoApiClient  # local import
-    except Exception:
-        logger.exception(
-            "pipeline_status: Kaiano API client not available; finding not posted"
-        )
-        return
+    except Exception as exc:
+        with contextlib.suppress(Exception):
+            logger.exception(
+                "pipeline_status: Kaiano API client not available; finding not posted"
+            )
+        _capture(exc)
+        return False
 
     try:
-        client = KaianoApiClient.from_env()
+        client = KaianoApiClient.from_env(machine_name=payload.get("repo"))
         client.post("/v1/evaluations", payload)
-    except Exception:
-        logger.exception(
-            "pipeline_status: failed to POST self-reported finding (best-effort)"
-        )
+        return True
+    except Exception as exc:
+        with contextlib.suppress(Exception):
+            logger.exception("pipeline_status: failed to POST finding (best-effort)")
+        _capture(exc)
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Sink 2 — run status, to POST /v1/notify
+# ---------------------------------------------------------------------------
+
+
+def _build_message(
+    *,
+    repo: str,
+    flow_name: str,
+    run_id: str,
+    severity: Severity,
+    text: str,
+    source: str,
+    dimension: str,
+    suggestion: str | None,
+) -> dict[str, Any]:
+    """Render one run report as a Discord message body.
+
+    Everything a person needs to decide whether to go look, and nothing
+    else. The run id is in the footer rather than the body because it is
+    what you copy into Prefect once you have decided to.
+    """
+    embed: dict[str, Any] = {
+        "title": f"{repo} · {flow_name}"[:256],
+        "color": _SEVERITY_COLORS.get(severity, _DEFAULT_COLOR),
+        "footer": {
+            "text": f"{severity} · {source} · {dimension} · run {run_id}"[:2048]
+        },
+    }
+    if text:
+        embed["description"] = text[:4096]
+    if suggestion:
+        embed["fields"] = [
+            {"name": "Suggestion", "value": suggestion[:1024], "inline": False}
+        ]
+    return {"embeds": [embed], "username": repo[:80]}
+
+
+def _deliver(message: dict[str, Any], *, repo: str, logger: Any) -> bool:
+    """POST one run report to ``/v1/notify``. Never raises.
+
+    ``machine_name=repo`` is what makes the API's audit trail name which cog
+    sent this. The cog's name, its distribution name and its machine name are
+    the same string by convention, so there is nothing to keep in step — and
+    a cog whose key variable is missing fails here loudly rather than
+    authenticating as something else.
+    """
+    try:
+        from mini_app_polis.api import KaianoApiClient  # local import
+    except Exception as exc:
+        with contextlib.suppress(Exception):
+            logger.exception(
+                "pipeline_status: Kaiano API client not available; "
+                "run report not sent (repo=%s)",
+                repo,
+            )
+        _capture(exc)
+        return False
+
+    try:
+        client = KaianoApiClient.from_env(machine_name=repo)
+        client.notify(embeds=message["embeds"], username=message.get("username"))
+        return True
+    except Exception as exc:
+        with contextlib.suppress(Exception):
+            logger.exception(
+                "pipeline_status: run report not delivered (repo=%s)", repo
+            )
+        _capture(exc)
+        return False
 
 
 def post_findings(
@@ -320,35 +497,44 @@ def post_findings(
     findings: Iterable[Finding],
     source: str = "flow_inline",
     production_only: bool = True,
-) -> None:
-    """Post one or more self-reported findings to ``/v1/evaluations``.
+) -> DeliveryReport:
+    """Post one or more graded findings to ``/v1/evaluations``.
+
+    This is the **findings** path and it still writes rows. Anything an
+    evaluator judged against a revision of the standards catalog belongs
+    here, because a finding is a record: it is compared, counted and burned
+    down over time, and a notification cannot be any of those.
+
+    What left this path is run status — "the flow finished", "the flow
+    crashed" — which was never graded against anything and now goes to
+    :func:`post_run_finding`. Keeping both here is what made the API null
+    out ``standards_version`` on some rows to stop Pipeline Health claiming
+    they had been evaluated.
 
     Each row is POSTed independently — one failed POST does not drop the
-    others. Used directly by cogs that emit multiple findings per run
-    (e.g. transcription-cog's voicenotes flow, which translates per-file
-    failure dicts into one row each); single-row callers should use the
-    :func:`post_run_finding` sugar instead.
+    others.
 
     Parameters
     ----------
     repo:
-        Name of the cog (e.g. ``"transcription-cog"``).
+        Name of the repo the finding is about. Also the machine name used
+        to authenticate, so the audit trail names the caller.
     flow_name:
         Name of the flow as it appears in Prefect.
     findings:
         Iterable of :class:`Finding` dicts. Each must have ``severity``
         and ``finding``; may carry ``dimension`` and ``suggestion``.
     source:
-        ``"flow_inline"`` for end-of-flow calls, ``"flow_hook"`` for
-        Prefect on_failure/on_crashed hook calls. Free-form otherwise.
         Applied to **all** rows in this batch.
     production_only:
-        When False, this call is a no-op regardless of env vars — used
-        by local-only or WIP flows that should never write to the
-        production evaluations table.
+        When False, this call is a no-op regardless of env vars.
 
-    Best-effort: exceptions inside the HTTP layer are logged, never
-    raised. Rows with empty ``finding`` text are skipped with a warning.
+    Returns
+    -------
+    DeliveryReport
+        What actually landed. A flow that logs "posted N" from the length
+        of the list it handed over is the instrument that showed green
+        while 162 findings went nowhere; log this instead.
     """
     logger = get_prefect_logger()
     rows = list(findings)
@@ -362,7 +548,7 @@ def post_findings(
             len(rows),
             production_only,
         )
-        return
+        return DeliveryReport(suppressed=len(rows))
 
     if not rows:
         logger.debug(
@@ -370,11 +556,13 @@ def post_findings(
             repo,
             flow_name,
         )
-        return
+        return DeliveryReport()
 
     run_id = get_run_id()
+    sent = failed = skipped = 0
+
     for row in rows:
-        severity = row.get("severity", "WARN")
+        severity: Severity = row.get("severity", "WARN")
         finding_text = (row.get("finding") or "").strip()
         if not finding_text:
             logger.warning(
@@ -384,15 +572,15 @@ def post_findings(
                 flow_name,
                 severity,
             )
+            skipped += 1
             continue
 
-        # Stamp the cog's installed distribution version onto the
-        # finding text so the Pipeline Health UI shows operators which
-        # build emitted a row. Done at the library funnel rather than in
-        # each cog's adapter so every cog routing through here gets it
-        # uniformly, and so a typoed cog-side helper can't silently
-        # stamp a marker like "0.0.0+local" instead of a real version
-        # (the original voicenotes regression).
+        # Stamp the cog's installed distribution version onto the finding
+        # text so Pipeline Health shows which build emitted a row. Done at
+        # the library funnel rather than in each cog's adapter so every cog
+        # gets it uniformly, and so a typoed cog-side helper cannot stamp a
+        # marker like "0.0.0+local" instead of a real version (the original
+        # voicenotes regression).
         finding_text = _stamp_processor_version(finding_text, repo)
 
         payload: dict[str, Any] = {
@@ -409,15 +597,16 @@ def post_findings(
             payload["suggestion"] = suggestion
 
         try:
-            _post_evaluation(payload)
-        except Exception:
-            # Defense in depth: _post_evaluation already handles its own
-            # exceptions, but post_findings must never propagate to flow
-            # code. Per-row error isolation: one bad POST does not abort
-            # the rest of the batch. Logging is itself best-effort —
-            # some test stubs ship logger objects without .exception(),
-            # and a crash in the error-reporting path would defeat the
-            # whole guarantee.
+            if _post_evaluation(payload):
+                sent += 1
+            else:
+                failed += 1
+        except Exception as exc:
+            # Defense in depth: _post_evaluation handles its own exceptions,
+            # but post_findings must never propagate to flow code. Per-row
+            # isolation: one bad POST does not abort the rest of the batch.
+            failed += 1
+            _capture(exc)
             with contextlib.suppress(Exception):
                 logger.exception(
                     "pipeline_status: row POST raised unexpectedly "
@@ -425,6 +614,18 @@ def post_findings(
                     repo,
                     flow_name,
                 )
+
+    result = DeliveryReport(sent=sent, failed=failed, skipped=skipped)
+    if result.failed:
+        with contextlib.suppress(Exception):
+            logger.error(
+                "pipeline_status: %d of %d findings failed to post (repo=%s flow=%s)",
+                result.failed,
+                len(rows),
+                repo,
+                flow_name,
+            )
+    return result
 
 
 def post_run_finding(
@@ -438,65 +639,128 @@ def post_run_finding(
     production_only: bool = True,
     source: str = "flow_inline",
     **extras: Any,
-) -> None:
-    """Emit exactly one self-reported finding for this run.
+) -> DeliveryReport:
+    """Report one run outcome to the notification channel.
 
-    Single-row convenience wrapper around :func:`post_findings` for the
-    common end-of-run case: one severity, one finding text, a sprinkle
-    of counters that get appended to the text as ``k=v`` pairs.
+    Run status, not a finding — nothing is persisted. It no longer routes
+    through :func:`post_findings`: sharing that funnel is what put run
+    telemetry in the evaluations table, and two sinks with two meanings
+    should not share one path back.
+
+    ``SUCCESS`` is logged and goes no further; see :data:`NOTIFY_SEVERITIES`.
 
     Parameters
     ----------
     flow_name:
         Name of the flow as it appears in Prefect.
     severity:
-        One of ``"SUCCESS"``, ``"WARN"``, ``"ERROR"``. Sent verbatim to
-        the API.
+        One of ``"SUCCESS"``, ``"WARN"``, ``"ERROR"``, ``"CRITICAL"``.
     text:
-        Human-readable finding. If omitted and severity is SUCCESS, a
+        Human-readable outcome. If omitted and severity is SUCCESS, a
         default of ``"Run completed successfully."`` is used.
     repo:
-        Name of the cog (e.g. ``"deejay-cog"``). Required.
+        Name of the cog (e.g. ``"deejay-cog"``). Required. Also the machine
+        name the API authenticates and attributes the message to.
     dimension:
-        Evaluation dimension; defaults to ``"pipeline_consistency"``.
+        Carried into the message footer. Retained for call-site
+        compatibility; it no longer selects anything, since run reports are
+        not graded against the standards catalog.
     suggestion:
-        Optional remediation hint surfaced alongside the finding in
-        the Pipeline Health UI.
+        Optional remediation hint, rendered as a field on the message.
     production_only:
-        When False, this call is a no-op regardless of env vars — used
-        by local-only or WIP flows that should never write to the
-        production evaluations table.
+        When False, this call is a no-op regardless of env vars.
     source:
-        ``"flow_inline"`` for end-of-flow calls, ``"flow_hook"`` for
-        Prefect on_failure/on_crashed hook calls. Free-form otherwise.
+        ``"flow_inline"`` for end-of-flow calls, ``"flow_hook"`` for Prefect
+        on_failure/on_crashed hook calls. Free-form otherwise.
     **extras:
-        Cog-specific counters or flags. Non-zero values are appended to
-        the finding text as ``k=v`` pairs (sorted alphabetically) so
-        operators can see them at a glance without the cog having to
-        hand-format the string.
+        Cog-specific counters or flags. Non-zero values are appended to the
+        text as ``k=v`` pairs (sorted alphabetically).
 
-    Best-effort: exceptions inside the HTTP layer are logged, never
-    raised.
+    Returns
+    -------
+    DeliveryReport
+        Best-effort delivery never raises, and never claims success it did
+        not get.
     """
+    logger = get_prefect_logger()
+
     if severity == "SUCCESS" and text is None:
         text = "Run completed successfully."
 
     text_final = _merge_extras_into_text(text or "", extras).strip()
-    row: Finding = {
-        "severity": severity,
-        "finding": text_final,
-        "dimension": dimension,
-    }
-    if suggestion is not None:
-        row["suggestion"] = suggestion
 
-    post_findings(
+    if not _should_post(production_only):
+        logger.debug(
+            "pipeline_status: run report suppressed "
+            "(repo=%s flow=%s production_only=%s)",
+            repo,
+            flow_name,
+            production_only,
+        )
+        return DeliveryReport(suppressed=1)
+
+    if not text_final:
+        logger.warning(
+            "pipeline_status: skipping run report with empty text "
+            "(repo=%s flow=%s severity=%s)",
+            repo,
+            flow_name,
+            severity,
+        )
+        return DeliveryReport(skipped=1)
+
+    run_id = get_run_id()
+    text_final = _stamp_processor_version(text_final, repo)
+
+    if severity not in NOTIFY_SEVERITIES:
+        # The successful-run case, which is most of them. Logged here and
+        # nowhere else: absence is what Healthchecks.io watches.
+        logger.info(
+            "pipeline_status: %s %s/%s run=%s — %s",
+            severity,
+            repo,
+            flow_name,
+            run_id,
+            text_final,
+        )
+        return DeliveryReport(suppressed=1)
+
+    message = _build_message(
         repo=repo,
         flow_name=flow_name,
-        findings=[row],
+        run_id=run_id,
+        severity=severity,
+        text=text_final,
         source=source,
-        production_only=production_only,
+        dimension=dimension,
+        suggestion=suggestion,
     )
+
+    try:
+        delivered = _deliver(message, repo=repo, logger=logger)
+    except Exception as exc:
+        # Defense in depth: _deliver handles its own exceptions, but this
+        # must never propagate into flow code or a Prefect hook.
+        _capture(exc)
+        with contextlib.suppress(Exception):
+            logger.exception(
+                "pipeline_status: run report raised unexpectedly "
+                "(should be best-effort) repo=%s flow=%s",
+                repo,
+                flow_name,
+            )
+        return DeliveryReport(failed=1)
+
+    if not delivered:
+        with contextlib.suppress(Exception):
+            logger.error(
+                "pipeline_status: run report not delivered (repo=%s flow=%s)",
+                repo,
+                flow_name,
+            )
+        return DeliveryReport(failed=1)
+
+    return DeliveryReport(sent=1)
 
 
 def make_failure_hook(
@@ -508,10 +772,10 @@ def make_failure_hook(
 ) -> Callable[..., None]:
     """Return a Prefect ``on_failure`` / ``on_crashed`` hook.
 
-    The returned hook posts a finding with severity ``WARN`` for the
-    ``Failed`` state and ``ERROR`` for ``Crashed``. It always logs the
-    failure locally; the API POST is gated the same way as
-    :func:`post_run_finding`.
+    The returned hook reports severity ``WARN`` for the ``Failed`` state
+    and ``ERROR`` for ``Crashed``. Both reach the notification channel —
+    this hook is the fleet's crash ping. It always logs the failure
+    locally; delivery is gated the same way as :func:`post_run_finding`.
 
     Parameters
     ----------
@@ -566,6 +830,8 @@ def make_failure_hook(
 
 __all__ = [
     "DEFAULT_DIMENSION",
+    "NOTIFY_SEVERITIES",
+    "DeliveryReport",
     "Finding",
     "Severity",
     "get_prefect_logger",

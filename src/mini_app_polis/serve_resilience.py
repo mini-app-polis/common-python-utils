@@ -66,7 +66,7 @@ Design constraints worth knowing before editing this module:
 - **No happy-path finding.** ``serve()`` blocks forever when it
   succeeds, so nothing after the call runs. A "started successfully"
   finding would only ever fire on the failure branch anyway, and on
-  every deploy it would be pure noise in Pipeline Health.
+  every deploy it would be pure noise in the notification channel.
 
 - **Fail fast on 4xx, except 408/429.** A ``401``/``403`` (bad
   ``PREFECT_API_KEY``) or ``404`` (deployment or work-queue gone) is a
@@ -376,7 +376,12 @@ def _post_startup_failure_finding(
     Note the ``run_id`` on this finding resolves to ``"local-run"`` —
     there is no Prefect flow run to attribute it to, which is precisely
     the condition being reported. ``source="startup"`` is what
-    disambiguates it in Pipeline Health.
+    disambiguates it in the message footer.
+
+    This report is a notification, not a finding: nothing about it is
+    graded against the standards catalog, and it is not written to the
+    evaluations table. See :mod:`mini_app_polis.pipeline_status` for the
+    split.
 
     The "config error" wording is chosen on whether retries *actually
     happened*, not on how the final exception classifies. Those differ:
@@ -467,7 +472,7 @@ def serve_with_retry(
     flow_name:
         ``flow_name`` on the emitted finding. Defaults to ``"startup"``.
         There is no flow at this point in the lifecycle — the value is a
-        Pipeline Health label, not a Prefect reference.
+        label on the message, not a Prefect reference.
     production_only:
         Same gating semantics as
         :func:`mini_app_polis.pipeline_status.post_run_finding`: when
