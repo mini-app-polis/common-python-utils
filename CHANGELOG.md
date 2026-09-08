@@ -1,3 +1,10 @@
+## [5.1.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.1.1...v5.1.2) (2026-09-08)
+
+
+### Bug Fixes
+
+* **deps:** bump google-auth in the python-minor-and-patch group ([c0000ee](https://github.com/mini-app-polis/common-python-utils/commit/c0000ee5c53b742e65c4b0e04941c6a0ca0a931e))
+
 ## [5.1.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.1.0...v5.1.1) (2026-09-08)
 
 
