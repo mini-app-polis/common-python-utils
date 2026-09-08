@@ -790,3 +790,57 @@ def test_failure_hook_never_emits_critical(monkeypatch) -> None:
         with captured() as cap:
             hook(None, None, state)
         assert _built(cap)["severity"] in {"WARN", "ERROR"}
+
+
+# ---------------------------------------------------------------------------
+# notable — a triggered run reports even when it produced nothing
+# ---------------------------------------------------------------------------
+
+
+def test_notable_success_is_sent(monkeypatch) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    with captured() as cap:
+        result = ps.post_run_finding(
+            "f", "SUCCESS", text="3 files ingested", repo="my-cog", notable=True
+        )
+    assert result.sent == 1
+    assert _built(cap)["severity"] == "SUCCESS"
+
+
+def test_notable_success_with_no_work_is_still_sent(monkeypatch) -> None:
+    """The case the flag exists for.
+
+    A run that fired because a condition was met and then processed
+    nothing has all-zero counters. Inferring "worth reporting" from output
+    would silence exactly the run that most needs explaining.
+    """
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    with captured() as cap:
+        result = ps.post_run_finding(
+            "f",
+            "SUCCESS",
+            text="Triggered by 2 new files; none matched the filter",
+            repo="my-cog",
+            notable=True,
+            files_processed=0,
+        )
+    assert result.sent == 1
+    assert "none matched" in _built(cap)["text"]
+
+
+def test_idle_tick_stays_silent(monkeypatch) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    with captured() as cap:
+        result = ps.post_run_finding("f", "SUCCESS", repo="my-cog")
+    cap.deliver.assert_not_called()
+    assert result.suppressed == 1
+
+
+def test_notable_does_not_override_gating(monkeypatch) -> None:
+    """notable says 'worth reporting', not 'ignore where we are running'."""
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    with captured() as cap:
+        ps.post_run_finding(
+            "f", "SUCCESS", text="x", repo="my-cog", notable=True, production_only=False
+        )
+    cap.deliver.assert_not_called()

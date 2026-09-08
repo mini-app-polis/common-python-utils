@@ -85,8 +85,10 @@ trail names which cog called rather than only that one did — the cog's
 name, its distribution name and its machine name are the same string by
 convention, so there is nothing to keep in step.
 
-``SUCCESS`` run reports are logged and not sent; see
-:data:`NOTIFY_SEVERITIES`. Findings are never suppressed by severity: a
+A ``SUCCESS`` run report is logged rather than sent, unless the caller
+marks it ``notable=True`` — the run was triggered by something rather
+than being an idle scheduled tick. See :data:`NOTIFY_SEVERITIES` and
+:func:`post_run_finding`. Findings are never suppressed by severity: a
 SUCCESS finding is a graded result and belongs in the table.
 """
 
@@ -162,10 +164,14 @@ tests in ``test_pipeline_status.py``. The API already accepts the
 string, so the change is library-only.
 """
 
-#: Severities that reach the notification channel. SUCCESS is logged and
-#: goes no further: a fleet announcing "ran fine" on every schedule is the
-#: noise problem this path exists to avoid, and Healthchecks.io already
-#: answers "did it run" by firing on absence rather than on success.
+#: Severities that always reach the notification channel, whatever else is
+#: true of the run. SUCCESS is not among them: a fleet announcing "ran
+#: fine" on every schedule is the noise problem this path exists to avoid,
+#: and Healthchecks.io already answers "did it run" by firing on absence.
+#:
+#: A SUCCESS run still sends when the caller passes ``notable=True`` — see
+#: :func:`post_run_finding`. The rule the two encode together: an idle tick
+#: is silent, a triggered run is not, whether or not it produced anything.
 NOTIFY_SEVERITIES: frozenset[str] = frozenset({"WARN", "ERROR", "CRITICAL"})
 
 #: Message colour per severity, so the channel is scannable without reading.
@@ -638,6 +644,7 @@ def post_run_finding(
     suggestion: str | None = None,
     production_only: bool = True,
     source: str = "flow_inline",
+    notable: bool = False,
     **extras: Any,
 ) -> DeliveryReport:
     """Report one run outcome to the notification channel.
@@ -672,6 +679,15 @@ def post_run_finding(
     source:
         ``"flow_inline"`` for end-of-flow calls, ``"flow_hook"`` for Prefect
         on_failure/on_crashed hook calls. Free-form otherwise.
+    notable:
+        Send this even at ``SUCCESS``. Set it when the run was *triggered*
+        — a file arrived, a webhook fired, a condition was met — rather
+        than being a bare scheduled tick.
+
+        Deliberately not inferred from the counters. A triggered run that
+        then processed nothing has all-zero counters and is precisely the
+        case worth hearing about: something said there was work, and none
+        happened. Inferring from output would silence exactly that run.
     **extras:
         Cog-specific counters or flags. Non-zero values are appended to the
         text as ``k=v`` pairs (sorted alphabetically).
@@ -712,9 +728,10 @@ def post_run_finding(
     run_id = get_run_id()
     text_final = _stamp_processor_version(text_final, repo)
 
-    if severity not in NOTIFY_SEVERITIES:
-        # The successful-run case, which is most of them. Logged here and
-        # nowhere else: absence is what Healthchecks.io watches.
+    if severity not in NOTIFY_SEVERITIES and not notable:
+        # An idle scheduled tick: nothing was waiting, nothing was done.
+        # Logged here and nowhere else — absence is what Healthchecks.io
+        # watches, so a quiet poller needs no message to prove it ran.
         logger.info(
             "pipeline_status: %s %s/%s run=%s — %s",
             severity,
