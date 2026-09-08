@@ -1,3 +1,10 @@
+## [5.1.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.1.0...v5.1.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* allowing success run notifications ([b1d0668](https://github.com/mini-app-polis/common-python-utils/commit/b1d0668e6cd46f38845f0b6c6eacefa7535ddb72))
+
 # [5.1.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.0.2...v5.1.0) (2026-09-08)
 
 
