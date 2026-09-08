@@ -34,7 +34,12 @@ dependencies = [
 # `temperature` from messages.create() and broke every LLM call in the
 # fleet with a TypeError. A major bump of an SDK this library calls
 # directly needs a deliberate change here, not a lockfile refresh.
-llm = ["openai>=1.0,<3", "anthropic>=1.0,<2"]
+# The cap is the point, and it goes at the *next* major rather than a
+# convenient-looking one: consumers are spread across openai 2.x
+# (wiki-curator-cog) and 3.x (transcription-cog, api-kaianolevine-com),
+# so anything tighter than <4 forces one of them to move. Matches
+# api-kaianolevine-com's own pin deliberately.
+llm = ["openai>=1.40,<4", "anthropic>=1,<2"]
 dev = [
   "pytest>=9.0.3,<10.0.0",
   "pytest-cov>=6.2.1,<8.0.0",
