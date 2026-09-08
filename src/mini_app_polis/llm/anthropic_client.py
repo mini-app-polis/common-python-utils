@@ -123,11 +123,20 @@ class AnthropicLLM(LLMClient):
             )
             for m in non_system_messages
         ]
+        # No ``temperature``. The Anthropic SDK removed it from
+        # ``messages.create()`` in 1.x — the parameter list is now
+        # max_tokens / messages / model / … / output_config / thinking,
+        # and passing it raises TypeError before the request is built.
+        # ``output_config`` is the nearest surviving control and takes an
+        # ``effort`` level (low … max) rather than a sampling
+        # temperature, so it is not a rename and nothing is mapped onto
+        # it here. Sampling therefore uses the API default rather than
+        # the 0.2 this used to request; set output_config deliberately if
+        # a specific effort level turns out to matter.
         create_kwargs: dict[str, Any] = {
             "model": self._cfg.model,
             "max_tokens": self._cfg.max_tokens,
             "messages": anthropic_messages,
-            "temperature": 0.2,
         }
         if system_prompt is not None:
             create_kwargs["system"] = system_prompt

@@ -308,9 +308,27 @@ def test_delivery_failure_reaches_sentry(monkeypatch) -> None:
 
 
 def test_capture_is_safe_without_sentry_installed() -> None:
-    """_capture must be callable in a process that has no sentry_sdk."""
+    """_capture must be callable in a process that has no sentry_sdk.
+
+    sentry_sdk is not a dependency of this library — the mp3 and Google
+    helpers should not start paying for one — so the import failing is
+    the ordinary case, not the exceptional one.
+    """
     with patch.dict("sys.modules", {"sentry_sdk": None}):
-        ps._capture(RuntimeError("x"))  # must not raise
+        assert ps._capture(RuntimeError("x")) is None
+
+
+def test_capture_reports_when_sentry_is_present() -> None:
+    """And the other half: it does report when the host process has it.
+
+    Without this, a version of _capture that returned early every time
+    would pass the test above and quietly report nothing anywhere.
+    """
+    sentry = MagicMock()
+    with patch.dict("sys.modules", {"sentry_sdk": sentry}):
+        ps._capture(RuntimeError("boom"))
+
+    sentry.capture_exception.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

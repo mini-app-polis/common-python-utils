@@ -29,7 +29,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-llm = ["openai", "anthropic"]
+# Upper bounds are load-bearing, not ceremony: these were unbounded, so
+# `anthropic` resolved across a major boundary into 1.x, which dropped
+# `temperature` from messages.create() and broke every LLM call in the
+# fleet with a TypeError. A major bump of an SDK this library calls
+# directly needs a deliberate change here, not a lockfile refresh.
+llm = ["openai>=1.0,<3", "anthropic>=1.0,<2"]
 dev = [
   "pytest>=9.0.3,<10.0.0",
   "pytest-cov>=6.2.1,<8.0.0",
