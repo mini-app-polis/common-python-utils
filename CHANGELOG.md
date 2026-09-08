@@ -1,3 +1,12 @@
+## [5.1.3](https://github.com/mini-app-polis/common-python-utils/compare/v5.1.2...v5.1.3) (2026-09-08)
+
+
+### Bug Fixes
+
+* ci ([29a6547](https://github.com/mini-app-polis/common-python-utils/commit/29a65470472e8380eb98c72739feafe3d2f3c1c9))
+* ci ([83b5b33](https://github.com/mini-app-polis/common-python-utils/commit/83b5b33e2fd23a249eb20f4a21bd829a7553f8ed))
+* open ai interface ([a9d43d9](https://github.com/mini-app-polis/common-python-utils/commit/a9d43d972c0e727a16d94d961e130b90b1465eb5))
+
 ## [5.1.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.1.1...v5.1.2) (2026-09-08)
 
 
