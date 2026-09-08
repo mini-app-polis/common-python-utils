@@ -1,3 +1,10 @@
+# [5.1.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.0.2...v5.1.0) (2026-09-08)
+
+
+### Features
+
+* adding client implementation for notifications to apply to cogs ([44fba4e](https://github.com/mini-app-polis/common-python-utils/commit/44fba4e510ec77be9d536530d63fe46f4158b741))
+
 ## [5.0.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.0.1...v5.0.2) (2026-09-06)
 
 
