@@ -96,8 +96,10 @@ from __future__ import annotations
 
 import contextlib
 import os
-from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from collections import Counter
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from functools import cache
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Literal, TypedDict
@@ -845,15 +847,208 @@ def make_failure_hook(
     return _hook
 
 
+# ---------------------------------------------------------------------------
+# Run reports
+# ---------------------------------------------------------------------------
+
+#: How many offending items are named per reason before the rest become a
+#: count. Enough to recognise the pattern from the channel; not enough to
+#: turn a bad batch into a wall of text nobody reads to the end of.
+MAX_EXAMPLES = 3
+
+
+@dataclass
+class RunReport:
+    """What a run did, accumulated as it happens and sent once at the end.
+
+    Nothing here forces a call site to report a problem it swallowed;
+    there is no mechanism that could, and a rule pretending otherwise
+    would measure paperwork. What this removes is every other reason not
+    to. No severity to decide, no text to compose, no counters threaded
+    through return values, and — used as a context manager — no send call
+    to remember. One verb, at the point where the problem is known.
+
+    Three verbs, mapped onto the severity vocabulary this module already
+    documents rather than a new one:
+
+    ``ok(n)``
+        ``n`` items were handled cleanly.
+    ``note(reason, item)``
+        Something was skipped for an ordinary reason. Counted, and never
+        raises severity: "already processed", "not a spreadsheet", "the
+        archive folder". These exist so the count in the message adds up,
+        not because anyone needs to act on them.
+    ``issue(reason, item, detail=...)``
+        Something a human should look at. Any issue makes the run WARN.
+
+    There is deliberately no verb for ERROR. ERROR means a flow died, and
+    a flow that died is reported by :func:`make_failure_hook` with the
+    Prefect state that killed it — a state this object does not have and
+    should not guess at.
+
+    ``count(key, value)`` carries a domain counter that says nothing about
+    severity (tracks read, bytes written). It becomes an ordinary extra on
+    the message, subject to the same non-zero filtering as before.
+    """
+
+    flow_name: str
+    repo: str
+    production_only: bool = True
+
+    processed: int = 0
+    notes: Counter = field(default_factory=Counter)
+    issues: Counter = field(default_factory=Counter)
+    examples: dict[str, list[str]] = field(default_factory=dict)
+    counters: dict[str, Any] = field(default_factory=dict)
+
+    _sent: bool = field(default=False, repr=False)
+
+    # -- recording ---------------------------------------------------------
+
+    def ok(self, n: int = 1) -> None:
+        """Record ``n`` items handled cleanly."""
+        self.processed += n
+
+    def note(self, reason: str, item: str | None = None) -> None:
+        """Record an ordinary skip. Counted; never raises severity."""
+        self.notes[reason] += 1
+        self._remember(reason, item)
+
+    def issue(
+        self, reason: str, item: str | None = None, *, detail: str | None = None
+    ) -> None:
+        """Record something a human should look at. Makes the run WARN."""
+        self.issues[reason] += 1
+        self._remember(reason, item if detail is None else f"{item or ''} ({detail})")
+
+    def count(self, key: str, value: Any) -> None:
+        """Carry a domain counter that has no bearing on severity."""
+        self.counters[key] = value
+
+    def _remember(self, reason: str, item: str | None) -> None:
+        """Keep the first few offenders for this reason, and no more."""
+        if not item:
+            return
+        seen = self.examples.setdefault(reason, [])
+        if len(seen) < MAX_EXAMPLES:
+            seen.append(str(item).strip())
+
+    # -- rendering ---------------------------------------------------------
+
+    @property
+    def severity(self) -> Severity:
+        """WARN if anything was flagged, SUCCESS otherwise."""
+        return "WARN" if self.issues else "SUCCESS"
+
+    def tally(self) -> str:
+        """The one-line count, in a fixed order so two runs compare."""
+        parts: list[str] = []
+        if self.processed:
+            parts.append(f"processed={self.processed}")
+        for reason, n in sorted(self.issues.items()):
+            parts.append(f"{reason}={n}")
+        for reason, n in sorted(self.notes.items()):
+            parts.append(f"{reason}={n}")
+        return ", ".join(parts)
+
+    def text(self) -> str:
+        """The message body: the tally, then who caused each flagged reason.
+
+        Only flagged reasons name names. An ordinary skip is counted and
+        left at that — naming every already-processed file is how the
+        interesting line ends up below the fold.
+        """
+        tally = self.tally()
+        body = f"Run complete — {tally}." if tally else "Run complete — nothing to do."
+
+        lines = [body]
+        for reason in sorted(self.issues):
+            named = self.examples.get(reason) or []
+            if not named:
+                continue
+            more = self.issues[reason] - len(named)
+            suffix = f", +{more} more" if more > 0 else ""
+            lines.append(f"{reason}: {', '.join(named)}{suffix}")
+        return "\n".join(lines)
+
+    # -- delivery ----------------------------------------------------------
+
+    def send(
+        self,
+        *,
+        notable: bool = False,
+        source: str = "flow_inline",
+        suggestion: str | None = None,
+    ) -> DeliveryReport:
+        """Post the accumulated run report. Safe to call twice; the second
+        call does nothing, so an explicit ``send()`` inside a ``with`` block
+        does not produce a second message.
+        """
+        if self._sent:
+            return DeliveryReport(suppressed=1)
+        self._sent = True
+        return post_run_finding(
+            self.flow_name,
+            self.severity,
+            text=self.text(),
+            repo=self.repo,
+            production_only=self.production_only,
+            source=source,
+            suggestion=suggestion,
+            notable=notable,
+            **self.counters,
+        )
+
+
+@contextmanager
+def run_report(
+    flow_name: str,
+    *,
+    repo: str,
+    production_only: bool = True,
+    notable: bool = False,
+    source: str = "flow_inline",
+) -> Iterator[RunReport]:
+    """Open a :class:`RunReport` that sends itself however the block ends.
+
+    Forgetting to *record* a problem is still possible, and always will
+    be. Forgetting to *send* is not, which is the half of the problem a
+    common interface can actually take away.
+
+    On an exception the accumulated report is sent with the exception
+    recorded as an issue, and the exception is re-raised unchanged — so
+    the flow still fails and ``make_failure_hook`` still fires. That is
+    two messages about one bad run, and it is the same trade the Prefect
+    webhook backstop already makes: the hook knows the Prefect state, this
+    knows what the run had managed to do first, and neither is derivable
+    from the other. They are told apart by ``source``.
+
+    ``BaseException`` is caught rather than ``Exception`` so a run killed
+    by SIGTERM mid-batch still says what it had processed. It is re-raised
+    either way, and :func:`post_run_finding` is documented never to raise.
+    """
+    report = RunReport(flow_name=flow_name, repo=repo, production_only=production_only)
+    try:
+        yield report
+    except BaseException as exc:
+        report.issue("unhandled_exception", type(exc).__name__, detail=str(exc))
+        report.send(notable=True, source=source)
+        raise
+    report.send(notable=notable, source=source)
+
+
 __all__ = [
     "DEFAULT_DIMENSION",
+    "MAX_EXAMPLES",
     "NOTIFY_SEVERITIES",
     "DeliveryReport",
     "Finding",
+    "RunReport",
     "Severity",
     "get_prefect_logger",
     "get_run_id",
     "make_failure_hook",
     "post_findings",
     "post_run_finding",
+    "run_report",
 ]
