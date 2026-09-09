@@ -1,3 +1,10 @@
+## [5.3.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.3.0...v5.3.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* **asana:** send workspace as the container when creating into a section ([0b8ec0d](https://github.com/mini-app-polis/common-python-utils/commit/0b8ec0dcead653a69ff2f86c5dae2bad16ecd6c8))
+
 # [5.3.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.2.0...v5.3.0) (2026-09-09)
 
 
