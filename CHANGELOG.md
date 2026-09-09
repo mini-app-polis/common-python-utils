@@ -1,3 +1,10 @@
+## [5.3.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.3.1...v5.3.2) (2026-09-09)
+
+
+### Bug Fixes
+
+* **logger:** default to INFO and never log credentials at DEBUG ([1f5face](https://github.com/mini-app-polis/common-python-utils/commit/1f5faceb203818d59c3aa3db6496381f9b48f972))
+
 ## [5.3.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.3.0...v5.3.1) (2026-09-09)
 
 
