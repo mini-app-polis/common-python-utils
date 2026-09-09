@@ -1,3 +1,10 @@
+# [5.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.1.3...v5.2.0) (2026-09-09)
+
+
+### Features
+
+* **pipeline-status:** add RunReport, a run-scoped accumulator for issues and counters ([5ad012f](https://github.com/mini-app-polis/common-python-utils/commit/5ad012f02f686b0654e3c20984cc2ac0bbfd3520))
+
 ## [5.1.3](https://github.com/mini-app-polis/common-python-utils/compare/v5.1.2...v5.1.3) (2026-09-08)
 
 
