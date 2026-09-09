@@ -1,3 +1,10 @@
+# [5.3.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.2.0...v5.3.0) (2026-09-09)
+
+
+### Features
+
+* **asana:** add Asana client with external-id idempotency ([6baa58a](https://github.com/mini-app-polis/common-python-utils/commit/6baa58aa24415e3e1e5bd66296cc4213976e788a))
+
 # [5.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.1.3...v5.2.0) (2026-09-09)
 
 
