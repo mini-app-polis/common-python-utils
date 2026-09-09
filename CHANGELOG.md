@@ -1,3 +1,10 @@
+# [5.4.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.3.2...v5.4.0) (2026-09-09)
+
+
+### Features
+
+* **google:** add trash_file for callers that cannot permanently delete ([d5f8a83](https://github.com/mini-app-polis/common-python-utils/commit/d5f8a83b4b0dd1bc2600ff4e301b208d3d6583ab))
+
 ## [5.3.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.3.1...v5.3.2) (2026-09-09)
 
 
