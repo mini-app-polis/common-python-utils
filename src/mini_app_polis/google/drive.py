@@ -483,6 +483,16 @@ class DriveFacade:
         """Permanently delete a file from Google Drive.
 
         Use with care. This should only be called after a successful end-to-end process.
+
+        Permission note: this is the irreversible path and Drive gates it
+        tightly. In My Drive it requires ownership of the file; on a
+        shared drive it requires the *organizer* role (the Manager
+        access level), which is strictly more than the Content manager
+        level that can otherwise add, move and trash content. A caller
+        without it fails on every attempt while its moves keep
+        succeeding, which reads as an intermittent bug and is not one.
+        Prefer :meth:`trash_file` unless the deletion genuinely must be
+        unrecoverable.
         """
 
         execute_with_retry(
@@ -492,6 +502,36 @@ class DriveFacade:
                 .execute()
             ),
             context=f"deleting file {file_id}",
+            retry=self._retry,
+        )
+
+    def trash_file(self, file_id: str) -> None:
+        """Move a file to the trash. Recoverable, unlike :meth:`delete_file`.
+
+        This is a metadata update rather than a deletion, so it is
+        available to any caller that can edit the file — on a shared
+        drive that includes the Content manager role, which cannot call
+        :meth:`delete_file` at all.
+
+        Trashed files stop appearing in listings (this module's
+        ``list_files`` filters ``trashed = false``), and a shared drive
+        empties its own trash automatically after 30 days, so storage is
+        still reclaimed without anything being destroyed on the spot. A
+        retention sweep with a bug therefore costs a restore rather than
+        the data.
+        """
+
+        execute_with_retry(
+            lambda: (
+                self._service.files()
+                .update(
+                    fileId=file_id,
+                    body={"trashed": True},
+                    supportsAllDrives=True,
+                )
+                .execute()
+            ),
+            context=f"trashing file {file_id}",
             retry=self._retry,
         )
 

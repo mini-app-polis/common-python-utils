@@ -310,6 +310,29 @@ def test_upload_and_update_and_rename_and_delete(tmp_path: Path):
     assert "delete" in ops
 
 
+def test_trash_file_is_a_metadata_update_not_a_delete():
+    """Trashing must not go near files.delete.
+
+    files.delete is the irreversible path and needs organizer/Manager on
+    a shared drive; trashing is an edit, which Content manager can do.
+    Sending the wrong one is the difference between a sweep that works
+    and one that fails every time.
+    """
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = FakeDriveService()
+    drive = DriveFacade(svc)
+
+    drive.trash_file("fileX")
+
+    ops = [c[0] for c in svc.calls]
+    assert ops == ["update"]
+    kwargs = svc.calls[0][1]
+    assert kwargs["fileId"] == "fileX"
+    assert kwargs["body"] == {"trashed": True}
+    assert kwargs["supportsAllDrives"] is True
+
+
 def test_get_all_and_most_recent_m3u_files(monkeypatch):
     from mini_app_polis import config
     from mini_app_polis.google.drive import DriveFacade
