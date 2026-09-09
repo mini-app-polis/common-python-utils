@@ -217,7 +217,7 @@ Key variables:
 | `KAIANO_API_KEY` | `KaianoApiClient` | Unnamed fallback for a caller that declares no machine name. Authenticates, but its writes are unattributable |
 | `ASANA_ACCESS_TOKEN` | `AsanaClient` | Asana personal access token. Read per request, so rotation needs no restart |
 | `ASANA_WORKSPACE_ID` | `AsanaClient` | Workspace gid. Required only by `find_or_create_tag()`, since tags are workspace-scoped objects |
-| `LOGGING_LEVEL` | `logger` | Log verbosity (`DEBUG` default) |
+| `LOGGING_LEVEL` | `logger` | Log verbosity (`INFO` default). Importing `logger` calls `basicConfig`, so this reaches every library in the process. Loggers known to print credentials (`websockets`, `httpx`, `httpcore`, …) are held at INFO regardless — raising this to DEBUG will not print your secrets |
 | `GOOGLE_CREDENTIALS_JSON` | `GoogleAPI` | Google Drive + Sheets access |
 | `SPOTIPY_CLIENT_ID` | `SpotifyAPI` | Spotify operations |
 | `SPOTIPY_CLIENT_SECRET` | `SpotifyAPI` | Spotify operations |
