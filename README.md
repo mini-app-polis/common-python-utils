@@ -41,6 +41,7 @@ dependencies = [
 | Module | Import | Description |
 |--------|--------|-------------|
 | `api/` | `from mini_app_polis.api import KaianoApiClient` | HTTP client for internal FastAPI services |
+| `asana/` | `from mini_app_polis.asana import AsanaClient` | Asana task creation with external-id idempotency |
 | `config.py` | `from mini_app_polis import config` | Env-var driven shared config (Spotify, Google, VDJ) |
 | `google/` | `from mini_app_polis.google import GoogleAPI` | Drive + Sheets facade |
 | `llm/` | `from mini_app_polis.llm import build_llm, LLMMessage` | OpenAI + Anthropic clients (optional extra) |
@@ -66,6 +67,46 @@ from mini_app_polis.api import KaianoApiClient
 client = KaianoApiClient.from_env("deejay-cog")
 result = client.post("/sets", {"name": "My Set"})
 ```
+
+### AsanaClient
+
+```python
+from datetime import date
+
+from mini_app_polis.asana import AsanaClient, AsanaTaskInput, link, rich_text_body
+
+# Set ASANA_ACCESS_TOKEN (personal access token) and, if you resolve tag
+# names, ASANA_WORKSPACE_ID in the environment.
+client = AsanaClient.from_env()
+
+external_id = "voicenote.1AbCdEf"
+
+# Idempotency is a single lookup, not a list-and-scan: Asana stores an
+# app-scoped `external` object on each task and lets you address the task
+# by it. Completed tasks are found too, so a triaged item is never
+# recreated.
+if client.find_task_by_external_id(external_id) is None:
+    client.create_task(
+        AsanaTaskInput(
+            name="Send the report",
+            html_notes=rich_text_body(
+                "Because it is due Friday.",
+                link("https://example.com/source", "Source"),
+            ),
+            project_gid="1218223550488548",
+            section_gid="1218337761864701",
+            assignee="me",
+            due_on=date.today(),
+            tag_gids=(client.find_or_create_tag("review"),),
+            external_id=external_id,
+        )
+    )
+```
+
+Task bodies are Asana rich text, not markdown, and Asana returns 400 on
+malformed markup. Compose them with `rich_text_body` / `link` /
+`escape_rich_text` rather than by hand — transcripts and model output
+contain `<` and `&` often enough that escaping is a correctness concern.
 
 ### LLM (requires `llm` extra)
 
@@ -174,6 +215,8 @@ Key variables:
 | `KAIANO_API_BASE_URL` | `KaianoApiClient` | Calling internal FastAPI services |
 | `<MACHINE_NAME>_API_KEY` | `KaianoApiClient` | This machine's own named key, e.g. `DEEJAY_COG_API_KEY`. Derived from the machine name by `machine_key_env_var()` |
 | `KAIANO_API_KEY` | `KaianoApiClient` | Unnamed fallback for a caller that declares no machine name. Authenticates, but its writes are unattributable |
+| `ASANA_ACCESS_TOKEN` | `AsanaClient` | Asana personal access token. Read per request, so rotation needs no restart |
+| `ASANA_WORKSPACE_ID` | `AsanaClient` | Workspace gid. Required only by `find_or_create_tag()`, since tags are workspace-scoped objects |
 | `LOGGING_LEVEL` | `logger` | Log verbosity (`DEBUG` default) |
 | `GOOGLE_CREDENTIALS_JSON` | `GoogleAPI` | Google Drive + Sheets access |
 | `SPOTIPY_CLIENT_ID` | `SpotifyAPI` | Spotify operations |
