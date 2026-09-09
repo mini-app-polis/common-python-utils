@@ -88,6 +88,68 @@ def test_create_task_uses_memberships_when_a_section_is_given() -> None:
     assert "projects" not in captured["data"]
 
 
+def test_create_task_with_a_section_still_sends_a_container() -> None:
+    """Regression: memberships alone is a 400.
+
+    Asana requires one of workspace, parent or projects on create;
+    memberships is not on that list, so a section-placed task needs the
+    workspace as its container.
+    """
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json
+
+        captured["data"] = json.loads(request.content)["data"]
+        return httpx.Response(201, json={"data": {"gid": "task-2"}})
+
+    _client(handler).create_task(_task(section_gid="sect-9"))
+
+    assert captured["data"]["workspace"] == _WORKSPACE
+
+
+def test_create_task_with_a_section_but_no_workspace_raises_before_the_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fail with a message naming the missing var, not Asana's 400."""
+    monkeypatch.delenv("ASANA_WORKSPACE_ID", raising=False)
+
+    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+        raise AssertionError("should not reach the network")
+
+    client = AsanaClient(
+        access_token=_TOKEN,
+        workspace_gid=None,
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    with pytest.raises(AsanaAPIError, match="ASANA_WORKSPACE_ID"):
+        client.create_task(_task(section_gid="sect-9"))
+
+
+def test_create_task_without_a_section_needs_no_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``projects`` is itself a valid container, so workspace is optional."""
+    monkeypatch.delenv("ASANA_WORKSPACE_ID", raising=False)
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json
+
+        captured["data"] = json.loads(request.content)["data"]
+        return httpx.Response(201, json={"data": {"gid": "task-2"}})
+
+    client = AsanaClient(
+        access_token=_TOKEN,
+        workspace_gid=None,
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    client.create_task(_task())
+
+    assert captured["data"]["projects"] == ["proj-1"]
+    assert "workspace" not in captured["data"]
+
+
 def test_create_task_sends_all_optional_fields_when_present() -> None:
     captured: dict = {}
 

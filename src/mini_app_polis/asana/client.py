@@ -103,7 +103,7 @@ class AsanaClient:
             )
         return token
 
-    def _workspace(self) -> str:
+    def _workspace(self, path: str) -> str:
         workspace = (
             self._workspace_gid or os.environ.get("ASANA_WORKSPACE_ID") or ""
         ).strip()
@@ -112,8 +112,9 @@ class AsanaClient:
                 None,
                 "No Asana workspace gid. Set ASANA_WORKSPACE_ID in Doppler, or "
                 "pass workspace_gid= explicitly. It is required to resolve tag "
-                "names, which are workspace-scoped objects.",
-                "/tags",
+                "names (workspace-scoped objects) and to create a task directly "
+                "into a section.",
+                path,
             )
         return workspace
 
@@ -137,12 +138,23 @@ class AsanaClient:
         two-step version that failed on the second step would leave a
         task whose ``external_id`` makes every retry return early
         without ever moving it.
+
+        ``memberships`` names the project and section but does not, on
+        its own, satisfy Asana's rule that "every task is required to be
+        created in a specific workspace… The workspace need not be set
+        explicitly if you specify ``projects`` or a ``parent`` task
+        instead." Sending only ``memberships`` returns 400 "You should
+        specify one of workspace, parent, projects". So the section path
+        sends ``workspace`` as the container and lets ``memberships``
+        do the placement, rather than duplicating the project id across
+        both ``projects`` and ``memberships``.
         """
         data: dict[str, Any] = {
             "name": task.name,
             "html_notes": task.html_notes,
         }
         if task.section_gid:
+            data["workspace"] = self._workspace("/tasks")
             data["memberships"] = [
                 {"project": task.project_gid, "section": task.section_gid}
             ]
@@ -197,7 +209,7 @@ class AsanaClient:
         if cached is not None:
             return cached
 
-        workspace = self._workspace()
+        workspace = self._workspace("/tags")
         offset: str | None = None
         while True:
             params: dict[str, Any] = {
