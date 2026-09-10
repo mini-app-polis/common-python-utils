@@ -135,6 +135,18 @@ def effect_enabled(effect: Effect) -> bool:
     return is_production()
 
 
+def env_var_name(name: str) -> str:
+    """The variable actually read for ``name`` in this environment.
+
+    ``env_var_name("KAIANO_API_BASE_URL")`` is ``KAIANO_API_BASE_URL`` in
+    production and ``KAIANO_API_BASE_URL_DEV`` everywhere else. Exposed so
+    that an error message can name the variable a reader needs to set,
+    rather than making them work out the suffix — and so no caller
+    reconstructs that suffix for itself.
+    """
+    return f"{name}{_SUFFIX[current_environment()]}"
+
+
 def env_var(name: str) -> str:
     """Value of an environment-specific variable, given its production name.
 
@@ -147,7 +159,7 @@ def env_var(name: str) -> str:
     this exists to prevent. An empty value that stops the call is the safe
     outcome, and the startup line names it.
     """
-    return (os.environ.get(f"{name}{_SUFFIX[current_environment()]}") or "").strip()
+    return (os.environ.get(env_var_name(name)) or "").strip()
 
 
 def api_base_url() -> str:

@@ -106,6 +106,47 @@ def test_production_only_true_noop_without_base_url(monkeypatch) -> None:
     cap.deliver.assert_not_called()
 
 
+def test_should_post_uses_the_environment_specific_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The gate and the destination must answer the same question."""
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.delenv("KAIANO_API_BASE_URL_DEV", raising=False)
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+
+    # A production URL is not a dev URL: the client would not post there,
+    # so the gate must not say yes on its account.
+    assert ps._should_post(True) is False
+
+    monkeypatch.setenv("KAIANO_API_BASE_URL_DEV", "https://dev-api.example")
+    assert ps._should_post(True) is True
+
+
+def test_should_post_warns_when_no_url_resolves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A misconfiguration must not be a silent no-op."""
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.delenv("KAIANO_API_BASE_URL_DEV", raising=False)
+    mock_log = MagicMock()
+    with patch.object(ps, "get_prefect_logger", return_value=mock_log):
+        assert ps._should_post(True) is False
+
+    mock_log.warning.assert_called_once()
+    assert mock_log.warning.call_args.args[2] == "KAIANO_API_BASE_URL_DEV"
+
+
+def test_opting_out_is_quiet(monkeypatch: pytest.MonkeyPatch) -> None:
+    """production_only=False is a choice, not a problem — no warning."""
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.delenv("KAIANO_API_BASE_URL_DEV", raising=False)
+    mock_log = MagicMock()
+    with patch.object(ps, "get_prefect_logger", return_value=mock_log):
+        assert ps._should_post(False) is False
+
+    mock_log.warning.assert_not_called()
+
+
 def test_anthropic_api_key_not_required(monkeypatch) -> None:
     """Run reports don't touch the LLM; no Anthropic key needed."""
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
