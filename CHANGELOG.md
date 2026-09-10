@@ -1,3 +1,11 @@
+## [5.5.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.5.0...v5.5.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **deps:** bump anthropic in the python-minor-and-patch group ([6a0ab6c](https://github.com/mini-app-polis/common-python-utils/commit/6a0ab6c006f78e96d2bfdc73ea2361a4384365f6))
+* **deps:** bump types-requests from 2.33.0.20260712 to 2.33.0.20260906 ([3b18223](https://github.com/mini-app-polis/common-python-utils/commit/3b182231ddc0839f8d3c65d3fe199e72fd06e75e))
+
 # [5.5.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.4.0...v5.5.0) (2026-09-10)
 
 
