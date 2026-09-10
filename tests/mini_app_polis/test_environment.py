@@ -11,6 +11,7 @@ from mini_app_polis.environment import (
     current_environment,
     effect_enabled,
     env_var,
+    env_var_name,
     resolve,
     summary,
 )
@@ -156,3 +157,13 @@ def test_summary_names_environment_source_and_gates(
 def test_summary_marks_an_unset_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ENVIRONMENT", "dev")
     assert "api_base_url=<unset>" in summary()
+
+
+def test_env_var_name_reports_the_suffixed_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    assert env_var_name("KAIANO_API_BASE_URL") == "KAIANO_API_BASE_URL"
+
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    assert env_var_name("KAIANO_API_BASE_URL") == "KAIANO_API_BASE_URL_DEV"

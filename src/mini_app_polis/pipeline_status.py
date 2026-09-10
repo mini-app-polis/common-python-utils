@@ -47,10 +47,17 @@ process has it initialised. A caller that logs "reported N" from the
 length of what it handed over is the instrument that showed green
 through the September outage.
 
-Posts are gated by ``production_only=True`` (the default) **and** the
-presence of the ``KAIANO_API_BASE_URL`` env var. Local development runs
-should pass ``production_only=False`` so they never write to the API
-regardless of which env vars are set.
+Posts are gated by ``production_only=True`` (the default) **and** a base
+URL resolving for this environment — ``KAIANO_API_BASE_URL`` in
+production, ``KAIANO_API_BASE_URL_DEV`` everywhere else, resolved by
+``mini_app_polis.environment``. A run with no base URL for its
+environment logs a WARNING and delivers nothing.
+
+``production_only`` is a misnomer kept for compatibility: it has never
+consulted the environment, and never gated on it. It means "this caller
+delivers at all" — deejay-cog's manual flows pass ``production_only=False``
+so their reports stay local. Renaming it is a 6.0 change; every consumer
+pins ``>=5,<6``. Development *does* deliver, to the development API.
 
 This module deliberately performs Prefect imports lazily so consumers
 that don't use Prefect (or test harnesses without it) don't pay the
@@ -105,7 +112,12 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Literal, TypedDict
 
 from mini_app_polis import logger as logger_mod
-from mini_app_polis.environment import Environment, current_environment
+from mini_app_polis.environment import (
+    Environment,
+    api_base_url,
+    current_environment,
+    env_var_name,
+)
 
 _log = logger_mod.get_logger()
 
@@ -287,10 +299,33 @@ def get_run_id() -> str:
 
 
 def _should_post(production_only: bool) -> bool:
-    """Return True iff a self-reported finding should actually be POSTed."""
+    """Return True iff a self-reported finding should actually be POSTed.
+
+    The base URL is resolved the same way :class:`KaianoApiClient` resolves
+    it, so the gate and the destination answer one question rather than
+    two. Reading the unsuffixed variable here while the client read the
+    suffixed one meant a development process could pass this gate and post
+    to production, or fail it while a perfectly good dev URL was set.
+
+    Two reasons to say no, and they are not the same kind of thing. A
+    caller that passed ``production_only=False`` chose this, and says so
+    every run; nothing is wrong. A missing base URL is a misconfiguration,
+    and the environment likely to have one is the environment nobody is
+    watching — so it is logged at WARNING rather than left to the
+    caller's DeliveryReport, which reads as fine either way.
+    """
     if not production_only:
         return False
-    return bool(os.environ.get("KAIANO_API_BASE_URL"))
+    if api_base_url():
+        return True
+    with contextlib.suppress(Exception):
+        get_prefect_logger().warning(
+            "pipeline_status: no API base URL resolved for environment=%s — "
+            "nothing will be delivered. Set %s.",
+            current_environment().value,
+            env_var_name("KAIANO_API_BASE_URL"),
+        )
+    return False
 
 
 def _nonzero_extras(counters: dict[str, Any]) -> dict[str, Any]:
