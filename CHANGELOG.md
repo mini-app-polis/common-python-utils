@@ -1,3 +1,10 @@
+# [5.7.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.6.0...v5.7.0) (2026-09-10)
+
+
+### Features
+
+* **pipeline-status:** mark non-production run reports in Discord ([eb2eb87](https://github.com/mini-app-polis/common-python-utils/commit/eb2eb87832050ae5cf7269c177e8b20170dc83a7))
+
 # [5.6.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.5.1...v5.6.0) (2026-09-10)
 
 
