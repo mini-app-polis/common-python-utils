@@ -28,6 +28,8 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 import mini_app_polis.pipeline_status as ps
 
 
@@ -155,6 +157,38 @@ def test_rendered_embed_shape(monkeypatch) -> None:
     assert "ERROR" in footer
     assert "flow_inline" in footer
     assert "run-77" in footer
+
+
+def test_build_message_marks_non_production(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    message = ps._build_message(
+        repo="watcher-cog",
+        flow_name="dj-sets",
+        run_id="r1",
+        severity="SUCCESS",
+        text="x",
+        source="watcher_loop",
+        dimension="cd_readiness",
+        suggestion=None,
+    )
+    assert message["embeds"][0]["title"].startswith("[DEVELOPMENT] ")
+
+
+def test_build_message_leaves_production_unmarked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    message = ps._build_message(
+        repo="watcher-cog",
+        flow_name="dj-sets",
+        run_id="r1",
+        severity="SUCCESS",
+        text="x",
+        source="watcher_loop",
+        dimension="cd_readiness",
+        suggestion=None,
+    )
+    assert message["embeds"][0]["title"] == "watcher-cog · dj-sets"
 
 
 def test_delivery_uses_notify_not_evaluations(monkeypatch) -> None:
