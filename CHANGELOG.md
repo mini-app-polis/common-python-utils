@@ -1,3 +1,10 @@
+# [5.5.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.4.0...v5.5.0) (2026-09-10)
+
+
+### Features
+
+* **spotify:** trim any playlist by id, and trim it all the way down ([6e1631c](https://github.com/mini-app-polis/common-python-utils/commit/6e1631c35e7d9aa3038578e28e859d57f29dfcd9))
+
 # [5.4.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.3.2...v5.4.0) (2026-09-09)
 
 
