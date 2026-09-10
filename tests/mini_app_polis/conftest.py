@@ -12,6 +12,19 @@ from __future__ import annotations
 import sys
 import types
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _production_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Exercise unmarked Discord titles unless a test says otherwise.
+
+    ``_build_message`` prefixes non-production titles. An unset
+    environment resolves to local, which would quietly put ``[LOCAL]``
+    on every embed assertion in this suite.
+    """
+    monkeypatch.setenv("ENVIRONMENT", "production")
+
 
 def _install_prefect_stub() -> None:
     """Install a minimal ``prefect`` stub if the real package is absent.
