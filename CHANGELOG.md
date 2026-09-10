@@ -1,3 +1,10 @@
+## [5.7.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.7.0...v5.7.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **pipeline-status:** gate delivery on the environment's own base URL ([04e34d4](https://github.com/mini-app-polis/common-python-utils/commit/04e34d46e54610aaadd8a4390739a63950353409))
+
 # [5.7.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.6.0...v5.7.0) (2026-09-10)
 
 
