@@ -52,6 +52,10 @@ class NoopCacheHandler(CacheHandler):
 # --- SpotifyAPI facade class ---
 
 
+#: Spotify caps both a playlist-items page and a remove request at 100.
+_TRIM_PAGE_SIZE = 100
+
+
 class SpotifyAPI:
     """Single entry point for Spotify operations.
 
@@ -391,36 +395,91 @@ class SpotifyAPI:
             )
             return None
 
-    def trim_playlist_to_limit(self, limit: int = 200) -> None:
-        """Remove oldest playlist items until the playlist is at or under the limit."""
-        if not config.SPOTIFY_PLAYLIST_ID:
-            raise OSError("Missing SPOTIFY_PLAYLIST_ID environment variable.")
+    def trim_playlist_to_limit(
+        self, limit: int = 200, playlist_id: str | None = None
+    ) -> None:
+        """Remove oldest playlist items until the playlist is at or under the limit.
+
+        ``playlist_id`` defaults to ``config.SPOTIFY_PLAYLIST_ID``, so callers
+        that relied on the env var keep working; pass it to trim any other
+        playlist.
+
+        Removal is by position, and repeats until the playlist is genuinely
+        within the limit. Both matter once a playlist has drifted well past
+        it. A single pass read the true total but sliced one page of items,
+        so it removed at most a page's worth however far over the playlist
+        was — it could hold a playlist steady but never dig one out. And
+        removing by URI took every other copy of a repeated track with it,
+        including recent ones.
+        """
+        target = playlist_id or config.SPOTIFY_PLAYLIST_ID
+        if not target:
+            raise OSError(
+                "No playlist to trim: pass playlist_id or set SPOTIFY_PLAYLIST_ID."
+            )
 
         sp = self.client
-        current = self._call_with_retry(
-            lambda: sp.playlist_items(
-                config.SPOTIFY_PLAYLIST_ID,
-                fields="items.track.uri,total",
-                additional_types=["track"],
-            ),
-            context="fetching current playlist items",
-        )
-        total = current["total"]
-        if total <= limit:
-            log.info(f"Playlist is within limit ({total}/{limit}); no tracks removed.")
-            return
+        removed = 0
+        previous_total: int | None = None
 
-        num_to_remove = total - limit
-        uris_to_remove = [
-            item["track"]["uri"] for item in current["items"][:num_to_remove]
-        ]
-        self._call_with_retry(
-            lambda: sp.playlist_remove_all_occurrences_of_items(
-                config.SPOTIFY_PLAYLIST_ID, uris_to_remove
-            ),
-            context=f"removing {num_to_remove} tracks",
-        )
-        log.info(f"Removed {len(uris_to_remove)} old tracks to stay under {limit}.")
+        while True:
+            page = self._call_with_retry(
+                lambda: sp.playlist_items(
+                    target,
+                    fields="items.track.uri,total",
+                    additional_types=["track"],
+                    limit=_TRIM_PAGE_SIZE,
+                    offset=0,
+                ),
+                context="fetching current playlist items",
+            )
+            total = page.get("total") or 0
+
+            if total <= limit:
+                if removed:
+                    log.info(
+                        f"Removed {removed} old tracks to stay under {limit} "
+                        f"({total} remaining)."
+                    )
+                else:
+                    log.info(
+                        f"Playlist is within limit ({total}/{limit}); "
+                        "no tracks removed."
+                    )
+                return
+
+            # Every pass must shrink the playlist. If one did not, stop
+            # rather than call Spotify in a loop that cannot terminate.
+            if previous_total is not None and total >= previous_total:
+                log.warning(
+                    f"Playlist total did not fall after a removal ({total}/{limit}); "
+                    "stopping."
+                )
+                return
+            previous_total = total
+
+            items = page.get("items") or []
+            batch = [
+                {"uri": item["track"]["uri"], "positions": [position]}
+                for position, item in enumerate(items[: total - limit])
+                if isinstance(item, dict)
+                and isinstance(item.get("track"), dict)
+                and item["track"].get("uri")
+            ]
+            if not batch:
+                log.warning(
+                    f"Playlist is over its limit ({total}/{limit}) but the oldest "
+                    "items carry no track URIs; nothing to remove."
+                )
+                return
+
+            self._call_with_retry(
+                lambda b=batch: sp.playlist_remove_specific_occurrences_of_items(
+                    target, b
+                ),
+                context=f"removing {len(batch)} tracks",
+            )
+            removed += len(batch)
 
 
 def get_spotify_client() -> Spotify:

@@ -421,7 +421,7 @@ def _install_trim_playlist_stubs(monkeypatch, *, total: int):
             items = [{"track": {"uri": f"uri:{i}"}} for i in range(total)]
             return {"total": total, "items": items}
 
-        def playlist_remove_all_occurrences_of_items(self, playlist_id, items):
+        def playlist_remove_specific_occurrences_of_items(self, playlist_id, items):
             _ = (playlist_id, items)
             self.remove_calls += 1
             return {"snapshot_id": "r"}
