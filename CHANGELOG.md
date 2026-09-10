@@ -1,3 +1,10 @@
+# [5.6.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.5.1...v5.6.0) (2026-09-10)
+
+
+### Features
+
+* **environment:** add fleet environment resolver and effect gates ([ea15273](https://github.com/mini-app-polis/common-python-utils/commit/ea15273eac058fd20a2d60c7c7f30663f09c853a))
+
 ## [5.5.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.5.0...v5.5.1) (2026-09-10)
 
 
