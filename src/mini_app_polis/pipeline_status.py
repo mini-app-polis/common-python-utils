@@ -105,6 +105,7 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Literal, TypedDict
 
 from mini_app_polis import logger as logger_mod
+from mini_app_polis.environment import Environment, current_environment
 
 _log = logger_mod.get_logger()
 
@@ -431,6 +432,22 @@ def _post_evaluation(payload: dict[str, Any]) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _environment_prefix() -> str:
+    """``"[DEVELOPMENT] "`` outside production, empty string inside it.
+
+    Only non-production is marked. A tag on every production message
+    would be decoration on almost all channel traffic and would train
+    the eye to skip the prefix entirely — the same reason the watcher's
+    baseline warning is suppressed for a folder that is never empty.
+    What is worth seeing is the message that did not come from
+    production.
+    """
+    env = current_environment()
+    if env is Environment.PRODUCTION:
+        return ""
+    return f"[{env.value.upper()}] "
+
+
 def _build_message(
     *,
     repo: str,
@@ -449,7 +466,11 @@ def _build_message(
     what you copy into Prefect once you have decided to.
     """
     embed: dict[str, Any] = {
-        "title": f"{repo} · {flow_name}"[:256],
+        # Prefix, not a footer field: the footer is where the metadata
+        # lives and is the part of an embed people skim past. The one
+        # thing that must not be missed is that this did not come from
+        # production.
+        "title": f"{_environment_prefix()}{repo} · {flow_name}"[:256],
         "color": _SEVERITY_COLORS.get(severity, _DEFAULT_COLOR),
         "footer": {
             "text": f"{severity} · {source} · {dimension} · run {run_id}"[:2048]
