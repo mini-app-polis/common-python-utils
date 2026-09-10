@@ -32,7 +32,11 @@ body shape live here rather than in each cog. See
 :mod:`mini_app_polis.pipeline_status` for the best-effort layer above it.
 
 **Env vars:**
-  KAIANO_API_BASE_URL             — base URL of the target API service
+  KAIANO_API_BASE_URL             — base URL of the target API service, in
+                                    production. Non-production reads
+                                    KAIANO_API_BASE_URL_DEV instead; see
+                                    mini_app_polis.environment.env_var. There
+                                    is no fallback between the two.
   <MACHINE_NAME>_API_KEY          — this cog's own key (from machine_name)
   KAIANO_API_KEY                  — key for a caller that declares no name
 """
@@ -45,6 +49,7 @@ from typing import Any
 
 import httpx
 
+from ..environment import api_base_url
 from .errors import KaianoApiError
 
 _log = _logging.getLogger(__name__)
@@ -79,6 +84,8 @@ class KaianoApiClient:
 
     Reads configuration from environment variables:
       KAIANO_API_BASE_URL             — base URL of the target service
+                                        (KAIANO_API_BASE_URL_DEV outside
+                                        production)
     """
 
     def __init__(
@@ -89,9 +96,7 @@ class KaianoApiClient:
         api_key: str | None = None,
         machine_name: str | None = None,
     ):
-        self.base_url = (base_url or os.environ.get("KAIANO_API_BASE_URL", "")).rstrip(
-            "/"
-        )
+        self.base_url = (base_url or api_base_url()).rstrip("/")
         self.machine_name = machine_name or os.environ.get("KAIANO_API_MACHINE_NAME")
         self.api_key = api_key or _key_for(self.machine_name)
         self.timeout = timeout
