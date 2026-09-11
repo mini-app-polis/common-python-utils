@@ -1,3 +1,10 @@
+# [5.8.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.7.1...v5.8.0) (2026-09-11)
+
+
+### Features
+
+* gate prefect serve on the environment ([bf856a3](https://github.com/mini-app-polis/common-python-utils/commit/bf856a3db69bbc12281d788ba1d99fd83e21af54))
+
 ## [5.7.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.7.0...v5.7.1) (2026-09-10)
 
 
