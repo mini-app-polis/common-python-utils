@@ -103,6 +103,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import time
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
@@ -912,6 +913,85 @@ def make_failure_hook(
 #: turn a bad batch into a wall of text nobody reads to the end of.
 MAX_EXAMPLES = 3
 
+#: Same idea for outcomes, and a little more generous. An outcome is what
+#: the reader came for — a batch that created six things should name all
+#: six rather than three and a number.
+MAX_OUTCOMES = 5
+
+CREATED = "created"
+UPDATED = "updated"
+REMOVED = "removed"
+
+#: Render order and mark per operation. Deliberately the same three marks
+#: the API's request middleware already puts in the activity channel, so
+#: a task this cog created in Asana and a row the API wrote read the same
+#: way to someone scrolling one server.
+_OUTCOME_MARKS: tuple[tuple[str, str], ...] = (
+    (CREATED, "+"),
+    (UPDATED, "~"),
+    (REMOVED, "-"),
+)
+
+
+@dataclass(frozen=True)
+class Outcome:
+    """One thing a run made exist, change, or stop existing.
+
+    The gap this closes: every other verb on :class:`RunReport` records a
+    problem or a count, so a clean run could say ``processed=1`` and
+    nothing more. A voice note that became an Asana task reported exactly
+    that — one file seen — while the task id it had just created was
+    computed, returned, and dropped one frame before anything reached
+    Discord.
+
+    ``kind`` is the noun as the reader thinks of it ("asana task", "wiki
+    page", "dj set"), not a table or class name. ``item`` names the
+    specific one; ``link`` makes it clickable where there is somewhere to
+    go. An outcome with no ``item`` still counts — some runs know they
+    wrote four things without having a name for each.
+    """
+
+    op: str
+    kind: str
+    item: str | None = None
+    link: str | None = None
+
+    def label(self) -> str:
+        """The item as it appears in the message, linked when possible."""
+        if not self.item:
+            return ""
+        if self.link:
+            return f"[{self.item}]({self.link})"
+        return self.item
+
+
+def _now() -> float:
+    """The monotonic clock, behind one name so a test can move it.
+
+    Called through rather than bound as a ``default_factory``: binding it
+    captures the function object at class-definition time, and a patched
+    clock would then move the end of a run without moving its start.
+    """
+    return time.monotonic()
+
+
+def format_duration(seconds: float) -> str:
+    """Render a run duration the way a person reads one.
+
+    Sub-second runs keep two decimals so "it did nothing and took no time"
+    is distinguishable from "it did nothing slowly"; past a minute the
+    decimals stop earning their place.
+    """
+    if seconds < 1:
+        return f"{seconds:.2f}s"
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes, secs = divmod(int(seconds), 60)
+    if minutes < 60:
+        return f"{minutes}m {secs:02d}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes:02d}m"
+
 
 @dataclass
 class RunReport:
@@ -924,7 +1004,7 @@ class RunReport:
     through return values, and — used as a context manager — no send call
     to remember. One verb, at the point where the problem is known.
 
-    Three verbs, mapped onto the severity vocabulary this module already
+    Four verbs, mapped onto the severity vocabulary this module already
     documents rather than a new one:
 
     ``ok(n)``
@@ -937,10 +1017,24 @@ class RunReport:
     ``issue(reason, item, detail=...)``
         Something a human should look at. Any issue makes the run WARN.
 
+    ``created(kind, item)`` / ``updated(...)`` / ``removed(...)``
+        Something now exists, differs, or is gone outside this process.
+        Recorded as an :class:`Outcome`, rendered above the problems, and
+        never affecting severity — creating a thing is what a healthy run
+        does. Recording one also makes the run ``notable``: a run that
+        changed the world is worth hearing about as a matter of fact,
+        rather than of per-flow configuration.
+
     There is deliberately no verb for ERROR. ERROR means a flow died, and
     a flow that died is reported by :func:`make_failure_hook` with the
     Prefect state that killed it — a state this object does not have and
     should not guess at.
+
+    The report times itself from construction to :meth:`send`, so the
+    duration on the headline is the run's and not a stopwatch every flow
+    has to remember to carry. A caller that already measured its own work
+    — or that builds the report after the fact, from a crash hook —
+    passes ``duration_sec``, and that wins.
 
     ``count(key, value)`` carries a domain counter that says nothing about
     severity (tracks read, bytes written). It becomes an ordinary extra on
@@ -950,14 +1044,20 @@ class RunReport:
     flow_name: str
     repo: str
     production_only: bool = True
+    #: Explicit duration in seconds. ``None`` means "measure it yourself",
+    #: which is right for every report opened at the start of the work.
+    duration_sec: float | None = None
 
     processed: int = 0
     notes: Counter = field(default_factory=Counter)
     issues: Counter = field(default_factory=Counter)
     examples: dict[str, list[str]] = field(default_factory=dict)
     counters: dict[str, Any] = field(default_factory=dict)
+    outcomes: list[Outcome] = field(default_factory=list)
 
     _sent: bool = field(default=False, repr=False)
+    _started_at: float = field(default_factory=lambda: _now(), repr=False)
+    _ended_at: float | None = field(default=None, repr=False)
 
     # -- recording ---------------------------------------------------------
 
@@ -981,6 +1081,24 @@ class RunReport:
         """Carry a domain counter that has no bearing on severity."""
         self.counters[key] = value
 
+    def created(
+        self, kind: str, item: str | None = None, *, link: str | None = None
+    ) -> None:
+        """Record that this run brought something into existence."""
+        self.outcomes.append(Outcome(CREATED, kind, item, link))
+
+    def updated(
+        self, kind: str, item: str | None = None, *, link: str | None = None
+    ) -> None:
+        """Record that this run changed something that already existed."""
+        self.outcomes.append(Outcome(UPDATED, kind, item, link))
+
+    def removed(
+        self, kind: str, item: str | None = None, *, link: str | None = None
+    ) -> None:
+        """Record that this run deleted or retired something."""
+        self.outcomes.append(Outcome(REMOVED, kind, item, link))
+
     def _remember(self, reason: str, item: str | None) -> None:
         """Keep the first few offenders for this reason, and no more."""
         if not item:
@@ -993,8 +1111,46 @@ class RunReport:
 
     @property
     def severity(self) -> Severity:
-        """WARN if anything was flagged, SUCCESS otherwise."""
+        """WARN if anything was flagged, SUCCESS otherwise.
+
+        Outcomes never enter into it. A run that created nine things and
+        broke nothing is a SUCCESS; what the outcomes change is whether
+        that SUCCESS is worth sending, not what it is called.
+        """
         return "WARN" if self.issues else "SUCCESS"
+
+    @property
+    def duration(self) -> float:
+        """Seconds this run took, measured unless the caller supplied it."""
+        if self.duration_sec is not None:
+            return max(0.0, float(self.duration_sec))
+        end = _now() if self._ended_at is None else self._ended_at
+        return max(0.0, end - self._started_at)
+
+    def outcome_lines(self) -> list[str]:
+        """One line per operation and kind, in a fixed order.
+
+        Grouped rather than one line per thing: twelve tasks created is a
+        fact about the run, and twelve consecutive identical-looking lines
+        is how the problem underneath them ends up below the fold.
+        """
+        lines: list[str] = []
+        for op, mark in _OUTCOME_MARKS:
+            by_kind: dict[str, list[Outcome]] = {}
+            for outcome in self.outcomes:
+                if outcome.op == op:
+                    by_kind.setdefault(outcome.kind, []).append(outcome)
+            for kind in sorted(by_kind):
+                rows = by_kind[kind]
+                named = [r.label() for r in rows if r.item]
+                shown = named[:MAX_OUTCOMES]
+                if not shown:
+                    lines.append(f"{mark} {kind} x{len(rows)}")
+                    continue
+                more = len(rows) - len(shown)
+                suffix = f", +{more} more" if more > 0 else ""
+                lines.append(f"{mark} {kind}: {', '.join(shown)}{suffix}")
+        return lines
 
     def tally(self) -> str:
         """The one-line count, in a fixed order so two runs compare."""
@@ -1008,16 +1164,21 @@ class RunReport:
         return ", ".join(parts)
 
     def text(self) -> str:
-        """The message body: the tally, then who caused each flagged reason.
+        """The message body: the tally, what the run did, then what it flagged.
 
-        Only flagged reasons name names. An ordinary skip is counted and
-        left at that — naming every already-processed file is how the
-        interesting line ends up below the fold.
+        Outcomes come before problems because a clean run has only
+        outcomes, and that is the whole message on a good day.
+
+        Among the problems, only flagged reasons name names. An ordinary
+        skip is counted and left at that — naming every already-processed
+        file is how the interesting line ends up below the fold.
         """
         tally = self.tally()
-        body = f"Run complete — {tally}." if tally else "Run complete — nothing to do."
+        took = f"Run complete in {format_duration(self.duration)}"
+        body = f"{took} — {tally}." if tally else f"{took} — nothing to do."
 
         lines = [body]
+        lines.extend(self.outcome_lines())
         for reason in sorted(self.issues):
             named = self.examples.get(reason) or []
             if not named:
@@ -1039,10 +1200,17 @@ class RunReport:
         """Post the accumulated run report. Safe to call twice; the second
         call does nothing, so an explicit ``send()`` inside a ``with`` block
         does not produce a second message.
+
+        Any recorded outcome makes the run notable. A SUCCESS is otherwise
+        logged and goes no further, which is right for an idle tick and is
+        the reason a voice note could become an Asana task in silence. The
+        caller keeps the flag for the other case — a triggered run that did
+        nothing, which has no outcome to speak for it.
         """
         if self._sent:
             return DeliveryReport(suppressed=1)
         self._sent = True
+        self._ended_at = _now()
         return post_run_finding(
             self.flow_name,
             self.severity,
@@ -1051,7 +1219,7 @@ class RunReport:
             production_only=self.production_only,
             source=source,
             suggestion=suggestion,
-            notable=notable,
+            notable=notable or bool(self.outcomes),
             **self.counters,
         )
 
@@ -1094,13 +1262,19 @@ def run_report(
 
 
 __all__ = [
+    "CREATED",
     "DEFAULT_DIMENSION",
     "MAX_EXAMPLES",
+    "MAX_OUTCOMES",
     "NOTIFY_SEVERITIES",
+    "REMOVED",
+    "UPDATED",
     "DeliveryReport",
     "Finding",
+    "Outcome",
     "RunReport",
     "Severity",
+    "format_duration",
     "get_prefect_logger",
     "get_run_id",
     "make_failure_hook",
