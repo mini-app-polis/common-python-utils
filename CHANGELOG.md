@@ -1,3 +1,10 @@
+# [5.9.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.8.0...v5.9.0) (2026-09-11)
+
+
+### Features
+
+* verb status and duration added ([61a85e7](https://github.com/mini-app-polis/common-python-utils/commit/61a85e775b6e5a44a35e97698fb1f7eedd1d276b))
+
 # [5.8.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.7.1...v5.8.0) (2026-09-11)
 
 
