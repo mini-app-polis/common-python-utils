@@ -97,6 +97,7 @@ from tenacity import (
     wait_exponential,
 )
 
+from mini_app_polis.environment import Effect, effect_enabled, summary
 from mini_app_polis.pipeline_status import get_prefect_logger, post_run_finding
 
 DEFAULT_MAX_SECONDS = 1800.0
@@ -451,6 +452,9 @@ def serve_with_retry(
     """Call ``prefect.serve(*deployments)`` with startup-failure resilience.
 
     Drop-in replacement for ``prefect.serve()`` in a cog's ``main()``.
+    Outside production it serves nothing and returns immediately — see
+    :data:`mini_app_polis.environment.Effect.PREFECT_SERVE` for why, and
+    set ``PREFECT_SERVE_ENABLED=true`` to override for a deliberate test.
     On success it blocks for the life of the process exactly as
     ``serve()`` does. On a transient failure during deployment
     registration it retries with bounded exponential backoff. On give-up
@@ -489,6 +493,12 @@ def serve_with_retry(
         Forwarded verbatim to ``prefect.serve()`` (``limit``,
         ``pause_on_shutdown``, ``print_starting_message``, …).
 
+    Returns
+    -------
+    None
+        Immediately and without contacting Prefect Cloud when
+        ``PREFECT_SERVE`` is off for this environment.
+
     Raises
     ------
     Exception
@@ -497,6 +507,28 @@ def serve_with_retry(
         Re-raising is load-bearing: a zero exit code would leave Railway
         with nothing to restart.
     """
+    if not effect_enabled(Effect.PREFECT_SERVE):
+        # Prefect Cloud is one workspace across both environments, so a
+        # non-production cog must not register deployments in it. This
+        # returns rather than raising: there is nothing wrong, and raising
+        # would trip Railway's ON_FAILURE restart policy into a loop.
+        # main() ends here and the process exits zero.
+        #
+        # Checked before the lazy import below so a non-production
+        # container need not resolve Prefect at all.
+        _log(
+            "info",
+            "serve_resilience: not serving — %s is off for this environment. "
+            "Would have registered %d deployment(s) for %s: %s. [%s]",
+            Effect.PREFECT_SERVE.value,
+            len(deployments),
+            repo,
+            ", ".join(str(getattr(d, "name", None) or "<unnamed>") for d in deployments)
+            or "<none>",
+            summary(),
+        )
+        return
+
     from prefect import serve  # lazy — Prefect is not a library dependency
 
     ceiling = _resolve_max_seconds(max_seconds)

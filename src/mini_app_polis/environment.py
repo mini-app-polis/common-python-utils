@@ -58,6 +58,19 @@ class Effect(StrEnum):
     """
 
     PREFECT_TRIGGER = "prefect_trigger"
+    #: Registering deployments with Prefect Cloud and running the serve
+    #: loop that polls them. Separate from PREFECT_TRIGGER because they are
+    #: different reaches into the same workspace — triggering fires one run,
+    #: serving claims every run of a deployment — and because a deliberate
+    #: dev test of one should not silently unmute the other.
+    #:
+    #: Ungated, two environments running the same cog register the *same*
+    #: deployment name in the one Prefect Cloud workspace and both poll it,
+    #: so whichever runner claims a scheduled run executes it. A production
+    #: run claimed by the development container resolves development
+    #: correctly and writes its results to the development API — which is
+    #: not a resolution bug and does not announce itself as one.
+    PREFECT_SERVE = "prefect_serve"
     HEALTHCHECKS = "healthchecks"
 
 

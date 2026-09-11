@@ -714,3 +714,91 @@ def test_broken_logger_does_not_abort_the_retry_loop(
     calls = _install_serve(monkeypatch, _flaky)
     sr.serve_with_retry("dep", repo="deejay-cog")
     assert len(calls) == 3, "retries must continue despite the logger raising"
+
+
+# ---------------------------------------------------------------------------
+# The environment gate
+#
+# Prefect Cloud is one workspace across both environments. Two environments
+# running the same cog register the same deployment name in it and both poll
+# it, so a scheduled run is executed by whichever runner claims it — and a
+# production run claimed by the development container writes its results to
+# the development API while resolving its environment perfectly correctly.
+# These pin the gate that stops that, at the only layer all four serving cogs
+# share.
+# ---------------------------------------------------------------------------
+
+
+def test_does_not_serve_outside_production(monkeypatch, api_configured) -> None:
+    """Development registers nothing and returns cleanly."""
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    calls = _install_serve(monkeypatch, _noop_serve)
+
+    sr.serve_with_retry("dep-a", repo="deejay-cog")
+
+    assert calls == []
+
+
+def test_gate_returns_rather_than_raising(monkeypatch, api_configured) -> None:
+    """Returning is load-bearing.
+
+    railway.json sets restartPolicyType ON_FAILURE, so raising here would
+    put a development service into a restart loop over a condition that is
+    not an error. main() ends and the process exits zero instead.
+    """
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    _install_serve(monkeypatch, _noop_serve)
+
+    assert sr.serve_with_retry("dep-a", repo="deejay-cog") is None
+
+
+def test_gate_posts_no_finding(monkeypatch, api_configured) -> None:
+    """Not serving is not a startup failure and must not look like one."""
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    _install_serve(monkeypatch, _noop_serve)
+
+    with patch.object(ps, "_deliver", return_value=True) as deliver:
+        sr.serve_with_retry("dep-a", repo="deejay-cog")
+
+    deliver.assert_not_called()
+
+
+def test_gate_does_not_need_prefect_installed(monkeypatch, api_configured) -> None:
+    """The check precedes the lazy import, so a gated container never needs it."""
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setitem(sys.modules, "prefect", None)
+
+    sr.serve_with_retry("dep-a", repo="deejay-cog")
+
+
+def test_local_does_not_serve(monkeypatch, api_configured) -> None:
+    """An unnamed environment is fail-closed here like everywhere else."""
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.delenv("RAILWAY_ENVIRONMENT_NAME", raising=False)
+    monkeypatch.delenv("RAILWAY_ENVIRONMENT", raising=False)
+    calls = _install_serve(monkeypatch, _noop_serve)
+
+    sr.serve_with_retry("dep-a", repo="deejay-cog")
+
+    assert calls == []
+
+
+def test_override_serves_in_development(monkeypatch, api_configured) -> None:
+    """PREFECT_SERVE_ENABLED=true is the deliberate end-to-end test escape."""
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("PREFECT_SERVE_ENABLED", "true")
+    calls = _install_serve(monkeypatch, _noop_serve)
+
+    sr.serve_with_retry("dep-a", repo="deejay-cog")
+
+    assert len(calls) == 1
+
+
+def test_production_still_serves(monkeypatch, api_configured) -> None:
+    """The gate is the only change; production behaviour is untouched."""
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    calls = _install_serve(monkeypatch, _noop_serve)
+
+    sr.serve_with_retry("dep-a", repo="deejay-cog")
+
+    assert len(calls) == 1
