@@ -1,3 +1,10 @@
+## [5.9.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.9.0...v5.9.1) (2026-09-13)
+
+
+### Bug Fixes
+
+* calling eval on release ([2437b01](https://github.com/mini-app-polis/common-python-utils/commit/2437b01bcb87820b86548129e150c6d94db82fa7))
+
 # [5.9.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.8.0...v5.9.0) (2026-09-11)
 
 
