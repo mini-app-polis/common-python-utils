@@ -8,6 +8,8 @@ is already covered where that module is tested.
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 from mini_app_polis import pipeline_status as ps
@@ -325,3 +327,49 @@ def test_production_only_is_passed_through(sent):
     with ps.run_report("f", repo="c", production_only=False) as r:
         r.ok()
     assert sent[0]["production_only"] is False
+
+
+# ---------------------------------------------------------------------------
+# run identity
+# ---------------------------------------------------------------------------
+
+
+def test_report_sends_under_the_run_id_it_was_given() -> None:
+    """Otherwise the report is unattributable to the findings it describes."""
+    report = ps.RunReport(
+        flow_name="conformance-check",
+        repo="evaluator-cog",
+        run_id="deterministic-7.0.0-abc123",
+    )
+    report.issue("repo_download_failed", "watcher-cog")
+
+    with patch.object(ps, "post_run_finding") as post:
+        report.send()
+
+    assert post.call_args.kwargs.get("run_id") == "deterministic-7.0.0-abc123"
+
+
+def test_run_id_may_be_set_after_construction() -> None:
+    """The id is often minted from data the report was opened to collect.
+
+    evaluator-cog builds its run id from the standards catalog version,
+    which it fetches using the same context that carries the report — so
+    the report necessarily exists before the id does.
+    """
+    report = ps.RunReport(flow_name="conformance-check", repo="evaluator-cog")
+    assert report.run_id is None
+
+    report.run_id = "deterministic-7.0.0-late"
+    with patch.object(ps, "post_run_finding") as post:
+        report.send()
+
+    assert post.call_args.kwargs.get("run_id") == "deterministic-7.0.0-late"
+
+
+def test_a_report_with_no_run_id_leaves_the_fallback_in_charge() -> None:
+    """Unconverted cogs keep whatever get_run_id resolves for them."""
+    report = ps.RunReport(flow_name="f", repo="some-cog")
+    with patch.object(ps, "post_run_finding") as post:
+        report.send()
+
+    assert post.call_args.kwargs.get("run_id") is None

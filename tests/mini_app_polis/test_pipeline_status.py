@@ -937,3 +937,65 @@ def test_notable_does_not_override_gating(monkeypatch) -> None:
             "f", "SUCCESS", text="x", repo="my-cog", notable=True, production_only=False
         )
     cap.deliver.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# run identity — the caller's id wins over get_run_id()
+# ---------------------------------------------------------------------------
+#
+# get_run_id's resolution order is Prefect's: the flow run id, then
+# PREFECT_FLOW_RUN_ID, then "local-run". A cog that has left Prefect hits
+# the fallback on every invocation, so every row and every run report it
+# sends arrives under one id that identifies nothing and cannot be joined
+# to anything else the same run did. These pin the way out.
+
+
+def test_get_run_id_falls_back_when_there_is_no_prefect(monkeypatch) -> None:
+    """The state a converted cog is permanently in. Not a failure — a floor."""
+    monkeypatch.delenv("PREFECT_FLOW_RUN_ID", raising=False)
+    assert ps.get_run_id() == "local-run"
+
+
+def test_post_findings_prefers_the_callers_run_id(monkeypatch) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    with patch.object(ps, "_post_evaluation", return_value=True) as post:
+        ps.post_findings(
+            repo="my-cog",
+            flow_name="my-flow",
+            findings=[{"severity": "WARN", "finding": "a finding"}],
+            run_id="deterministic-7.0.0-abc123",
+        )
+    # _post_evaluation takes one positional payload dict.
+    assert post.call_args.args[0]["run_id"] == "deterministic-7.0.0-abc123"
+
+
+def test_post_findings_still_resolves_one_when_the_caller_has_none(
+    monkeypatch,
+) -> None:
+    """Callers that have not been converted keep working unchanged."""
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    with (
+        patch.object(ps, "_post_evaluation", return_value=True) as post,
+        patch.object(ps, "get_run_id", return_value="resolved-elsewhere"),
+    ):
+        ps.post_findings(
+            repo="my-cog",
+            flow_name="my-flow",
+            findings=[{"severity": "WARN", "finding": "a finding"}],
+        )
+    assert post.call_args.args[0]["run_id"] == "resolved-elsewhere"
+
+
+def test_run_id_is_not_swallowed_as_a_domain_counter(monkeypatch) -> None:
+    """post_run_finding takes **extras. run_id must not land in them.
+
+    Declared before **extras deliberately: as an extra it would be
+    rendered on the notification as though it were a domain counter like
+    "tracks read", and the run would still be filed under "local-run".
+    """
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    import inspect
+
+    params = inspect.signature(ps.post_run_finding).parameters
+    assert "run_id" in params, "run_id is not a declared parameter"
+    assert params["run_id"].kind is inspect.Parameter.KEYWORD_ONLY

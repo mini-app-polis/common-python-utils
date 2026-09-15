@@ -282,6 +282,15 @@ def get_run_id() -> str:
 
     Deliberately does **not** consult ``GITHUB_RUN_ID``. GitHub Actions
     is a trigger, not a run identity, in the Kaiano cog ecosystem.
+
+    **Every caller should prefer passing its own run id.** Both resolution
+    steps above are Prefect's, and a cog that no longer runs under Prefect
+    reaches the ``"local-run"`` fallback on every invocation — so its run
+    reports all arrive under one id that identifies nothing and cannot be
+    joined to the findings the same run filed. ``post_findings``,
+    ``post_run_finding`` and :class:`RunReport` all take ``run_id`` for
+    that reason; this function is the fallback for callers that have none,
+    and becomes a dead path once the last cog is converted.
     """
     try:
         from prefect.runtime import flow_run as _flow_run  # lazy import
@@ -562,6 +571,7 @@ def post_findings(
     findings: Iterable[Finding],
     source: str = "flow_inline",
     production_only: bool = True,
+    run_id: str | None = None,
 ) -> DeliveryReport:
     """Post one or more graded findings to ``/v1/evaluations``.
 
@@ -623,7 +633,10 @@ def post_findings(
         )
         return DeliveryReport()
 
-    run_id = get_run_id()
+    # The caller's own id wins. See get_run_id: its resolution order is
+    # Prefect's, and a converted cog would otherwise file every row under
+    # "local-run".
+    run_id = run_id or get_run_id()
     sent = failed = skipped = 0
 
     for row in rows:
@@ -704,6 +717,7 @@ def post_run_finding(
     production_only: bool = True,
     source: str = "flow_inline",
     notable: bool = False,
+    run_id: str | None = None,
     **extras: Any,
 ) -> DeliveryReport:
     """Report one run outcome to the notification channel.
@@ -784,7 +798,7 @@ def post_run_finding(
         )
         return DeliveryReport(skipped=1)
 
-    run_id = get_run_id()
+    run_id = run_id or get_run_id()
     text_final = _stamp_processor_version(text_final, repo)
 
     if severity not in NOTIFY_SEVERITIES and not notable:
@@ -1047,6 +1061,16 @@ class RunReport:
     #: Explicit duration in seconds. ``None`` means "measure it yourself",
     #: which is right for every report opened at the start of the work.
     duration_sec: float | None = None
+    #: The run this report belongs to.
+    #:
+    #: ``None`` falls back to :func:`get_run_id`, whose resolution order is
+    #: Prefect's — so a cog that has left Prefect and does not set this
+    #: sends every run report under ``"local-run"``, unattributable and
+    #: unjoinable to the findings the same run filed. A caller that mints
+    #: its own id should set this as soon as it has one; it may be assigned
+    #: after construction, because the id is often minted from data the
+    #: report was opened to collect.
+    run_id: str | None = None
 
     processed: int = 0
     notes: Counter = field(default_factory=Counter)
@@ -1220,6 +1244,7 @@ class RunReport:
             source=source,
             suggestion=suggestion,
             notable=notable or bool(self.outcomes),
+            run_id=self.run_id,
             **self.counters,
         )
 
@@ -1232,6 +1257,7 @@ def run_report(
     production_only: bool = True,
     notable: bool = False,
     source: str = "flow_inline",
+    run_id: str | None = None,
 ) -> Iterator[RunReport]:
     """Open a :class:`RunReport` that sends itself however the block ends.
 
@@ -1251,7 +1277,12 @@ def run_report(
     by SIGTERM mid-batch still says what it had processed. It is re-raised
     either way, and :func:`post_run_finding` is documented never to raise.
     """
-    report = RunReport(flow_name=flow_name, repo=repo, production_only=production_only)
+    report = RunReport(
+        flow_name=flow_name,
+        repo=repo,
+        production_only=production_only,
+        run_id=run_id,
+    )
     try:
         yield report
     except BaseException as exc:
