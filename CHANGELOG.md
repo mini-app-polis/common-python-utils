@@ -1,3 +1,15 @@
+# [5.10.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.9.1...v5.10.0) (2026-09-15)
+
+
+### Bug Fixes
+
+* **deps:** bump the python-minor-and-patch group with 4 updates ([a2b82d7](https://github.com/mini-app-polis/common-python-utils/commit/a2b82d71d2afdeea232aca3ace7d5330e24d6539))
+
+
+### Features
+
+* **pipeline-status:** let a caller supply its own run id ([246b6ef](https://github.com/mini-app-polis/common-python-utils/commit/246b6efe7186b3295a48a6862902926b89301c6c))
+
 ## [5.9.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.9.0...v5.9.1) (2026-09-13)
 
 
