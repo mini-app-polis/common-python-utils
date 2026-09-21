@@ -85,3 +85,38 @@ def test_clamp_does_not_lower_a_quieter_setting() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logger_mod._clamp_credential_bearing_loggers()
     assert logging.getLogger("httpx").level == logging.WARNING
+
+
+def test_info_reaches_a_host_that_already_configured_root(monkeypatch) -> None:
+    """AWS Lambda installs a root handler at WARNING before any import.
+
+    basicConfig is then a no-op, so the fleet's INFO lines were dropped on
+    Lambda while httpx's — explicitly levelled by the clamp — still showed.
+    The shared logger carries LOGGING_LEVEL itself so it does not depend on
+    being first to configure root.
+    """
+    monkeypatch.delenv("LOGGING_LEVEL", raising=False)
+    root = logging.getLogger()
+    records: list[logging.LogRecord] = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    handler = _Capture()
+    old_level = root.level
+    root.addHandler(handler)
+    root.setLevel(logging.WARNING)
+    try:
+        logger_mod = _load_real_logger_module()
+        root_level_after_import = root.level
+        logger_mod.get_logger().info("worker: run m-1 mode=process-new-files")
+    finally:
+        root.removeHandler(handler)
+        root.setLevel(old_level)
+
+    assert [r.getMessage() for r in records] == [
+        "worker: run m-1 mode=process-new-files"
+    ]
+    # The host's root level is left alone: third-party INFO stays its choice.
+    assert root_level_after_import == logging.WARNING

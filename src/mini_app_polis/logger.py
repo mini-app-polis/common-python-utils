@@ -105,6 +105,15 @@ _clamp_credential_bearing_loggers()
 
 _logger = logging.getLogger("mini_app_polis")
 
+# Set on this logger too, not only through basicConfig. basicConfig does
+# nothing when the root logger already has a handler — which on AWS Lambda
+# it always does, installed by the runtime at WARNING — so there ``_level``
+# never applied and every INFO line a cog wrote was dropped, while the
+# credential-bearing loggers above, whose levels are set explicitly, still
+# printed. Setting it here reaches the fleet's own logging without touching
+# the root level, so third-party libraries keep whatever the host chose.
+_logger.setLevel(_level)
+
 # Shortcut aliases — used across consumer repos
 debug = _logger.debug
 info = _logger.info
