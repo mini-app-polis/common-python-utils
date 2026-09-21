@@ -1,3 +1,10 @@
+## [5.10.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.10.1...v5.10.2) (2026-09-21)
+
+
+### Bug Fixes
+
+* **logger:** apply LOGGING_LEVEL when the host already configured root ([668b164](https://github.com/mini-app-polis/common-python-utils/commit/668b1641bfee23823ed31dc1ea99aac6017d5df9))
+
 ## [5.10.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.10.0...v5.10.1) (2026-09-21)
 
 
