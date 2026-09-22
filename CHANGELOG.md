@@ -1,3 +1,10 @@
+# [5.11.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.10.2...v5.11.0) (2026-09-22)
+
+
+### Features
+
+* **llm:** honour timeout_s and max_retries on the Anthropic client ([f4b4726](https://github.com/mini-app-polis/common-python-utils/commit/f4b472613f5a7d25eb10cc9694b02a38e783ce6a))
+
 ## [5.10.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.10.1...v5.10.2) (2026-09-21)
 
 
