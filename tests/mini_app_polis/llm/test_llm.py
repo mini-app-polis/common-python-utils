@@ -111,6 +111,38 @@ class TestBuildLlm:
         with pytest.raises(LLMError, match="Unknown LLM provider"):
             build_llm(provider="gemini", model="gemini-pro")
 
+    def test_the_defaults_are_the_configs(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+        captured: list[LLMConfig] = []
+        with patch(
+            "mini_app_polis.llm.factory.AnthropicLLM",
+            side_effect=lambda cfg: captured.append(cfg),
+        ):
+            build_llm(provider="anthropic", model="claude")
+        (cfg,) = captured
+        assert cfg.timeout_s == LLMConfig("p", "m", "E").timeout_s
+        assert cfg.max_retries is None
+
+    @pytest.mark.parametrize("provider", ["anthropic", "openai"])
+    def test_a_caller_with_a_deadline_can_size_the_call(
+        self, monkeypatch: pytest.MonkeyPatch, provider: str
+    ) -> None:
+        """timeout_s x (1 + max_retries) is what has to fit in the deadline."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        target = "AnthropicLLM" if provider == "anthropic" else "OpenAILLM"
+        captured: list[LLMConfig] = []
+        with patch(
+            f"mini_app_polis.llm.factory.{target}",
+            side_effect=lambda cfg: captured.append(cfg),
+        ):
+            build_llm(provider=provider, model="m", timeout_s=600, max_retries=0)
+        (cfg,) = captured
+        assert cfg.timeout_s == 600
+        assert cfg.max_retries == 0
+
 
 # ---------------------------------------------------------------------------
 # AnthropicLLM
@@ -118,6 +150,37 @@ class TestBuildLlm:
 
 
 class TestAnthropicLLM:
+    def test_the_sdk_client_is_given_the_configured_timeout(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """It used to be declared and ignored, leaving the SDK's 600s default."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+        mock_anthropic = MagicMock()
+        cfg = LLMConfig(
+            provider="anthropic",
+            model="test-model",
+            api_key_env="ANTHROPIC_API_KEY",
+            timeout_s=42.0,
+            max_retries=0,
+        )
+        with patch.dict("sys.modules", {"anthropic": mock_anthropic}):
+            AnthropicLLM(cfg)
+
+        mock_anthropic.Anthropic.assert_called_once()
+        kwargs = mock_anthropic.Anthropic.call_args.kwargs
+        assert kwargs["timeout"] == 42.0
+        assert kwargs["max_retries"] == 0
+
+    def test_the_sdk_keeps_its_own_retry_default_when_unset(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+        mock_anthropic = MagicMock()
+        with patch.dict("sys.modules", {"anthropic": mock_anthropic}):
+            AnthropicLLM(_cfg("anthropic"))
+
+        assert "max_retries" not in mock_anthropic.Anthropic.call_args.kwargs
+
     def _make_client(self, monkeypatch: pytest.MonkeyPatch) -> AnthropicLLM:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
         mock_anthropic = MagicMock()
