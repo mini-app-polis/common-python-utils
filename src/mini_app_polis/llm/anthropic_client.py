@@ -35,7 +35,13 @@ class AnthropicLLM(LLMClient):
                 "anthropic SDK not installed. Add dependency 'anthropic' or install mini_app_polis with the llm extra."
             ) from e
 
-        self._client = Anthropic(api_key=api_key)
+        client_kwargs: dict[str, Any] = {
+            "api_key": api_key,
+            "timeout": config.timeout_s,
+        }
+        if config.max_retries is not None:
+            client_kwargs["max_retries"] = config.max_retries
+        self._client = Anthropic(**client_kwargs)
 
     def _extract_output_text(self, resp: Any) -> str:
         """Concatenate all text blocks from the Claude response.

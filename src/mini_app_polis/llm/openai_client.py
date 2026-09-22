@@ -70,7 +70,12 @@ class OpenAILLM(LLMClient):
                 "openai SDK not installed. Add dependency 'openai' or install mini_app_polis with the llm extra."
             ) from e
 
-        self._client = OpenAI(api_key=api_key)
+        client_kwargs: dict[str, Any] = {"api_key": api_key}
+        if config.max_retries is not None:
+            client_kwargs["max_retries"] = config.max_retries
+        # ``timeout`` is passed per request below, not here, so a caller can
+        # read it off the config at the call site.
+        self._client = OpenAI(**client_kwargs)
 
     def _extract_output_text(self, resp: Any) -> str:
         # Newer SDKs expose output_text
