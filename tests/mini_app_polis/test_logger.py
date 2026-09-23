@@ -120,3 +120,55 @@ def test_info_reaches_a_host_that_already_configured_root(monkeypatch) -> None:
     ]
     # The host's root level is left alone: third-party INFO stays its choice.
     assert root_level_after_import == logging.WARNING
+
+
+def _httpx_request_line(url: str) -> str:
+    """Emit httpx's INFO request line through the real logger; return it."""
+    records: list[logging.LogRecord] = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    httpx_logger = logging.getLogger("httpx")
+    handler = _Capture()
+    # An earlier test leaves httpx at WARNING; this line is emitted at INFO.
+    old_level = httpx_logger.level
+    httpx_logger.setLevel(logging.INFO)
+    httpx_logger.addHandler(handler)
+    try:
+        httpx_logger.info(
+            'HTTP Request: %s %s "%s %d %s"', "POST", url, "HTTP/1.1", 204, "No Content"
+        )
+    finally:
+        httpx_logger.removeHandler(handler)
+        httpx_logger.setLevel(old_level)
+    return records[-1].getMessage()
+
+
+def test_discord_webhook_token_is_redacted_from_httpx_lines() -> None:
+    """Live webhook tokens reached Railway through this line on 2026-09-23."""
+    _load_real_logger_module()
+    line = _httpx_request_line(
+        "https://discord.com/api/webhooks/1546975930675765312/AbC-123_xyz/github"
+    )
+    assert "AbC-123_xyz" not in line
+    assert "/api/webhooks/1546975930675765312/<redacted>/github" in line
+    assert line.startswith("HTTP Request: POST")
+
+
+def test_urls_without_a_secret_are_left_alone() -> None:
+    _load_real_logger_module()
+    url = "https://raw.githubusercontent.com/mini-app-polis/x/main/ecosystem.yaml"
+    assert url in _httpx_request_line(url)
+
+
+def test_reloading_does_not_stack_redactors() -> None:
+    _load_real_logger_module()
+    _load_real_logger_module()
+    filters = [
+        f
+        for f in logging.getLogger("httpx").filters
+        if type(f).__name__ == "_UrlSecretRedactor"
+    ]
+    assert len(filters) == 1
