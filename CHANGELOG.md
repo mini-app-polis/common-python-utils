@@ -1,3 +1,10 @@
+## [5.12.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.12.0...v5.12.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* **logger:** redact secrets carried in URL paths from httpx log lines ([af72f08](https://github.com/mini-app-polis/common-python-utils/commit/af72f080c485042c421278348544f1ee274fec55))
+
 # [5.12.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.11.0...v5.12.0) (2026-09-23)
 
 
