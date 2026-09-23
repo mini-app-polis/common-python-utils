@@ -30,6 +30,13 @@ So the loggers known to print credentials are held at a floor
 (:data:`_CREDENTIAL_LOGGER_FLOOR`) regardless of ``LOGGING_LEVEL``.
 Debugging your own code must never print your credentials.
 
+The floor keeps header dumps out, but not a secret carried in a URL's path:
+httpx's INFO line ``HTTP Request: POST <url> …`` prints the full URL, and a
+Discord webhook URL is ``/api/webhooks/<id>/<token>``. That is how live
+webhook tokens reached api-kaianolevine-com's Railway logs on 2026-09-23. A
+filter on the same loggers replaces those secrets with ``<redacted>`` and
+keeps the line (:data:`_URL_SECRET_PATTERNS`).
+
 If you genuinely need that transport-level output, opt in explicitly and
 temporarily in your own process::
 
@@ -41,6 +48,7 @@ from __future__ import annotations
 import datetime
 import logging
 import os
+import re
 
 from dotenv import load_dotenv
 
@@ -102,6 +110,51 @@ def _clamp_credential_bearing_loggers() -> None:
 
 
 _clamp_credential_bearing_loggers()
+
+#: Secrets that travel in a URL's path, where the floor above cannot keep
+#: them out of an INFO line. Each pattern's first group is kept and the rest
+#: of the match is replaced. Discord's webhook token is the observed one; add
+#: a pattern here for any other service that puts a credential in a URL.
+_URL_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(/api/webhooks/\d+/)[^/\s\"'?#]+"),
+)
+
+_REDACTED = "<redacted>"
+
+
+class _UrlSecretRedactor(logging.Filter):
+    """Replace URL-borne secrets in a record's message; never drop the record.
+
+    The line is kept because it is often the only record that a request went
+    out. Only the secret goes.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Rewrite the record in place when its message carries a secret."""
+        message = record.getMessage()
+        redacted = message
+        for pattern in _URL_SECRET_PATTERNS:
+            redacted = pattern.sub(rf"\g<1>{_REDACTED}", redacted)
+        if redacted != message:
+            record.msg, record.args = redacted, None
+        return True
+
+
+def _install_url_secret_redaction() -> None:
+    """Attach the redactor to each credential-bearing logger, once.
+
+    Matched by class name rather than identity, so reloading this module
+    (the tests do) does not stack a second filter on each logger.
+    """
+    for name in _CREDENTIAL_BEARING_LOGGERS:
+        logger = logging.getLogger(name)
+        if not any(
+            type(f).__name__ == _UrlSecretRedactor.__name__ for f in logger.filters
+        ):
+            logger.addFilter(_UrlSecretRedactor())
+
+
+_install_url_secret_redaction()
 
 _logger = logging.getLogger("mini_app_polis")
 
