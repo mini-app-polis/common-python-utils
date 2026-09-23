@@ -1,3 +1,10 @@
+# [5.12.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.11.0...v5.12.0) (2026-09-23)
+
+
+### Features
+
+* ship py.typed ([02ecd53](https://github.com/mini-app-polis/common-python-utils/commit/02ecd5301baa9a5bbbf5506a71e44423e374fe68))
+
 # [5.11.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.10.2...v5.11.0) (2026-09-22)
 
 
