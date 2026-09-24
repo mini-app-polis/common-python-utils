@@ -40,7 +40,12 @@ def load_credentials(config: AuthConfig | None = None):
 
     if creds_json:
         try:
-            creds_dict = json.loads(creds_json)
+            # strict=False: the private key's line breaks may arrive as real
+            # newlines rather than \n escapes — Doppler stores it that way,
+            # and SSM Parameter Store passes it through unchanged. Strict
+            # parsing rejects control characters inside strings; the key is
+            # the same either way.
+            creds_dict = json.loads(creds_json, strict=False)
             if not isinstance(creds_dict, dict):
                 raise ValueError("Decoded credentials JSON is not a dict")
             return service_account.Credentials.from_service_account_info(

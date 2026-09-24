@@ -9,6 +9,25 @@ def test_load_credentials_from_env_valid_json(monkeypatch, json_env_payload):
     assert creds.payload["info"]["type"] == "service_account"
 
 
+def test_load_credentials_accepts_raw_newlines_in_the_key(monkeypatch):
+    """A key with real line breaks, as Doppler and SSM hand it over."""
+    import json
+
+    import pytest
+
+    from mini_app_polis.google._auth import AuthConfig, load_credentials
+
+    key = "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n"
+    raw = '{"type": "service_account", "private_key": "' + key + '"}'
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(raw)  # what strict parsing did with it
+    monkeypatch.setenv("GOOGLE_CREDENTIALS_JSON", raw)
+
+    creds = load_credentials(AuthConfig())
+    assert getattr(creds, "source", None) == "info"
+    assert creds.payload["info"]["private_key"] == key
+
+
 def test_load_credentials_env_invalid_json_falls_back_to_file(monkeypatch):
     from mini_app_polis.google._auth import AuthConfig, load_credentials
 
