@@ -1,3 +1,10 @@
+# [5.13.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.12.1...v5.13.0) (2026-09-24)
+
+
+### Features
+
+* load Lambda secrets from SSM Parameter Store ([41959e8](https://github.com/mini-app-polis/common-python-utils/commit/41959e88cfd13c27cb875e54c731f9f6e8e97a46))
+
 ## [5.12.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.12.0...v5.12.1) (2026-09-23)
 
 
