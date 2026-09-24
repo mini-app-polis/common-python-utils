@@ -1,3 +1,10 @@
+## [5.13.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.13.0...v5.13.1) (2026-09-24)
+
+
+### Bug Fixes
+
+* accept raw newlines in GOOGLE_CREDENTIALS_JSON ([85d8c5c](https://github.com/mini-app-polis/common-python-utils/commit/85d8c5c822414e86d1b15fb74c28644022918e7b))
+
 # [5.13.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.12.1...v5.13.0) (2026-09-24)
 
 
