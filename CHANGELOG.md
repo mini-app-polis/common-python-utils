@@ -1,3 +1,10 @@
+## [5.13.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.13.1...v5.13.2) (2026-09-28)
+
+
+### Bug Fixes
+
+* **deps:** bump the python-minor-and-patch group with 4 updates ([36d9c2d](https://github.com/mini-app-polis/common-python-utils/commit/36d9c2d067d5c164993d7d83f2bb909f73e81af3))
+
 ## [5.13.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.13.0...v5.13.1) (2026-09-24)
 
 
