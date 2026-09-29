@@ -15,27 +15,25 @@ name: Contract
 #   variable  CONTRACT_API_URL         https://dev-api.kaianolevine.com
 #
 # When it runs — whenever either side of the contract changes:
-#   - a push to dev here that touches the client, the catalog or the suite.
-#     The rest of this library cannot change what the API is sent or how
-#     its answers are read, and every run writes to dev and posts to Discord;
+#   - the promotion pull request to main. This is the gate: nothing is
+#     released unless the suite passed against exactly what would be
+#     released (the pull request's merge of dev into main). promote keeps
+#     that pull request open and updates it on every push to dev, so every
+#     push is checked here, once. Require the `contract` check on main's
+#     branch protection for this to block the merge;
 #   - `dev-api-deployed`: api-kaianolevine-com's deployed workflow sends this
 #     once Railway reports a successful dev deploy, so the suite checks the
 #     API that is actually live rather than the one it replaced;
 #   - by hand.
-# Not on the promotion pull request to main: its head is dev's latest
-# commit, already checked by the push run.
 # A repository_dispatch always runs this file from main, so that run checks
 # out dev explicitly: it is dev's suite that should meet dev's API.
+#
+# As a gate it depends on the development API being up: a dev outage holds
+# releases until it is back, or until someone merges past the check.
 
 on:
-  push:
-    branches: [dev]
-    paths:
-      - "src/mini_app_polis/api/**"
-      - "contract/**"
-      - "pyproject.toml"
-      - "uv.lock"
-      - ".github/workflows/contract.yml"
+  pull_request:
+    branches: [main]
   repository_dispatch:
     types: [dev-api-deployed]
   workflow_dispatch:
@@ -62,6 +60,12 @@ jobs:
         id: config
         run: |
           if [ -z "$CONTRACT_API_URL" ] || [ -z "$CONTRACT_SUITE_API_KEY" ]; then
+            # A gate that cannot run must not pass: on the promotion pull
+            # request a missing configuration fails the check.
+            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+              echo "::error::Contract suite not configured — set CONTRACT_API_URL and CONTRACT_SUITE_API_KEY."
+              exit 1
+            fi
             echo "::warning::Contract suite not configured — set CONTRACT_API_URL and CONTRACT_SUITE_API_KEY."
             echo "ready=false" >> "$GITHUB_OUTPUT"
           else
@@ -88,3 +92,4 @@ jobs:
       - name: Run the contract suite
         if: steps.config.outputs.ready == 'true'
         run: uv run pytest contract --no-cov -p no:cacheprovider -rA
+        

@@ -96,8 +96,9 @@ and fails if an endpoint is neither exercised nor listed in
 `contract/harness.py`'s `NOT_EXERCISED`. It writes data, so it refuses to run
 unless it has a `dev_` key and a non-production host, and it stops if the API
 doesn't recognise the key as `contract-suite` (CD-033). It runs from
-`.github/workflows/contract.yml`, on pushes to `dev` that touch the client or
-the suite, and when the API's dev deploy dispatches `dev-api-deployed`.
+`.github/workflows/contract.yml` on the promotion pull request to `main`, where
+it gates the release, and when the API's dev deploy dispatches
+`dev-api-deployed`.
 Locally:
 
 ```bash
