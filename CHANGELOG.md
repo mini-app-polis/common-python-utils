@@ -1,3 +1,10 @@
+# [5.15.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.14.1...v5.15.0) (2026-09-29)
+
+
+### Features
+
+* **request-metrics:** publish API request latency and error counts to CloudWatch ([be1e596](https://github.com/mini-app-polis/common-python-utils/commit/be1e596720c7994a50257fec156ba5b0f602a9f2))
+
 ## [5.14.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.14.0...v5.14.1) (2026-09-29)
 
 
