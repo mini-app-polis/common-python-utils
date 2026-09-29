@@ -34,6 +34,12 @@ from tenacity import wait_none
 import mini_app_polis.pipeline_status as ps
 import mini_app_polis.serve_resilience as sr
 
+# serve_with_retry is deprecated but still tested until it is removed; its
+# warning is asserted once, below, not on every test.
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:serve_resilience\\.serve_with_retry is deprecated:DeprecationWarning"
+)
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -802,3 +808,11 @@ def test_production_still_serves(monkeypatch, api_configured) -> None:
     sr.serve_with_retry("dep-a", repo="deejay-cog")
 
     assert len(calls) == 1
+
+
+def test_serve_with_retry_is_deprecated(monkeypatch, api_configured) -> None:
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    _install_serve(monkeypatch, _noop_serve)
+
+    with pytest.warns(DeprecationWarning, match="Prefect"):
+        sr.serve_with_retry("dep-a", repo="deejay-cog")

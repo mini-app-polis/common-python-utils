@@ -104,6 +104,7 @@ from __future__ import annotations
 import contextlib
 import os
 import time
+import warnings
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
@@ -541,6 +542,7 @@ def _deliver(message: dict[str, Any], *, repo: str, logger: Any) -> bool:
     """
     try:
         from mini_app_polis.api import KaianoApiClient  # local import
+        from mini_app_polis.api.contract import NotifyRequest
     except Exception as exc:
         with contextlib.suppress(Exception):
             logger.exception(
@@ -553,8 +555,9 @@ def _deliver(message: dict[str, Any], *, repo: str, logger: Any) -> bool:
 
     try:
         client = KaianoApiClient.from_env(machine_name=repo)
-        client.notify(embeds=message["embeds"], username=message.get("username"))
-        return True
+        result = client.send_notification(
+            NotifyRequest(embeds=message["embeds"], username=message.get("username"))
+        )
     except Exception as exc:
         with contextlib.suppress(Exception):
             logger.exception(
@@ -562,6 +565,19 @@ def _deliver(message: dict[str, Any], *, repo: str, logger: Any) -> bool:
             )
         _capture(exc)
         return False
+
+    # The API answers 200 with forwarded=false when it decided not to post
+    # the message. That is not a delivery, and saying so is the point of
+    # returning a bool at all.
+    if not result.forwarded:
+        with contextlib.suppress(Exception):
+            logger.warning(
+                "pipeline_status: run report not forwarded (repo=%s): %s",
+                repo,
+                result.reason,
+            )
+        return False
+    return True
 
 
 def post_findings(
@@ -574,6 +590,12 @@ def post_findings(
     run_id: str | None = None,
 ) -> DeliveryReport:
     """Post one or more graded findings to ``/v1/evaluations``.
+
+    .. deprecated::
+        Nothing in the fleet calls this: evaluator-cog posts its findings
+        through its own client. Use ``KaianoApiClient.create_evaluation``
+        with a ``PipelineEvaluationCreate``. Removed in the next major
+        release.
 
     This is the **findings** path and it still writes rows. Anything an
     evaluator judged against a revision of the standards catalog belongs
@@ -611,6 +633,13 @@ def post_findings(
         of the list it handed over is the instrument that showed green
         while 162 findings went nowhere; log this instead.
     """
+    warnings.warn(
+        "pipeline_status.post_findings is deprecated: use "
+        "KaianoApiClient.create_evaluation. It will be removed in the next "
+        "major release.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     logger = get_prefect_logger()
     rows = list(findings)
 
@@ -862,6 +891,10 @@ def make_failure_hook(
 ) -> Callable[..., None]:
     """Return a Prefect ``on_failure`` / ``on_crashed`` hook.
 
+    .. deprecated::
+        The fleet no longer runs on Prefect and nothing calls this. Removed
+        in the next major release.
+
     The returned hook reports severity ``WARN`` for the ``Failed`` state
     and ``ERROR`` for ``Crashed``. Both reach the notification channel —
     this hook is the fleet's crash ping. It always logs the failure
@@ -881,6 +914,12 @@ def make_failure_hook(
     The returned callable never raises — hooks that raise can mask the
     underlying flow failure.
     """
+    warnings.warn(
+        "pipeline_status.make_failure_hook is deprecated: the fleet no longer "
+        "runs on Prefect. It will be removed in the next major release.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
     def _hook(flow, flow_run, state) -> None:  # noqa: ARG001
         logger = get_prefect_logger()

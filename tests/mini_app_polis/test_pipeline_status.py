@@ -32,6 +32,13 @@ import pytest
 
 import mini_app_polis.pipeline_status as ps
 
+# post_findings and make_failure_hook are deprecated but still tested until
+# they are removed; their warning is asserted once, below, not on every test.
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:pipeline_status\\.(post_findings|make_failure_hook) is deprecated"
+    ":DeprecationWarning"
+)
+
 
 @contextmanager
 def captured(*, deliver_returns: bool = True, deliver_raises: Exception | None = None):
@@ -241,15 +248,61 @@ def test_delivery_uses_notify_not_evaluations(monkeypatch) -> None:
     """
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
     client = MagicMock()
+    client.send_notification.return_value = MagicMock(forwarded=True)
     with patch(
         "mini_app_polis.api.KaianoApiClient.from_env", return_value=client
     ) as from_env:
         ps.post_run_finding("f", "WARN", text="x", repo="my-cog")
 
     from_env.assert_called_once_with(machine_name="my-cog")
-    client.notify.assert_called_once()
+    client.send_notification.assert_called_once()
     client.post.assert_not_called()
-    assert client.notify.call_args.kwargs["embeds"]
+    request = client.send_notification.call_args.args[0]
+    assert request.embeds
+    assert request.username == "my-cog"
+
+
+def test_a_report_the_api_did_not_forward_is_not_delivered() -> None:
+    """A 200 with forwarded=false is the API declining to post, not a send."""
+    client = MagicMock()
+    client.send_notification.return_value = MagicMock(
+        forwarded=False, reason="webhook_missing"
+    )
+    logger = MagicMock()
+    with patch("mini_app_polis.api.KaianoApiClient.from_env", return_value=client):
+        delivered = ps._deliver(
+            {"embeds": [{"title": "t"}], "username": "my-cog"},
+            repo="my-cog",
+            logger=logger,
+        )
+
+    assert delivered is False
+    assert "webhook_missing" in logger.warning.call_args.args
+
+
+def test_a_report_the_api_forwarded_is_delivered() -> None:
+    client = MagicMock()
+    client.send_notification.return_value = MagicMock(forwarded=True)
+    with patch("mini_app_polis.api.KaianoApiClient.from_env", return_value=client):
+        assert ps._deliver(
+            {"embeds": [{"title": "t"}], "username": "my-cog"},
+            repo="my-cog",
+            logger=MagicMock(),
+        )
+
+
+def test_post_findings_is_deprecated(monkeypatch) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    with (
+        patch("mini_app_polis.api.KaianoApiClient.from_env"),
+        pytest.warns(DeprecationWarning, match="create_evaluation"),
+    ):
+        ps.post_findings(repo="r", flow_name="f", findings=[])
+
+
+def test_make_failure_hook_is_deprecated() -> None:
+    with pytest.warns(DeprecationWarning, match="Prefect"):
+        ps.make_failure_hook("f", repo="r")
 
 
 def test_dimension_override(monkeypatch) -> None:

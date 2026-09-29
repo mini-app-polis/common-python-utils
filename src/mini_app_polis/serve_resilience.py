@@ -85,6 +85,7 @@ import contextlib
 import math
 import os
 import time
+import warnings
 from typing import Any
 
 import httpx
@@ -451,6 +452,10 @@ def serve_with_retry(
 ) -> None:
     """Call ``prefect.serve(*deployments)`` with startup-failure resilience.
 
+    .. deprecated::
+        The fleet no longer runs on Prefect and nothing calls this. Removed
+        in the next major release.
+
     Drop-in replacement for ``prefect.serve()`` in a cog's ``main()``.
     Outside production it serves nothing and returns immediately — see
     :data:`mini_app_polis.environment.Effect.PREFECT_SERVE` for why, and
@@ -507,6 +512,12 @@ def serve_with_retry(
         Re-raising is load-bearing: a zero exit code would leave Railway
         with nothing to restart.
     """
+    warnings.warn(
+        "serve_resilience.serve_with_retry is deprecated: the fleet no longer "
+        "runs on Prefect. It will be removed in the next major release.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if not effect_enabled(Effect.PREFECT_SERVE):
         # Prefect Cloud is one workspace across both environments, so a
         # non-production cog must not register deployments in it. This
