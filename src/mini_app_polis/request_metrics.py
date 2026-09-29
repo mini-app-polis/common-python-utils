@@ -87,6 +87,12 @@ class _Window:
 
     @property
     def empty(self) -> bool:
+        """Whether no request was recorded in this window.
+
+        Every request adds to the service-wide latency series, errors
+        included, so no latency means nothing to publish: ``flush`` skips
+        the PutMetricData call rather than sending an empty minute.
+        """
         return not self.latency
 
 
