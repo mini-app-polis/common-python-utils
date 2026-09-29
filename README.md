@@ -90,6 +90,21 @@ single definition. A response that doesn't match raises pydantic's
 fields, so a field the API adds doesn't break a cog pinned to an older
 release. A test enforces this.
 
+**Contract suite.** `contract/` checks the catalog against the deployed
+development API (TEST-016). It calls every endpoint through the typed methods
+and fails if an endpoint is neither exercised nor listed in
+`contract/harness.py`'s `NOT_EXERCISED`. It writes data, so it refuses to run
+unless it has a `dev_` key and a non-production host, and it stops if the API
+doesn't recognise the key as `contract-suite` (CD-033). It runs from
+`.github/workflows/contract.yml`, on pushes to `dev` that touch the client or
+the suite, and when the API's dev deploy dispatches `dev-api-deployed`.
+Locally:
+
+```bash
+CONTRACT_API_URL=https://dev-api.kaianolevine.com CONTRACT_SUITE_API_KEY=dev_… \
+  uv run pytest contract --no-cov
+```
+
 ### AsanaClient
 
 ```python

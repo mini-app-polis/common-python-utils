@@ -49,10 +49,10 @@ jobs:
         run: uv sync --all-extras
 
       - name: Lint
-        run: uv run ruff check src/ tests/
+        run: uv run ruff check src/ tests/ contract/
 
       - name: Format check
-        run: uv run ruff format --check src/ tests/
+        run: uv run ruff format --check src/ tests/ contract/
 
       - name: Type check
         run: uv run mypy src/

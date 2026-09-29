@@ -1,0 +1,90 @@
+name: Contract
+
+# The live contract suite (contract/): every endpoint in the fleet's catalog,
+# mini_app_polis.api.contract, called against the development Kaiano API
+# through the same typed client methods the cogs use (TEST-016). The cogs
+# call the API through this library, so the suite lives here once rather
+# than in every cog (ADR-012).
+#
+# It writes to that API, so it runs one at a time and only ever with the
+# development contract-suite key — see contract/harness.py for the guards
+# (CD-033).
+#
+# Configuration (repository settings → Secrets and variables → Actions):
+#   secret    CONTRACT_SUITE_API_KEY   the dev API's contract-suite key (dev_…)
+#   variable  CONTRACT_API_URL         https://dev-api.kaianolevine.com
+#
+# When it runs — whenever either side of the contract changes:
+#   - a push to dev here that touches the client, the catalog or the suite.
+#     The rest of this library cannot change what the API is sent or how
+#     its answers are read, and every run writes to dev and posts to Discord;
+#   - `dev-api-deployed`: api-kaianolevine-com's deployed workflow sends this
+#     once Railway reports a successful dev deploy, so the suite checks the
+#     API that is actually live rather than the one it replaced;
+#   - by hand.
+# Not on the promotion pull request to main: its head is dev's latest
+# commit, already checked by the push run.
+# A repository_dispatch always runs this file from main, so that run checks
+# out dev explicitly: it is dev's suite that should meet dev's API.
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "src/mini_app_polis/api/**"
+      - "contract/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/contract.yml"
+  repository_dispatch:
+    types: [dev-api-deployed]
+  workflow_dispatch:
+
+# Every suite that writes to the development Kaiano API shares this group.
+concurrency:
+  group: contract-dev-kaiano-api
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CONTRACT_API_URL: ${{ vars.CONTRACT_API_URL }}
+      CONTRACT_SUITE_API_KEY: ${{ secrets.CONTRACT_SUITE_API_KEY }}
+      # The API commit being checked, when the API asked for this run.
+      CONTRACT_API_SHA: ${{ github.event.client_payload.api_sha }}
+    steps:
+      - name: Check configuration
+        id: config
+        run: |
+          if [ -z "$CONTRACT_API_URL" ] || [ -z "$CONTRACT_SUITE_API_KEY" ]; then
+            echo "::warning::Contract suite not configured — set CONTRACT_API_URL and CONTRACT_SUITE_API_KEY."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.config.outputs.ready == 'true'
+        with:
+          ref: ${{ github.event_name == 'repository_dispatch' && 'dev' || '' }}
+
+      - name: Install uv
+        if: steps.config.outputs.ready == 'true'
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Python
+        if: steps.config.outputs.ready == 'true'
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        if: steps.config.outputs.ready == 'true'
+        run: uv sync --locked --extra dev
+
+      - name: Run the contract suite
+        if: steps.config.outputs.ready == 'true'
+        run: uv run pytest contract --no-cov -p no:cacheprovider -rA
