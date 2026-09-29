@@ -1,3 +1,10 @@
+# [5.14.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.13.2...v5.14.0) (2026-09-29)
+
+
+### Features
+
+* **api:** add typed contract catalog and client methods for fleet endpoints ([7b7c5f4](https://github.com/mini-app-polis/common-python-utils/commit/7b7c5f4dd99fd1a247d3a70a1b60a5f9b7b310f0))
+
 ## [5.13.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.13.1...v5.13.2) (2026-09-28)
 
 
