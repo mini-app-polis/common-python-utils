@@ -1,3 +1,11 @@
+## [5.14.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.14.0...v5.14.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **api:** send typed request fields under their wire aliases ([0aa42d4](https://github.com/mini-app-polis/common-python-utils/commit/0aa42d4447a10af43a7e74b4a26f876ab6f00905))
+* **deps:** bump oauthlib to 4.0.0 for CVE-2026-49265 ([8a3dd11](https://github.com/mini-app-polis/common-python-utils/commit/8a3dd115889530c001332fdfd0222a73b98ed0b2))
+
 # [5.14.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.13.2...v5.14.0) (2026-09-29)
 
 
