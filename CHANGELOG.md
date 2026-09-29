@@ -1,3 +1,10 @@
+## [5.15.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.15.1...v5.15.2) (2026-09-29)
+
+
+### Bug Fixes
+
+* **deps:** require oauthlib>=4.0.0 for CVE-2026-49265 ([a5bb7fd](https://github.com/mini-app-polis/common-python-utils/commit/a5bb7fd45ae0127c1ee1ee670905c3cb9764bbeb))
+
 ## [5.15.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.15.0...v5.15.1) (2026-09-29)
 
 
