@@ -92,3 +92,4 @@ jobs:
       - name: Run the contract suite
         if: steps.config.outputs.ready == 'true'
         run: uv run pytest contract --no-cov -p no:cacheprovider -rA
+        
