@@ -152,6 +152,7 @@ def test_summary_names_environment_source_and_gates(
     assert "prefect_trigger=off" in line
     assert "prefect_serve=off" in line
     assert "healthchecks=off" in line
+    assert "cloudwatch_metrics=off" in line
     assert "api_base_url=https://dev-api.example" in line
 
 
