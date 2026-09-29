@@ -19,6 +19,8 @@ from mini_app_polis.api.contract import (
     NotifyRequest,
     PipelineEvaluationItem,
     TranscriptionRunRequest,
+    WcsExtractionRawOutput,
+    WcsSourceCreate,
 )
 
 _META = {"count": 1, "total": 1, "version": "test"}
@@ -152,6 +154,35 @@ def test_typed_post_serialises_dates_as_json(
         "tracks": [{"title": "Song", "artist": "Artist"}],
     }
     assert out.set_id == set_id
+
+
+def test_typed_post_sends_fields_under_their_wire_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``from_`` goes out as ``"from"``, which is what the API reads.
+
+    Sent by field name, the relation arrives without ``from`` and the whole
+    source is a 422. The body must validate as the request model, the way
+    the API will validate it.
+    """
+    client, calls = _client(monkeypatch, {"data": {}, "meta": _META})
+    payload = WcsSourceCreate(
+        transcript_id=uuid.uuid4(),
+        extractor_version="1",
+        extractor_model="m",
+        extractor_provider="p",
+        prompt_version="v",
+        raw_output=WcsExtractionRawOutput.model_validate(
+            {"entity_relations": [{"from": "a", "to": "b", "relation_kind": "r"}]}
+        ),
+    )
+
+    with pytest.raises(ValidationError):  # the fake answer is not a source
+        client.create_wcs_source(payload)
+
+    sent = calls[0][2]
+    assert sent["raw_output"]["entity_relations"][0]["from"] == "a"
+    assert WcsSourceCreate.model_validate(sent) == payload
 
 
 def test_list_evaluations_sends_only_the_filters_given(
