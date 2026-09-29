@@ -1,3 +1,10 @@
+## [5.15.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.15.0...v5.15.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **pipeline_status:** send run reports through the typed notify client ([f12f26d](https://github.com/mini-app-polis/common-python-utils/commit/f12f26d54f2f50bdfba22cab520d9ad1b053edf2))
+
 # [5.15.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.14.1...v5.15.0) (2026-09-29)
 
 
