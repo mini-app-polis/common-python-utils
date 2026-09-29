@@ -72,6 +72,12 @@ class Effect(StrEnum):
     #: not a resolution bug and does not announce itself as one.
     PREFECT_SERVE = "prefect_serve"
     HEALTHCHECKS = "healthchecks"
+    #: Publishing request metrics to CloudWatch (``request_metrics``).
+    #: CloudWatch could carry the environment as a dimension instead, but
+    #: every dimension value is a separately billed metric, and nothing
+    #: reads development's latency. Gated rather than labeled for that
+    #: reason alone.
+    CLOUDWATCH_METRICS = "cloudwatch_metrics"
 
 
 #: Spellings seen across Railway environment names, Doppler configs and
