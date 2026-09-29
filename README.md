@@ -41,6 +41,7 @@ dependencies = [
 | Module | Import | Description |
 |--------|--------|-------------|
 | `api/` | `from mini_app_polis.api import KaianoApiClient` | HTTP client for internal FastAPI services |
+| `api/contract/` | `from mini_app_polis.api.contract import IngestSet, ENDPOINTS` | Typed request/response models for the Kaiano API endpoints the fleet calls |
 | `asana/` | `from mini_app_polis.asana import AsanaClient` | Asana task creation with external-id idempotency |
 | `config.py` | `from mini_app_polis import config` | Env-var driven shared config (Spotify, Google, VDJ) |
 | `google/` | `from mini_app_polis.google import GoogleAPI` | Drive + Sheets facade |
@@ -67,6 +68,27 @@ from mini_app_polis.api import KaianoApiClient
 client = KaianoApiClient.from_env("deejay-cog")
 result = client.post("/sets", {"name": "My Set"})
 ```
+
+For the endpoints in `mini_app_polis.api.contract.ENDPOINTS`, use the typed
+methods. They take the request model the API validates against and return the
+envelope's `data` as the response model. `get()` and `post()` still work for
+anything outside the catalog.
+
+```python
+from mini_app_polis.api.contract import TranscriptionRunRequest
+
+accepted = client.request_transcription_run(
+    TranscriptionRunRequest(mode="wcs-transcripts", drive_file_id=file_id)
+)
+if accepted.deduplicated:
+    ...
+```
+
+The API imports these same models for its routes, so the contract has a
+single definition. A response that doesn't match raises pydantic's
+`ValidationError`, not `KaianoApiError`. Response models never forbid extra
+fields, so a field the API adds doesn't break a cog pinned to an older
+release. A test enforces this.
 
 ### AsanaClient
 
