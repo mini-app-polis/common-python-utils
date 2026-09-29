@@ -303,8 +303,13 @@ class KaianoApiClient:
     #
     # One per endpoint in mini_app_polis.api.contract.ENDPOINTS. Each takes
     # the request model the API validates against, sends only the fields the
-    # caller set — the same body a hand-built dict would have been — and
-    # returns the envelope's ``data`` validated against the response model.
+    # caller set — the same body a hand-built dict would have been — under
+    # their wire names, and returns the envelope's ``data`` validated against
+    # the response model.
+    #
+    # Wire names matter: a field whose name is a Python keyword is declared
+    # with an alias (``from_`` is ``"from"`` on the wire), and the API reads
+    # the alias. Dumped by field name it arrives missing and is a 422.
     #
     # A response that does not match raises pydantic's ValidationError rather
     # than KaianoApiError: the call succeeded and the API answered, but not
@@ -322,7 +327,8 @@ class KaianoApiClient:
             if body is None:
                 raise TypeError(f"{endpoint_name} needs a request body")
             raw = self.post(
-                endpoint.path, body.model_dump(mode="json", exclude_unset=True)
+                endpoint.path,
+                body.model_dump(mode="json", exclude_unset=True, by_alias=True),
             )
         else:
             raw = self.get(endpoint.path, params)
