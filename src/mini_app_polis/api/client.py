@@ -45,14 +45,51 @@ from __future__ import annotations
 
 import logging as _logging
 import os
-from typing import Any
+from functools import cache
+from typing import Any, cast
 
 import httpx
+from pydantic import BaseModel, TypeAdapter
 
 from ..environment import api_base_url
+from .contract import (
+    ENDPOINTS_BY_NAME,
+    DeejayRunAccepted,
+    DeejayRunRequest,
+    Envelope,
+    IngestResponseData,
+    IngestSet,
+    LivePlaysIngest,
+    LivePlaysResponseData,
+    NotificationResult,
+    NotifyRequest,
+    PipelineEvaluationCreate,
+    PipelineEvaluationItem,
+    PipelineEvaluationWriteResult,
+    SpotifyPlaylistsIngest,
+    SpotifyPlaylistsIngestResponse,
+    TranscriptionRunAccepted,
+    TranscriptionRunRequest,
+    WcsSourceCreate,
+    WcsSourceItem,
+    WcsTranscriptCreate,
+    WcsTranscriptItem,
+    WcsWikiExportItem,
+)
 from .errors import KaianoApiError
 
 _log = _logging.getLogger(__name__)
+
+
+@cache
+def _envelope_adapter(endpoint_name: str) -> TypeAdapter[Any]:
+    """Validator for one catalog endpoint's full response body.
+
+    Built once per endpoint: parametrising ``Envelope`` creates a new model
+    class, which is not something to do on every call.
+    """
+    response = ENDPOINTS_BY_NAME[endpoint_name].response
+    return TypeAdapter(Envelope[response])  # type: ignore[valid-type]
 
 
 def machine_key_env_var(machine_name: str) -> str:
@@ -261,3 +298,137 @@ class KaianoApiClient:
             message=f"Connection failed after {self.max_retries} attempts: {last_exc}",
             path=path,
         )
+
+    # ── Typed methods ─────────────────────────────────────────────────────
+    #
+    # One per endpoint in mini_app_polis.api.contract.ENDPOINTS. Each takes
+    # the request model the API validates against, sends only the fields the
+    # caller set — the same body a hand-built dict would have been — and
+    # returns the envelope's ``data`` validated against the response model.
+    #
+    # A response that does not match raises pydantic's ValidationError rather
+    # than KaianoApiError: the call succeeded and the API answered, but not
+    # in the shape the contract says, and that should read differently from
+    # a refusal. get() and post() stay for anything outside the catalog.
+
+    def _call(
+        self,
+        endpoint_name: str,
+        body: BaseModel | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> Any:
+        endpoint = ENDPOINTS_BY_NAME[endpoint_name]
+        if endpoint.method == "POST":
+            if body is None:
+                raise TypeError(f"{endpoint_name} needs a request body")
+            raw = self.post(
+                endpoint.path, body.model_dump(mode="json", exclude_unset=True)
+            )
+        else:
+            raw = self.get(endpoint.path, params)
+        return _envelope_adapter(endpoint_name).validate_python(raw).data
+
+    def ingest(self, payload: IngestSet) -> IngestResponseData:
+        """``POST /v1/ingest`` — one set and its tracks."""
+        return cast(IngestResponseData, self._call("ingest", payload))
+
+    def ingest_live_plays(self, payload: LivePlaysIngest) -> LivePlaysResponseData:
+        """``POST /v1/live-plays`` — a batch of plays from the live history."""
+        return cast(LivePlaysResponseData, self._call("ingest_live_plays", payload))
+
+    def ingest_spotify_playlists(
+        self, payload: SpotifyPlaylistsIngest
+    ) -> SpotifyPlaylistsIngestResponse:
+        """``POST /v1/spotify/playlists`` — the playlists a set was published to."""
+        return cast(
+            SpotifyPlaylistsIngestResponse,
+            self._call("ingest_spotify_playlists", payload),
+        )
+
+    def create_wcs_transcript(self, payload: WcsTranscriptCreate) -> WcsTranscriptItem:
+        """``POST /v1/wcs/transcripts`` — store one raw transcript."""
+        return cast(WcsTranscriptItem, self._call("create_wcs_transcript", payload))
+
+    def create_wcs_source(self, payload: WcsSourceCreate) -> WcsSourceItem:
+        """``POST /v1/wcs/sources`` — ingest one source and its extraction."""
+        return cast(WcsSourceItem, self._call("create_wcs_source", payload))
+
+    def export_wcs_wiki(self) -> WcsWikiExportItem:
+        """``GET /v1/wcs/wiki/export`` — the whole corpus in one response."""
+        return cast(WcsWikiExportItem, self._call("export_wcs_wiki"))
+
+    def request_deejay_run(self, payload: DeejayRunRequest) -> DeejayRunAccepted:
+        """``POST /v1/deejay/runs`` — enqueue a deejay-cog run.
+
+        Answered 202 when enqueued and 200 when deduplicated; both come back
+        here as the same model, with ``deduplicated`` telling them apart.
+        """
+        return cast(DeejayRunAccepted, self._call("request_deejay_run", payload))
+
+    def request_transcription_run(
+        self, payload: TranscriptionRunRequest
+    ) -> TranscriptionRunAccepted:
+        """``POST /v1/transcription/runs`` — enqueue one transcription-cog job.
+
+        Answered 202 when enqueued and 200 when deduplicated; both come back
+        here as the same model, with ``deduplicated`` telling them apart.
+        """
+        return cast(
+            TranscriptionRunAccepted,
+            self._call("request_transcription_run", payload),
+        )
+
+    def create_evaluation(
+        self, payload: PipelineEvaluationCreate
+    ) -> PipelineEvaluationWriteResult:
+        """``POST /v1/evaluations`` — record one graded finding.
+
+        Raises like every other verb here. For best-effort posting from a
+        flow, use :func:`mini_app_polis.pipeline_status.post_findings`.
+        """
+        return cast(
+            PipelineEvaluationWriteResult, self._call("create_evaluation", payload)
+        )
+
+    def list_evaluations(
+        self,
+        *,
+        repo: str | None = None,
+        dimension: str | None = None,
+        severity: str | None = None,
+        source: str | None = None,
+        run_id: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[PipelineEvaluationItem]:
+        """``GET /v1/evaluations`` — findings, newest first.
+
+        ``repo``, ``dimension``, ``severity`` and ``source`` take one value
+        or a comma-separated list. Unset filters are not sent, so the API's
+        own defaults apply (``limit`` 50, at most 500).
+        """
+        params = {
+            key: value
+            for key, value in {
+                "repo": repo,
+                "dimension": dimension,
+                "severity": severity,
+                "source": source,
+                "run_id": run_id,
+                "limit": limit,
+                "offset": offset,
+            }.items()
+            if value is not None
+        }
+        return cast(
+            list[PipelineEvaluationItem],
+            self._call("list_evaluations", params=params),
+        )
+
+    def send_notification(self, payload: NotifyRequest) -> NotificationResult:
+        """``POST /v1/notify`` — one Discord message, typed.
+
+        :meth:`notify` is the same call taking keyword arguments and returning
+        the raw body; it stays as it is for the callers that use it.
+        """
+        return cast(NotificationResult, self._call("send_notification", payload))

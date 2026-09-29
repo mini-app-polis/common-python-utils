@@ -26,6 +26,9 @@ dependencies = [
   "musicbrainzngs>=0.7.1,<0.8.0",
   "httpx>=0.27,<1.0",
   "tenacity>=8.2,<10.0",
+  # mini_app_polis.api.contract. Same range as api-kaianolevine-com, which
+  # imports these models for its routes, so both sides resolve together.
+  "pydantic>=2.6,<3.0",
 ]
 
 [project.optional-dependencies]
