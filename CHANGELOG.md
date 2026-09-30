@@ -1,3 +1,10 @@
+## [5.15.4](https://github.com/mini-app-polis/common-python-utils/compare/v5.15.3...v5.15.4) (2026-09-30)
+
+
+### Bug Fixes
+
+* **deps:** patch vulnerable dependencies (virtualenv) ([17b527f](https://github.com/mini-app-polis/common-python-utils/commit/17b527f57b45deafe77a7559448d9fe18db0497a))
+
 ## [5.15.3](https://github.com/mini-app-polis/common-python-utils/compare/v5.15.2...v5.15.3) (2026-09-30)
 
 
