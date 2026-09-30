@@ -1,3 +1,10 @@
+# [5.16.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.15.4...v5.16.0) (2026-09-30)
+
+
+### Features
+
+* **api:** raise ApiUnavailable when the API cannot be reached ([f876bda](https://github.com/mini-app-polis/common-python-utils/commit/f876bda1a3ea6a15b9d1293f8a5e9b3953950c3b))
+
 ## [5.15.4](https://github.com/mini-app-polis/common-python-utils/compare/v5.15.3...v5.15.4) (2026-09-30)
 
 
