@@ -1,3 +1,10 @@
+# [5.17.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.16.0...v5.17.0) (2026-09-30)
+
+
+### Features
+
+* **request-metrics:** log requests slower than a second with their route ([b6a8bee](https://github.com/mini-app-polis/common-python-utils/commit/b6a8bee510d39b578a95bdcb9ad47866a664d244))
+
 # [5.16.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.15.4...v5.16.0) (2026-09-30)
 
 
