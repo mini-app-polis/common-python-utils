@@ -63,6 +63,11 @@ NAMESPACE = "MiniAppPolis/Api"
 #: PutMetricData call per API per minute is well inside the free tier.
 DEFAULT_FLUSH_INTERVAL_SECONDS = 60.0
 
+#: A request at least this slow is also logged, with its method, route and
+#: status. The metrics say that the p99 is slow; this line says which
+#: request it was, in the logs the service already has.
+DEFAULT_SLOW_REQUEST_MS = 1000.0
+
 #: PutMetricData limits: distinct values per datum, datums per call.
 _MAX_VALUES_PER_DATUM = 150
 _MAX_DATUMS_PER_CALL = 1000
@@ -138,6 +143,7 @@ class RequestMetricsMiddleware:
         routes: Iterable[str] = (),
         exclude_paths: Iterable[str] = (),
         flush_interval_seconds: float = DEFAULT_FLUSH_INTERVAL_SECONDS,
+        slow_request_ms: float | None = DEFAULT_SLOW_REQUEST_MS,
         start_flusher: bool = True,
     ) -> None:
         self.app = app
@@ -145,6 +151,7 @@ class RequestMetricsMiddleware:
         self.routes = frozenset(routes)
         self.exclude_paths = frozenset(exclude_paths)
         self.enabled = effect_enabled(Effect.CLOUDWATCH_METRICS)
+        self.slow_request_ms = slow_request_ms
 
         self._client_factory = client_factory
         self._client: Any | None = None
@@ -189,6 +196,19 @@ class RequestMetricsMiddleware:
             route = _route_template(scope)
             try:
                 self.record(route, status, elapsed_ms)
+                if (
+                    self.slow_request_ms is not None
+                    and elapsed_ms >= self.slow_request_ms
+                ):
+                    # The template when routing matched, so ids stay out of
+                    # the log; the raw path only for an unmatched request.
+                    _log.warning(
+                        "request_metrics: slow request %s %s -> %d in %.0f ms",
+                        scope.get("method", "?"),
+                        route or scope.get("path", "?"),
+                        status,
+                        elapsed_ms,
+                    )
             except Exception:  # never break a request over a metric
                 _log.debug("request_metrics: record failed", exc_info=True)
 

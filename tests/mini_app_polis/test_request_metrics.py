@@ -62,7 +62,9 @@ def call(middleware: RequestMetricsMiddleware, path: str = "/v1/things") -> None
     async def send(_message):
         return None
 
-    asyncio.run(middleware({"type": "http", "path": path}, receive, send))
+    asyncio.run(
+        middleware({"type": "http", "method": "GET", "path": path}, receive, send)
+    )
 
 
 def build(app=None, client: FakeCloudWatch | None = None, **kwargs):
@@ -226,3 +228,35 @@ def test_non_http_scope_passes_through() -> None:
     asyncio.run(middleware({"type": "lifespan"}, noop, noop))
     assert seen == ["lifespan"]
     assert middleware.flush() == 0
+
+
+def slow_lines(caplog: pytest.LogCaptureFixture) -> list[str]:
+    """Only the slow-request warnings: construction also logs an INFO line."""
+    return [r.getMessage() for r in caplog.records if "slow request" in r.getMessage()]
+
+
+def test_slow_request_is_logged_with_its_route(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    middleware, _ = build(
+        make_app(route="/sets/{set_id}", effective="/v1/sets/{set_id}"),
+        slow_request_ms=0,
+    )
+    with caplog.at_level("WARNING", logger="mini_app_polis.request_metrics"):
+        call(middleware, "/v1/sets/123")
+    (message,) = slow_lines(caplog)
+    assert "slow request GET /v1/sets/{set_id} -> 200" in message
+
+
+def test_fast_request_is_not_logged(caplog: pytest.LogCaptureFixture) -> None:
+    middleware, _ = build()
+    with caplog.at_level("WARNING", logger="mini_app_polis.request_metrics"):
+        call(middleware)
+    assert slow_lines(caplog) == []
+
+
+def test_slow_logging_can_be_turned_off(caplog: pytest.LogCaptureFixture) -> None:
+    middleware, _ = build(slow_request_ms=None)
+    with caplog.at_level("WARNING", logger="mini_app_polis.request_metrics"):
+        call(middleware)
+    assert slow_lines(caplog) == []
