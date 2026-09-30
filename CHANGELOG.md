@@ -1,3 +1,10 @@
+## [5.15.3](https://github.com/mini-app-polis/common-python-utils/compare/v5.15.2...v5.15.3) (2026-09-30)
+
+
+### Bug Fixes
+
+* **deps:** require urllib3>=2.8.0 for CVE-2026-97687, CVE-2026-97688, CVE-2026-97689 ([73cb9ca](https://github.com/mini-app-polis/common-python-utils/commit/73cb9ca85046d0a9f79a7fda112841ebbcfed110))
+
 ## [5.15.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.15.1...v5.15.2) (2026-09-29)
 
 
