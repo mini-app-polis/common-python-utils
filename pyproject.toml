@@ -29,18 +29,6 @@ dependencies = [
   # mini_app_polis.api.contract. Same range as api-kaianolevine-com, which
   # imports these models for its routes, so both sides resolve together.
   "pydantic>=2.6,<3.0",
-  # Security floor, not a direct import: oauthlib arrives transitively via
-  # gspread -> google-auth-oauthlib -> requests-oauthlib. Declared here so
-  # every consumer's lock is forced past CVE-2026-49265 by bumping common,
-  # instead of each repo waiting on a Dependabot major PR. No upper cap:
-  # nothing in this package calls oauthlib, so there is no API to protect.
-  "oauthlib>=4.0.0",
-  # Security floor, not a direct import: urllib3 arrives transitively via
-  # spotipy and requests (google-api-core, pyacoustid, requests-oauthlib).
-  # Declared here so every consumer's lock is forced past CVE-2026-97687,
-  # CVE-2026-97688 and CVE-2026-97689 by bumping common. No upper cap:
-  # nothing in this package calls urllib3, so there is no API to protect.
-  "urllib3>=2.8.0",
 ]
 
 [project.optional-dependencies]
