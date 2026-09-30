@@ -76,7 +76,7 @@ from .contract import (
     WcsTranscriptItem,
     WcsWikiExportItem,
 )
-from .errors import KaianoApiError
+from .errors import ApiUnavailable, KaianoApiError, error_for
 
 _log = _logging.getLogger(__name__)
 
@@ -174,7 +174,8 @@ class KaianoApiClient:
         Make a synchronous POST request to the API.
 
         Retries up to max_retries times on connection errors.
-        Raises KaianoApiError on non-2xx responses.
+        Raises KaianoApiError on non-2xx responses, ApiUnavailable when the
+        API cannot be reached.
         """
         url = f"{self.base_url}{path}"
         last_exc: Exception | None = None
@@ -185,11 +186,7 @@ class KaianoApiClient:
                     response = client.post(url, json=payload, headers=self._headers())
 
                 if response.status_code >= 400:
-                    raise KaianoApiError(
-                        status_code=response.status_code,
-                        message=response.text,
-                        path=path,
-                    )
+                    raise error_for(response.status_code, response.text, path)
 
                 return response.json()
 
@@ -199,7 +196,7 @@ class KaianoApiClient:
                     break
                 continue
 
-        raise KaianoApiError(
+        raise ApiUnavailable(
             status_code=0,
             message=f"Connection failed after {self.max_retries} attempts: {last_exc}",
             path=path,
@@ -251,7 +248,8 @@ class KaianoApiClient:
         Make a synchronous GET request to the API.
 
         Retries up to max_retries times on connection errors.
-        Raises KaianoApiError on non-2xx responses.
+        Raises KaianoApiError on non-2xx responses, ApiUnavailable when the
+        API cannot be reached.
         """
         url = f"{self.base_url}{path}"
         last_exc: Exception | None = None
@@ -279,11 +277,7 @@ class KaianoApiClient:
                         response = client.get(url, headers=self._headers())
 
                 if response.status_code >= 400:
-                    raise KaianoApiError(
-                        status_code=response.status_code,
-                        message=response.text,
-                        path=path,
-                    )
+                    raise error_for(response.status_code, response.text, path)
 
                 return response.json()
 
@@ -293,7 +287,7 @@ class KaianoApiClient:
                     break
                 continue
 
-        raise KaianoApiError(
+        raise ApiUnavailable(
             status_code=0,
             message=f"Connection failed after {self.max_retries} attempts: {last_exc}",
             path=path,
