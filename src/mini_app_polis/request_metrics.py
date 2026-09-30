@@ -96,6 +96,31 @@ class _Window:
         return not self.latency
 
 
+def _route_template(scope: Scope) -> str | None:
+    """The matched route's full template, prefixes included, or None.
+
+    FastAPI 0.13x and later keep a route included under a prefix unprefixed
+    — ``scope["route"].path`` is ``/evaluations`` for ``/v1/evaluations`` —
+    and record the prefixed template on the effective route context. Read
+    that first; ``scope["route"]`` is the answer on older FastAPI and plain
+    Starlette. Reading the route alone made every configured ``/v1/...``
+    route silently fail to match, so its series never appeared.
+    """
+    fastapi_scope = scope.get("fastapi")
+    context = (
+        fastapi_scope.get("effective_route_context")
+        if isinstance(fastapi_scope, dict)
+        else None
+    )
+    for candidate in (context, scope.get("route")):
+        path = getattr(candidate, "path_format", None) or getattr(
+            candidate, "path", None
+        )
+        if isinstance(path, str) and path:
+            return path
+    return None
+
+
 class RequestMetricsMiddleware:
     """Pure ASGI middleware: records each HTTP request, publishes each minute.
 
@@ -161,7 +186,7 @@ class RequestMetricsMiddleware:
             elapsed_ms = (time.perf_counter() - start) * 1000
             # Routing mutates the scope it was handed, so the matched route
             # is here once the app returns. Absent for an unmatched path.
-            route = getattr(scope.get("route"), "path", None)
+            route = _route_template(scope)
             try:
                 self.record(route, status, elapsed_ms)
             except Exception:  # never break a request over a metric
