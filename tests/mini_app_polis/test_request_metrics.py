@@ -29,12 +29,24 @@ class FakeRoute:
     path: str
 
 
-def make_app(status: int = 200, *, route: str | None = None, raises: bool = False):
-    """A bare ASGI app that sets the scope's route the way FastAPI's router does."""
+def make_app(
+    status: int = 200,
+    *,
+    route: str | None = None,
+    effective: str | None = None,
+    raises: bool = False,
+):
+    """A bare ASGI app that sets the scope's route the way FastAPI's router does.
+
+    ``effective`` is the prefixed template FastAPI 0.13x+ records for a route
+    included under a prefix, while ``route`` stays unprefixed.
+    """
 
     async def app(scope, receive, send):
         if route is not None:
             scope["route"] = FakeRoute(route)
+        if effective is not None:
+            scope["fastapi"] = {"effective_route_context": FakeRoute(effective)}
         if raises:
             raise RuntimeError("boom")
         await send({"type": "http.response.start", "status": status, "headers": []})
@@ -131,6 +143,22 @@ def test_listed_route_gets_its_own_series() -> None:
     assert [
         {"Name": "Service", "Value": "api-test"},
         {"Name": "Route", "Value": "/v1/sets/{set_id}"},
+    ] in dims
+
+
+def test_prefixed_route_matches_by_its_full_template() -> None:
+    # FastAPI 0.141: an included router's route reports "/evaluations"; the
+    # "/v1" prefix is only on the effective route context.
+    middleware, client = build(
+        make_app(route="/evaluations", effective="/v1/evaluations"),
+        routes=["/v1/evaluations"],
+    )
+    call(middleware, "/v1/evaluations")
+    middleware.flush()
+    dims = [d["Dimensions"] for d in by_name(client, "Latency")]
+    assert [
+        {"Name": "Service", "Value": "api-test"},
+        {"Name": "Route", "Value": "/v1/evaluations"},
     ] in dims
 
 
