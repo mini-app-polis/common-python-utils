@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from mini_app_polis.api import KaianoApiClient
-from mini_app_polis.api.errors import KaianoApiError
+from mini_app_polis.api.errors import ApiUnavailable, KaianoApiError
 
 
 def test_post_returns_parsed_json_on_200_response(
@@ -453,3 +453,58 @@ def test_notify_raises_on_error_response() -> None:
         client = KaianoApiClient(base_url="https://example.com", api_key="k_test")
         with pytest.raises(KaianoApiError):
             client.notify("anything")
+
+
+# ── unavailable vs refused ──────────────────────────────────────────────
+
+_EDGE_404 = (
+    '{"status":"error","code":404,"message":"Application not found",'
+    '"request_id":"HN0qFBvpTHmbin_5GbGh5g"}'
+)
+_API_404 = '{"error":{"code":"not_found","message":"Not Found","details":null}}'
+
+
+def _get_answering(status: int, body: str) -> KaianoApiError:
+    response = MagicMock()
+    response.status_code = status
+    response.text = body
+    mock_http_client = MagicMock()
+    mock_http_client.get.return_value = response
+    with patch("mini_app_polis.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+        client = KaianoApiClient(base_url="https://example.com", api_key="k_test")
+        with pytest.raises(KaianoApiError) as excinfo:
+            client.get("/v1/deejay/runs")
+    return excinfo.value
+
+
+def test_railways_edge_404_is_unavailable() -> None:
+    err = _get_answering(404, _EDGE_404)
+    assert isinstance(err, ApiUnavailable)
+    assert err.status_code == 404
+
+
+def test_the_apis_own_404_is_not_unavailable() -> None:
+    """A route the API does not have is a bug, not a blip."""
+    err = _get_answering(404, _API_404)
+    assert not isinstance(err, ApiUnavailable)
+
+
+@pytest.mark.parametrize("status", [502, 503, 504])
+def test_gateway_errors_are_unavailable(status: int) -> None:
+    assert isinstance(_get_answering(status, "bad gateway"), ApiUnavailable)
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 409, 422, 500])
+def test_the_apis_refusals_are_not_unavailable(status: int) -> None:
+    assert not isinstance(_get_answering(status, _API_404), ApiUnavailable)
+
+
+def test_exhausted_connection_retries_are_unavailable() -> None:
+    mock_http_client = MagicMock()
+    mock_http_client.post.side_effect = httpx.TransportError("connection reset")
+    with patch("mini_app_polis.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+        client = KaianoApiClient(base_url="https://example.com", api_key="k_test")
+        with pytest.raises(ApiUnavailable):
+            client.post("/v1/x", payload={})
