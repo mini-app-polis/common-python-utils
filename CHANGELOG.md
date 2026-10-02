@@ -1,3 +1,10 @@
+# [5.18.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.17.0...v5.18.0) (2026-10-02)
+
+
+### Features
+
+* **google:** add reader sharing, appProperties tagging, file lookup, resumable upload and service-account construction to DriveFacade ([b739381](https://github.com/mini-app-polis/common-python-utils/commit/b739381a6083231eebd064bccf7ac56b872f66b5))
+
 # [5.17.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.16.0...v5.17.0) (2026-09-30)
 
 
