@@ -378,3 +378,374 @@ def test_download_m3u_file_data_returns_lines(monkeypatch):
     drive = DriveFacade(svc)
     lines = drive.download_m3u_file_data("file1")
     assert lines == ["hello"]
+
+
+# ---------------------------------------------------------------------------
+# share_with_readers / app_properties / find_files_by_app_property /
+# get_file_name / clear_folder_cache
+#
+# These use a MagicMock service so every assertion is on the exact call Drive
+# received; a fake that silently accepted any kwargs could let them pass
+# without the request being right.
+# ---------------------------------------------------------------------------
+
+
+def _mock_service():
+    from unittest.mock import MagicMock
+
+    return MagicMock()
+
+
+def test_share_with_readers_cleans_dedupes_and_validates():
+    from unittest.mock import call
+
+    from mini_app_polis.google.drive import DriveFacade, ShareResult
+
+    svc = _mock_service()
+    drive = DriveFacade(svc)
+
+    result = drive.share_with_readers(
+        "file1",
+        [
+            "  Alice@Example.com ",
+            None,
+            "",
+            "   ",
+            "not-an-email",
+            "two@@example.com",
+            "spa ce@example.com",
+            "nodot@example",
+            "bob@example.org",
+            "ALICE@example.com",  # duplicate of the first after cleaning
+            "bob@example.org",
+        ],
+    )
+
+    assert result == ShareResult(
+        shared=["alice@example.com", "bob@example.org"], failed=[]
+    )
+    create = svc.permissions.return_value.create
+    assert create.call_args_list == [
+        call(
+            fileId="file1",
+            body={
+                "role": "reader",
+                "type": "user",
+                "emailAddress": "alice@example.com",
+            },
+            sendNotificationEmail=False,
+            supportsAllDrives=True,
+        ),
+        call(
+            fileId="file1",
+            body={
+                "role": "reader",
+                "type": "user",
+                "emailAddress": "bob@example.org",
+            },
+            sendNotificationEmail=False,
+            supportsAllDrives=True,
+        ),
+    ]
+    assert create.return_value.execute.call_count == 2
+
+
+def test_share_with_readers_accepts_any_iterable():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    drive = DriveFacade(svc)
+
+    result = drive.share_with_readers("f", (e for e in ["a@b.co"]))
+
+    assert result.shared == ["a@b.co"]
+    svc.permissions.return_value.create.assert_called_once()
+
+
+def test_share_with_readers_collects_per_address_failures(as_http_error):
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    boom = as_http_error(status=400, message="invalid sharing request")
+
+    def create(*, fileId, body, sendNotificationEmail, supportsAllDrives):
+        req = _Exec(
+            (lambda: (_ for _ in ()).throw(boom))
+            if body["emailAddress"] == "bad@example.com"
+            else (lambda: {"id": "perm"})
+        )
+        return req
+
+    svc.permissions.return_value.create.side_effect = create
+    drive = DriveFacade(svc)
+
+    result = drive.share_with_readers(
+        "file1", ["good@example.com", "bad@example.com", "also@example.com"]
+    )
+
+    assert result.shared == ["good@example.com", "also@example.com"]
+    assert len(result.failed) == 1
+    assert result.failed[0][0] == "bad@example.com"
+    assert result.failed[0][1] is boom
+    # The failure did not stop the address after it.
+    assert svc.permissions.return_value.create.call_count == 3
+
+
+def test_share_with_readers_makes_no_call_when_nothing_valid():
+    from mini_app_polis.google.drive import DriveFacade, ShareResult
+
+    svc = _mock_service()
+    drive = DriveFacade(svc)
+
+    result = drive.share_with_readers("file1", [None, "", "  ", "nope", "a@b"])
+
+    assert result == ShareResult(shared=[], failed=[])
+    svc.permissions.assert_not_called()
+
+
+def test_share_result_is_frozen():
+    import dataclasses
+
+    import pytest
+
+    from mini_app_polis.google.drive import ShareResult
+
+    r = ShareResult(shared=[], failed=[])
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        r.shared = ["x"]  # type: ignore[misc]
+
+
+def test_copy_file_sends_app_properties_only_when_given():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    copy = svc.files.return_value.copy
+    copy.return_value.execute.return_value = {"id": "new"}
+    drive = DriveFacade(svc)
+
+    assert drive.copy_file("src", parent_folder_id="p", name="n") == "new"
+    copy.assert_called_once_with(
+        fileId="src",
+        body={"parents": ["p"], "name": "n"},
+        fields="id",
+        supportsAllDrives=True,
+    )
+
+    copy.reset_mock()
+    copy.return_value.execute.return_value = {"id": "new2"}
+    assert (
+        drive.copy_file(
+            "src",
+            parent_folder_id="p",
+            name="n",
+            app_properties={"deejaytoolsSubmissionId": "42"},
+        )
+        == "new2"
+    )
+    copy.assert_called_once_with(
+        fileId="src",
+        body={
+            "parents": ["p"],
+            "name": "n",
+            "appProperties": {"deejaytoolsSubmissionId": "42"},
+        },
+        fields="id",
+        supportsAllDrives=True,
+    )
+
+
+def test_upload_bytes_sends_app_properties_only_when_given():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    create = svc.files.return_value.create
+    create.return_value.execute.return_value = {"id": "up"}
+    drive = DriveFacade(svc)
+
+    assert (
+        drive.upload_bytes(
+            parent_id="p", filename="a.mp3", content=b"x", mime_type="audio/mpeg"
+        )
+        == "up"
+    )
+    kwargs = create.call_args.kwargs
+    assert kwargs["body"] == {"name": "a.mp3", "parents": ["p"]}
+    assert kwargs["fields"] == "id"
+    assert kwargs["supportsAllDrives"] is True
+    assert kwargs["media_body"].mimetype == "audio/mpeg"
+
+    create.reset_mock()
+    drive.upload_bytes(
+        parent_id="p",
+        filename="a.mp3",
+        content=b"x",
+        mime_type="audio/mpeg",
+        app_properties={"k": "v"},
+    )
+    create.assert_called_once()
+    assert create.call_args.kwargs["body"] == {
+        "name": "a.mp3",
+        "parents": ["p"],
+        "appProperties": {"k": "v"},
+    }
+
+
+def test_upload_bytes_is_single_request_unless_resumable():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    create = svc.files.return_value.create
+    create.return_value.execute.return_value = {"id": "up"}
+    drive = DriveFacade(svc)
+
+    drive.upload_bytes(
+        parent_id="p", filename="a.mp3", content=b"x", mime_type="audio/mpeg"
+    )
+    assert create.call_args.kwargs["media_body"].resumable is False
+
+    create.reset_mock()
+    drive.upload_bytes(
+        parent_id="p",
+        filename="a.mp3",
+        content=b"x" * 10,
+        mime_type="audio/mpeg",
+        resumable=True,
+    )
+    create.assert_called_once()
+    media = create.call_args.kwargs["media_body"]
+    assert media.resumable is True
+
+
+def test_find_files_by_app_property_query_and_escaping():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    lst = svc.files.return_value.list
+    lst.return_value.execute.return_value = {"files": [{"id": "a"}, {"id": "b"}]}
+    drive = DriveFacade(svc)
+
+    ids = drive.find_files_by_app_property("fold'er", key="k'ey\\", value="O'Brien\\'s")
+
+    assert ids == ["a", "b"]
+    lst.assert_called_once()
+    kwargs = lst.call_args.kwargs
+    assert kwargs["q"] == (
+        "'fold\\'er' in parents"
+        " and appProperties has { key='k\\'ey\\\\'"
+        " and value='O\\'Brien\\\\\\'s' }"
+        " and trashed = false"
+    )
+    assert kwargs["supportsAllDrives"] is True
+    assert kwargs["includeItemsFromAllDrives"] is True
+    assert kwargs["pageToken"] is None
+    assert "nextPageToken" in kwargs["fields"]
+
+
+def test_find_files_by_app_property_plain_query():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    lst = svc.files.return_value.list
+    lst.return_value.execute.return_value = {"files": []}
+    drive = DriveFacade(svc)
+
+    assert drive.find_files_by_app_property("P1", key="sid", value="7") == []
+    assert lst.call_args.kwargs["q"] == (
+        "'P1' in parents and appProperties has { key='sid' and value='7' }"
+        " and trashed = false"
+    )
+
+
+def test_find_files_by_app_property_paginates():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    pages = {
+        None: {"files": [{"id": "1"}, {"id": "2"}], "nextPageToken": "t2"},
+        "t2": {"files": [{"id": "3"}], "nextPageToken": "t3"},
+        "t3": {"files": [{"id": "4"}]},
+    }
+    seen_tokens: list[str | None] = []
+
+    def list_(**kwargs):
+        seen_tokens.append(kwargs["pageToken"])
+        return _Exec(lambda: pages[kwargs["pageToken"]])
+
+    svc.files.return_value.list.side_effect = list_
+    drive = DriveFacade(svc)
+
+    assert drive.find_files_by_app_property("p", key="k", value="v") == [
+        "1",
+        "2",
+        "3",
+        "4",
+    ]
+    assert seen_tokens == [None, "t2", "t3"]
+
+
+def test_get_file_name():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    get = svc.files.return_value.get
+    get.return_value.execute.return_value = {"name": "Routine.mp3"}
+    drive = DriveFacade(svc)
+
+    assert drive.get_file_name("f1") == "Routine.mp3"
+    get.assert_called_once_with(fileId="f1", fields="name", supportsAllDrives=True)
+
+
+def test_clear_folder_cache_empties_cache_and_forces_lookup():
+    from mini_app_polis.google.drive import (
+        FOLDER_CACHE,
+        DriveFacade,
+        clear_folder_cache,
+    )
+
+    FOLDER_CACHE.clear()
+    FOLDER_CACHE["p/Stale"] = "dead-id"
+
+    svc = _mock_service()
+    lst = svc.files.return_value.list
+    lst.return_value.execute.return_value = {"files": [{"id": "fresh-id"}]}
+    drive = DriveFacade(svc)
+
+    # Cached: no API call.
+    assert drive.ensure_folder("p", "Stale") == "dead-id"
+    lst.assert_not_called()
+
+    clear_folder_cache()
+    assert FOLDER_CACHE == {}
+
+    # After clearing, the folder is looked up again.
+    assert drive.ensure_folder("p", "Stale") == "fresh-id"
+    lst.assert_called_once()
+    FOLDER_CACHE.clear()
+
+
+def test_from_service_account_info_uses_exactly_the_given_scopes(monkeypatch):
+    from mini_app_polis.google import drive as drive_mod
+
+    made = {}
+
+    def fake_creds(info, scopes):
+        made["info"], made["scopes"] = info, scopes
+        return "creds"
+
+    monkeypatch.setattr(
+        drive_mod.service_account.Credentials,
+        "from_service_account_info",
+        staticmethod(fake_creds),
+    )
+    monkeypatch.setattr(drive_mod, "build_drive_service", lambda creds: f"svc({creds})")
+
+    facade = drive_mod.DriveFacade.from_service_account_info(
+        {"client_email": "a@b", "private_key": "k", "token_uri": "t"},
+        scopes=("https://www.googleapis.com/auth/drive.file",),
+    )
+
+    assert facade.service == "svc(creds)"
+    assert made == {
+        "info": {"client_email": "a@b", "private_key": "k", "token_uri": "t"},
+        "scopes": ["https://www.googleapis.com/auth/drive.file"],
+    }

@@ -3,16 +3,19 @@ import os
 import random
 import re
 import time
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import partial
 from typing import Any
 
+from google.oauth2 import service_account
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload, MediaIoBaseUpload
 
 import mini_app_polis.config as config
 from mini_app_polis import logger as logger_mod
 
+from ._auth import build_drive_service
 from ._retry import RetryConfig, execute_with_retry
 from .types import DriveFile
 
@@ -21,6 +24,30 @@ FOLDER_CACHE: dict[str, str] = {}
 
 _DRIVE_ID_RE = re.compile(r"[-\w]{25,}")
 _VERSION_RE = re.compile(r"_v(\d+)$")
+# Same pattern as deejaytools-api's shareDriveFileWithUsers, so addresses the
+# old service would have shared are exactly the ones this shares.
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+def clear_folder_cache() -> None:
+    """Empty the process-wide folder-id cache used by ``ensure_folder``.
+
+    ``ensure_folder`` caches ``parent/name -> folder id`` for the life of the
+    process. If a cached folder is deleted or trashed out from under it, every
+    later copy or upload into that folder fails against a stale id. Callers
+    that see such a failure clear the cache so the next ``ensure_folder``
+    looks the folder up (or recreates it) instead of reusing the dead id.
+    """
+    FOLDER_CACHE.clear()
+
+
+def _escape_query_value(value: str) -> str:
+    """Escape a value for a single-quoted Drive query string literal.
+
+    Backslashes first, then quotes: escaping quotes first would double the
+    backslash that the quote escape just introduced.
+    """
+    return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
 @dataclass(frozen=True)
@@ -31,6 +58,20 @@ class DownloadedFile:
     name: str
     mime_type: str
     data: bytes
+
+
+@dataclass(frozen=True)
+class ShareResult:
+    """Outcome of :meth:`DriveFacade.share_with_readers`.
+
+    ``shared`` holds the cleaned addresses that were granted access, in the
+    order they were attempted. ``failed`` pairs each address that could not
+    be shared with the exception Drive raised for it. One bad address never
+    stops the rest from being shared.
+    """
+
+    shared: list[str]
+    failed: list[tuple[str, Exception]]
 
 
 class DriveFacade:
@@ -46,6 +87,28 @@ class DriveFacade:
             return None
         m = _DRIVE_ID_RE.search(url_or_id)
         return m.group(0) if m else None
+
+    @classmethod
+    def from_service_account_info(
+        cls,
+        info: Mapping[str, Any],
+        *,
+        scopes: Sequence[str],
+        retry: RetryConfig | None = None,
+    ) -> "DriveFacade":
+        """A facade acting as the service account described by ``info``.
+
+        ``info`` is the service-account JSON as a mapping (at least
+        ``client_email``, ``private_key`` and ``token_uri``). ``scopes`` is
+        required rather than defaulted: a caller that should only touch the
+        files it created asks for ``drive.file`` and gets nothing wider.
+        For callers whose credentials do not arrive as a JSON blob in
+        ``GOOGLE_CREDENTIALS_JSON`` (see :class:`~mini_app_polis.google.GoogleAPI`).
+        """
+        creds = service_account.Credentials.from_service_account_info(
+            dict(info), scopes=list(scopes)
+        )
+        return cls(build_drive_service(creds), retry=retry)
 
     def __init__(self, service: Any, retry: RetryConfig | None = None):
         self._service = service
@@ -89,6 +152,130 @@ class DriveFacade:
         )
         files = resp.get("files") or []
         return files[0]["id"] if files else None
+
+    def find_files_by_app_property(
+        self, parent_folder_id: str, *, key: str, value: str
+    ) -> list[str]:
+        """Return ids of non-trashed files in a folder tagged ``key=value``.
+
+        Matches on Drive ``appProperties`` (as set by ``copy_file`` /
+        ``upload_bytes``), which is the reliable way to find a file this app
+        created: names can collide or be edited by people, an app property
+        cannot be seen or changed outside this OAuth client. Returns every
+        match across all pages, so a caller can detect and clean up
+        duplicates left by an earlier partial failure.
+        """
+
+        q = (
+            f"'{_escape_query_value(parent_folder_id)}' in parents"
+            f" and appProperties has {{ key='{_escape_query_value(key)}'"
+            f" and value='{_escape_query_value(value)}' }}"
+            " and trashed = false"
+        )
+
+        def _call(page_token: str | None):
+            return (
+                self._service.files()
+                .list(
+                    q=q,
+                    spaces="drive",
+                    fields="nextPageToken, files(id)",
+                    pageToken=page_token,
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                )
+                .execute()
+            )
+
+        ids: list[str] = []
+        page_token: str | None = None
+        while True:
+            resp = execute_with_retry(
+                partial(_call, page_token),
+                context=(
+                    f"finding files with appProperty {key}={value} "
+                    f"under {parent_folder_id}"
+                ),
+                retry=self._retry,
+            )
+            ids.extend(f["id"] for f in resp.get("files") or [] if f.get("id"))
+            page_token = resp.get("nextPageToken")
+            if not page_token:
+                break
+        return ids
+
+    def get_file_name(self, file_id: str) -> str:
+        """Return a Drive file's current name.
+
+        Reads it from Drive rather than trusting a stored copy, because people
+        rename files in the Drive UI and a cached name goes stale silently.
+        """
+
+        meta = execute_with_retry(
+            lambda: (
+                self._service.files()
+                .get(fileId=file_id, fields="name", supportsAllDrives=True)
+                .execute()
+            ),
+            context=f"getting name for file {file_id}",
+            retry=self._retry,
+        )
+        return meta["name"]
+
+    def share_with_readers(
+        self, file_id: str, emails: Iterable[str | None]
+    ) -> ShareResult:
+        """Grant reader access on a file to each valid address, without emailing.
+
+        Mirrors deejaytools-api's ``shareDriveFileWithUsers``: each address is
+        trimmed and lowercased, empties and anything that does not look like
+        an address are dropped, and duplicates are removed keeping first-seen
+        order. ``sendNotificationEmail=False`` because the recipients are told
+        through the app itself; Drive's own share email would be a second,
+        unbranded message.
+
+        Failures are per address and are collected, never raised: one address
+        Drive rejects (no Google account, domain policy) must not stop the
+        others from being shared. If nothing survives cleaning, no API call
+        is made.
+        """
+
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for raw in emails:
+            email = (raw or "").strip().lower()
+            if not email or not _EMAIL_RE.match(email) or email in seen:
+                continue
+            seen.add(email)
+            cleaned.append(email)
+
+        def _call(email: str):
+            return (
+                self._service.permissions()
+                .create(
+                    fileId=file_id,
+                    body={"role": "reader", "type": "user", "emailAddress": email},
+                    sendNotificationEmail=False,
+                    supportsAllDrives=True,
+                )
+                .execute()
+            )
+
+        shared: list[str] = []
+        failed: list[tuple[str, Exception]] = []
+        for email in cleaned:
+            try:
+                execute_with_retry(
+                    partial(_call, email),
+                    context=f"sharing file {file_id} with {email}",
+                    retry=self._retry,
+                )
+                shared.append(email)
+            except Exception as e:
+                log.warning("Failed to share file %s with %s: %s", file_id, email, e)
+                failed.append((email, e))
+
+        return ShareResult(shared=shared, failed=failed)
 
     def list_files(
         self,
@@ -205,6 +392,7 @@ class DriveFacade:
         parent_folder_id: str | None = None,
         name: str | None = None,
         max_retries: int = 5,
+        app_properties: dict[str, str] | None = None,
     ) -> str:
         """Copy a Drive file.
 
@@ -213,6 +401,12 @@ class DriveFacade:
 
         Backwards compatible with the previous signature; callers can still pass
         `parent_folder_id` and `name` as before.
+
+        ``app_properties`` is stored on the copy as Drive ``appProperties``
+        (private to this app's OAuth client). Tagging a copy with a stable key
+        lets a caller find it again with :meth:`find_files_by_app_property`
+        after a partial failure, rather than matching on a name that may
+        collide or have been changed.
         """
 
         body: dict[str, Any] = {}
@@ -220,6 +414,8 @@ class DriveFacade:
             body["parents"] = [parent_folder_id]
         if name:
             body["name"] = name
+        if app_properties is not None:
+            body["appProperties"] = dict(app_properties)
 
         delay = 1.0
         for attempt in range(max_retries):
@@ -769,17 +965,33 @@ class DriveFacade:
         filename: str,
         content: bytes,
         mime_type: str,
+        app_properties: dict[str, str] | None = None,
+        resumable: bool = False,
     ) -> str:
-        """Upload a new Drive file from bytes and return its file ID."""
+        """Upload a new Drive file from bytes and return its file ID.
+
+        ``app_properties``, when given, is stored on the new file as Drive
+        ``appProperties`` so the file can be found again by key with
+        :meth:`find_files_by_app_property` (see :meth:`copy_file`).
+
+        ``resumable`` sends the content as a resumable upload, in chunks.
+        Google documents the default single-request upload for files up to
+        5 MB; pass ``resumable=True`` for anything that may be larger (audio,
+        video). ``execute()`` drives every chunk, so the call still returns
+        only once the file exists.
+        """
 
         media = MediaIoBaseUpload(
-            io.BytesIO(content), mimetype=mime_type, resumable=False
+            io.BytesIO(content), mimetype=mime_type, resumable=resumable
         )
+        body: dict[str, Any] = {"name": filename, "parents": [parent_id]}
+        if app_properties is not None:
+            body["appProperties"] = dict(app_properties)
         created = execute_with_retry(
             lambda: (
                 self._service.files()
                 .create(
-                    body={"name": filename, "parents": [parent_id]},
+                    body=body,
                     media_body=media,
                     fields="id",
                     supportsAllDrives=True,

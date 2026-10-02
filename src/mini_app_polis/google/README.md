@@ -129,12 +129,34 @@ Accessed via:
 g.drive
 ```
 
+or, when the service account's details arrive as separate values rather than
+`GOOGLE_CREDENTIALS_JSON`, and only a narrow scope is wanted:
+
+```python
+from mini_app_polis.google.drive import DriveFacade
+
+drive = DriveFacade.from_service_account_info(
+    {
+        "client_email": ...,
+        "private_key": ...,
+        "token_uri": "https://oauth2.googleapis.com/token",
+    },
+    scopes=["https://www.googleapis.com/auth/drive.file"],
+)
+```
+
 ### File Discovery
 
 ```python
 list_files(parent_id, mime_type=None, name_contains=None, trashed=False) -> list[DriveFile]
 find_first(parent_id, name, mime_type=None) -> DriveFile | None
+find_files_by_app_property(parent_folder_id, key=..., value=...) -> list[file_id]
+get_file_name(file_id) -> str
 ```
+
+`find_files_by_app_property` matches Drive `appProperties` (set via the
+`app_properties=` keyword below), which is private to this app and survives
+renames, so it is the reliable way to find a file the app created.
 
 ### Folder Management
 
@@ -142,15 +164,30 @@ find_first(parent_id, name, mime_type=None) -> DriveFile | None
 ensure_folder(parent_id, name) -> folder_id
 ```
 
+`ensure_folder` caches ids per process. After a failure that may mean a cached
+folder no longer exists, call the module-level
+`mini_app_polis.google.drive.clear_folder_cache()`.
+
 ### File Operations
 
 ```python
-copy_file(file_id, parent_folder_id, name=None) -> new_file_id
+copy_file(file_id, parent_folder_id=None, name=None, app_properties=None) -> new_file_id
 move_file(file_id, new_parent_id, remove_from_parents=True)
 upload_file(src_path, parent_id, mime_type=None, name=None) -> file_id
+upload_bytes(parent_id=..., filename=..., content=..., mime_type=..., app_properties=None, resumable=False) -> file_id  # resumable=True for files over 5 MB
 download_file(file_id, dst_path)
 delete_file(file_id)
 ```
+
+### Sharing
+
+```python
+share_with_readers(file_id, emails) -> ShareResult(shared, failed)
+```
+
+Grants `reader` to each address without Drive's notification email. Addresses
+are trimmed, lowercased, validated and de-duplicated first; per-address
+failures are returned in `failed`, never raised.
 
 ---
 
