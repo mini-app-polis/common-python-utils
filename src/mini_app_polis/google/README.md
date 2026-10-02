@@ -136,7 +136,11 @@ or, when the service account's details arrive as separate values rather than
 from mini_app_polis.google.drive import DriveFacade
 
 drive = DriveFacade.from_service_account_info(
-    {"client_email": ..., "private_key": ..., "token_uri": "https://oauth2.googleapis.com/token"},
+    {
+        "client_email": ...,
+        "private_key": ...,
+        "token_uri": "https://oauth2.googleapis.com/token",
+    },
     scopes=["https://www.googleapis.com/auth/drive.file"],
 )
 ```
