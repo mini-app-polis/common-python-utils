@@ -55,7 +55,7 @@ def pytest_configure():
     # Ensure the package under test (src/mini_app_polis) is importable.
     # This repo uses a src/ layout, so when running tests without an editable install,
     # we add <repo>/src to sys.path.
-    repo_root = Path(__file__).resolve().parents[3]
+    repo_root = Path(__file__).resolve().parents[4]
     src_path = str(repo_root / "src")
     if src_path not in sys.path:
         sys.path.insert(0, src_path)

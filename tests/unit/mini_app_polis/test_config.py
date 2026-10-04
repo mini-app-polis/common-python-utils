@@ -5,7 +5,7 @@ import sys
 
 
 def test_config_imports_cleanly() -> None:
-    # tests/mini_app_polis/google/conftest.py stubs mini_app_polis.config for the whole session;
+    # tests/unit/mini_app_polis/google/conftest.py stubs mini_app_polis.config for the whole session;
     # load the real implementation for this smoke test.
     sys.modules.pop("mini_app_polis.config", None)
     importlib.invalidate_caches()

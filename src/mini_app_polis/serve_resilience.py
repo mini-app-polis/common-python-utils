@@ -214,7 +214,7 @@ def _log(level: str, msg: str, *args: Any) -> None:
     This is not hypothetical. ``mini_app_polis.pipeline_status`` already
     carries the same guard, with the same reasoning: test stubs (and
     third-party logger shims) ship logger objects missing methods —
-    ``tests/mini_app_polis/google/conftest.py`` installs a ``DummyLogger``
+    ``tests/unit/mini_app_polis/google/conftest.py`` installs a ``DummyLogger``
     with no ``.exception`` via a session-global ``pytest_configure``, and
     it leaks into every test in the suite.
 

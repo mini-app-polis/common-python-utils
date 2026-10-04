@@ -1,4 +1,4 @@
-"""Test fixtures shared across ``tests/mini_app_polis``.
+"""Test fixtures shared across ``tests/unit/mini_app_polis``.
 
 The pipeline_status module lazily imports ``prefect`` (its consumers are
 Prefect-driven cogs, but ``mini_app_polis`` itself doesn't take Prefect
