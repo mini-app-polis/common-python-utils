@@ -7,7 +7,7 @@ import sys
 
 
 def _load_real_logger_module():
-    # tests/mini_app_polis/google/conftest.py stubs mini_app_polis.logger for the whole session;
+    # tests/unit/mini_app_polis/google/conftest.py stubs mini_app_polis.logger for the whole session;
     # load the real implementation for this test module.
     sys.modules.pop("mini_app_polis.logger", None)
     importlib.invalidate_caches()

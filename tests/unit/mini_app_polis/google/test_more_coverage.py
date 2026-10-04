@@ -25,7 +25,7 @@ def test_sheets_facade_exercises_write_append_clear_insert_sort(monkeypatch):
     from mini_app_polis.google.sheets import SheetsFacade
 
     FakeSheetsService = importlib.import_module(
-        "tests.mini_app_polis.google.test_sheets_facade"
+        "tests.unit.mini_app_polis.google.test_sheets_facade"
     ).FakeSheetsService
 
     svc = FakeSheetsService()
@@ -51,7 +51,7 @@ def test_drive_facade_exercises_remaining_helpers(monkeypatch, tmp_path):
     from mini_app_polis.google.types import DriveFile
 
     FakeDriveService = importlib.import_module(
-        "tests.mini_app_polis.google.test_drive_facade"
+        "tests.unit.mini_app_polis.google.test_drive_facade"
     ).FakeDriveService
 
     svc = FakeDriveService()

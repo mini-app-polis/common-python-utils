@@ -631,7 +631,7 @@ def test_unparseable_argument_falls_back_to_default(monkeypatch) -> None:
 # exception there REPLACES the startup error and the operator sees a
 # logging bug instead of the 503 that killed the process.
 #
-# This is not hypothetical: tests/mini_app_polis/google/conftest.py
+# This is not hypothetical: tests/unit/mini_app_polis/google/conftest.py
 # installs a DummyLogger with no `.exception` via a session-global
 # pytest_configure, and it leaks into every test in the suite — which is
 # how this surfaced. These tests pin the behaviour explicitly rather than

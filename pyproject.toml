@@ -102,4 +102,4 @@ warn_return_any = false
 
 [tool.pytest.ini_options]
 addopts = "--cov=mini_app_polis --cov-report=term-missing"
-testpaths = ["tests"]
+testpaths = ["tests/unit", "tests/integration"]
