@@ -1,6 +1,0 @@
-[run]
-branch = True
-source = mini_app_polis
-
-[report]
-show_missing = True

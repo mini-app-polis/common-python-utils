@@ -76,6 +76,8 @@ branch = true
 source = ["mini_app_polis"]
 
 [tool.coverage.report]
+# TEST-019: CI fails below this floor. Raise it as coverage rises; lowering it is a reviewed edit.
+fail_under = 50
 show_missing = true
 
 [tool.ruff]
