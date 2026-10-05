@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 
 class _Exec:
     def __init__(self, fn):
@@ -333,42 +335,85 @@ def test_trash_file_is_a_metadata_update_not_a_delete():
     assert kwargs["supportsAllDrives"] is True
 
 
-def test_get_all_and_most_recent_m3u_files(monkeypatch):
-    from mini_app_polis import config
+def _m3u_drive(monkeypatch, listing):
     from mini_app_polis.google.drive import DriveFacade
-    from mini_app_polis.google.types import DriveFile
 
-    svc = FakeDriveService()
-    drive = DriveFacade(svc)
-
-    # Patch config and list_files to return date-prefixed names
-    config.VDJ_HISTORY_FOLDER_ID = "folder"
+    drive = DriveFacade(FakeDriveService())
+    calls = []
 
     def list_files(parent_id, **kwargs):
-        return [
-            DriveFile(id="1", name="2026-01-01.m3u"),
-            DriveFile(id="2", name="2026-01-03.m3u"),
-            DriveFile(id="3", name="2026-01-02.m3u"),
-        ]
+        calls.append((parent_id, kwargs))
+        if isinstance(listing, Exception):
+            raise listing
+        return listing
 
     monkeypatch.setattr(drive, "list_files", list_files)
+    return drive, calls
+
+
+def test_get_all_and_most_recent_m3u_files(monkeypatch):
+    from mini_app_polis import config
+    from mini_app_polis.google.types import DriveFile
+
+    monkeypatch.setattr(config, "VDJ_HISTORY_FOLDER_ID", "folder")
+    drive, calls = _m3u_drive(
+        monkeypatch,
+        [
+            DriveFile(id="1", name="2026-01-01.m3u"),
+            DriveFile(id="2", name="2026-01-03.m3u"),
+            DriveFile(id="3", name="2026-01-02.M3U"),
+            DriveFile(id="4", name="2026-01-04.m3u8"),
+            DriveFile(id="5", name="2026-01-05.m3u.bak"),
+        ],
+    )
 
     all_files = drive.get_all_m3u_files()
-    assert [f["id"] for f in all_files] == ["2", "3", "1"]  # newest-first
-    most_recent = drive.get_most_recent_m3u_file()
-    assert most_recent == {"id": "2", "name": "2026-01-03.m3u"}
+    assert [f["id"] for f in all_files] == ["2", "3", "1"]  # newest-first, .m3u only
+    assert drive.get_most_recent_m3u_file() == {"id": "2", "name": "2026-01-03.m3u"}
+    assert calls[0][0] == "folder"
 
 
-def test_get_m3u_helpers_handle_missing_config(monkeypatch):
+def test_m3u_helpers_list_the_folder_they_are_given(monkeypatch):
     from mini_app_polis import config
-    from mini_app_polis.google.drive import DriveFacade
+    from mini_app_polis.google.types import DriveFile
 
-    config.VDJ_HISTORY_FOLDER_ID = None
-    svc = FakeDriveService()
-    drive = DriveFacade(svc)
+    monkeypatch.setattr(config, "VDJ_HISTORY_FOLDER_ID", "from-config")
+    drive, calls = _m3u_drive(monkeypatch, [DriveFile(id="1", name="2026-01-01.m3u")])
 
-    assert drive.get_all_m3u_files() == []
-    assert drive.get_most_recent_m3u_file() is None
+    drive.get_all_m3u_files("passed-in")
+    drive.get_most_recent_m3u_file(folder_id="passed-in")
+
+    assert [c[0] for c in calls] == ["passed-in", "passed-in"]
+
+
+def test_m3u_helpers_raise_without_a_folder(monkeypatch):
+    from mini_app_polis import config
+
+    monkeypatch.setattr(config, "VDJ_HISTORY_FOLDER_ID", None)
+    drive, calls = _m3u_drive(monkeypatch, [])
+
+    with pytest.raises(ValueError, match="VDJ_HISTORY_FOLDER_ID"):
+        drive.get_all_m3u_files()
+    with pytest.raises(ValueError, match="VDJ_HISTORY_FOLDER_ID"):
+        drive.get_most_recent_m3u_file()
+    assert calls == []
+
+
+def test_m3u_helpers_let_a_failed_listing_raise(monkeypatch):
+    """A Drive outage must not look like an empty history folder."""
+    drive, _ = _m3u_drive(monkeypatch, RuntimeError("503 backendError"))
+
+    with pytest.raises(RuntimeError, match="503"):
+        drive.get_all_m3u_files("folder")
+    with pytest.raises(RuntimeError, match="503"):
+        drive.get_most_recent_m3u_file("folder")
+
+
+def test_an_empty_history_folder_is_empty_not_an_error(monkeypatch):
+    drive, _ = _m3u_drive(monkeypatch, [])
+
+    assert drive.get_all_m3u_files("folder") == []
+    assert drive.get_most_recent_m3u_file("folder") is None
 
 
 def test_download_m3u_file_data_returns_lines(monkeypatch):

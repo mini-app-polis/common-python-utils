@@ -731,71 +731,56 @@ class DriveFacade:
             retry=self._retry,
         )
 
-    def get_all_m3u_files(self) -> list[dict]:
-        """Return all VirtualDJ history .m3u files (newest-first).
+    def get_all_m3u_files(self, folder_id: str | None = None) -> list[dict]:
+        """Return the VirtualDJ history ``.m3u`` files, newest first.
 
-        Matches legacy `mini_app_polis.m3u_parsing.get_all_m3u_files(drive_service)`.
+        ``folder_id`` is the history folder; it defaults to
+        ``config.VDJ_HISTORY_FOLDER_ID``. Returns a list of
+        ``{"id": str, "name": str}``. Only names ending in ``.m3u`` count, so
+        ``.m3u8`` playlists and the like are left out. Sorted by name:
+        VirtualDJ names each history file ``YYYY-MM-DD.m3u``, so the newest
+        is first.
 
-        Returns a list of dicts containing at least: {"id": str, "name": str}.
-        Sorting is by filename. With date-prefixed filenames (YYYY-MM-DD.m3u), this
-        yields correct chronological order.
+        Raises when there is no folder to list, and lets a failed listing
+        raise. Both used to be logged and answered with ``[]``, which a
+        caller could not tell from an empty folder: a Drive outage read as
+        "no history yet", and a scheduled run reported an idle tick instead
+        of a failure. An empty list now means the folder really is empty.
         """
-
-        if not getattr(config, "VDJ_HISTORY_FOLDER_ID", None):
-            log.critical("VDJ_HISTORY_FOLDER_ID is not set in config.")
-            return []
-        folder_id = config.VDJ_HISTORY_FOLDER_ID
-        if folder_id is None:
-            return []
-
-        try:
-            files = self.list_files(
-                folder_id,
+        folder = self._history_folder(folder_id)
+        files = [
+            f
+            for f in self.list_files(
+                folder,
                 name_contains=".m3u",
                 trashed=False,
                 include_folders=False,
             )
+            if (f.name or "").lower().endswith(".m3u")
+        ]
+        files.sort(key=lambda f: f.name or "", reverse=True)
+        return [{"id": f.id, "name": f.name} for f in files]
 
-            files.sort(key=lambda f: f.name or "")
-            files = list(reversed(files))
+    def get_most_recent_m3u_file(self, folder_id: str | None = None) -> dict | None:
+        """Return the newest history ``.m3u`` file, or None if there is none.
 
-            return [{"id": f.id, "name": f.name} for f in files]
-        except Exception as e:
-            log.error(f"Failed to list .m3u files: {e}")
-            return []
-
-    def get_most_recent_m3u_file(self) -> dict | None:
-        """Return the most recent .m3u file.
-
-        Matches legacy `mini_app_polis.m3u_parsing.get_most_recent_m3u_file(drive_service)`.
-
-        Returns a dict with keys: {"id", "name"} or None.
+        Same folder, filtering, ordering and errors as
+        :meth:`get_all_m3u_files`: None means the folder has no history
+        file, never that it could not be read.
         """
+        files = self.get_all_m3u_files(folder_id)
+        return files[0] if files else None
 
-        if not getattr(config, "VDJ_HISTORY_FOLDER_ID", None):
-            log.critical("VDJ_HISTORY_FOLDER_ID is not set in config.")
-            return None
-        folder_id = config.VDJ_HISTORY_FOLDER_ID
-        if folder_id is None:
-            return None
-
-        try:
-            files = self.list_files(
-                folder_id,
-                name_contains=".m3u",
-                trashed=False,
-                include_folders=False,
+    @staticmethod
+    def _history_folder(folder_id: str | None) -> str:
+        """The history folder to list: the argument, else the config value."""
+        folder = folder_id or getattr(config, "VDJ_HISTORY_FOLDER_ID", None)
+        if not folder:
+            raise ValueError(
+                "No VirtualDJ history folder: pass folder_id or set "
+                "VDJ_HISTORY_FOLDER_ID."
             )
-
-            if not files:
-                return None
-
-            files.sort(key=lambda f: f.name or "")
-            f = files[-1]
-            return {"id": f.id, "name": f.name}
-        except Exception as e:
-            log.error(f"Failed to find most recent .m3u file: {e}")
-            return None
+        return folder
 
     def download_m3u_file_data(
         self, file_id: str, *, encoding: str = "utf-8"
