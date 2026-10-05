@@ -1,3 +1,10 @@
+## [5.18.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.18.0...v5.18.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* **deps:** bump coverage ([234104b](https://github.com/mini-app-polis/common-python-utils/commit/234104b549d8e7ac68e9757c345de7bce4acd1b5))
+
 # [5.18.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.17.0...v5.18.0) (2026-10-02)
 
 
