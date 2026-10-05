@@ -18,6 +18,7 @@ from mini_app_polis.api.contract import (
     NotificationResult,
     NotifyRequest,
     PipelineEvaluationItem,
+    SetListItem,
     TranscriptionRunRequest,
     WcsExtractionRawOutput,
     WcsSourceCreate,
@@ -208,6 +209,26 @@ def test_list_evaluations_sends_only_the_filters_given(
     assert calls == [("GET", "/v1/evaluations", {"run_id": "r1", "limit": 500})]
     assert [type(i) for i in out] == [PipelineEvaluationItem]
     assert out[0].repo == "deejay-cog"
+
+
+def test_list_sets_sends_dates_as_iso_and_only_the_filters_given(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = {
+        "id": str(uuid.uuid4()),
+        "set_date": "2026-10-02",
+        "year": 2026,
+        "venue": "TC Rebels",
+        "source_file": "2026-10-02 TC Rebels",
+        "track_count": 48,
+    }
+    client, calls = _client(monkeypatch, {"data": [item], "meta": _META})
+
+    out = client.list_sets(date_from=dt.date(2026, 4, 5), limit=200)
+
+    assert calls == [("GET", "/v1/sets", {"date_from": "2026-04-05", "limit": 200})]
+    assert [type(i) for i in out] == [SetListItem]
+    assert out[0].source_file == "2026-10-02 TC Rebels"
 
 
 def test_a_response_outside_the_contract_raises_validation_error(

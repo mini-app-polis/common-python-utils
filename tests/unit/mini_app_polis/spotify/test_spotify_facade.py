@@ -2,6 +2,8 @@ import importlib
 import sys
 import types
 
+import pytest
+
 
 def _install(name: str, module: types.ModuleType) -> None:
     sys.modules[name] = module
@@ -95,9 +97,12 @@ def test_spotify_retry_helpers_and_client_from_refresh(monkeypatch):
             _ = (playlist_id, items)
             return {"snapshot_id": "s"}
 
-        def current_user_playlists(self, limit=50):
+        def current_user_playlists(self, limit=50, offset=0):
             _ = limit
-            return {"items": [{"name": "MyPlaylist", "id": "pl-1"}]}
+            if offset:
+                return {"items": [{"name": "MyPlaylist", "id": "pl-1"}], "next": None}
+            other = [{"name": f"Other {i}", "id": f"o-{i}"} for i in range(50)]
+            return {"items": other, "next": "more"}
 
         def playlist_remove_all_occurrences_of_items(self, playlist_id, items):
             _ = playlist_id
@@ -304,7 +309,7 @@ class TestClearPlaylist:
         assert isinstance(client, SpotifyCls)
         monkeypatch.setattr(
             api,
-            "get_playlist_tracks",
+            "playlist_track_uris",
             lambda _pid: ["u1", "u2", "u3"],
         )
 
@@ -319,7 +324,7 @@ class TestClearPlaylist:
         client = api.client
         assert isinstance(client, SpotifyCls)
         uris = [f"uri:{i}" for i in range(101)]
-        monkeypatch.setattr(api, "get_playlist_tracks", lambda _pid: uris)
+        monkeypatch.setattr(api, "playlist_track_uris", lambda _pid: uris)
 
         api.clear_playlist("big-pl")
 
@@ -334,13 +339,14 @@ class TestClearPlaylist:
         api = mod.SpotifyAPI.from_env()
         client = api.client
         assert isinstance(client, SpotifyCls)
-        monkeypatch.setattr(api, "get_playlist_tracks", lambda _pid: [])
+        monkeypatch.setattr(api, "playlist_track_uris", lambda _pid: [])
 
         api.clear_playlist("empty-pl")
 
         assert client.remove_calls == []
 
-    def test_swallows_exceptions_from_get_playlist_tracks(self, monkeypatch):
+    def test_raises_when_the_tracks_cannot_be_read(self, monkeypatch):
+        """Not "already empty": a refill would double the playlist."""
         mod, SpotifyCls = _install_clear_playlist_stubs(monkeypatch)
         api = mod.SpotifyAPI.from_env()
         client = api.client
@@ -349,11 +355,27 @@ class TestClearPlaylist:
         def boom(_pid):
             raise RuntimeError("network")
 
-        monkeypatch.setattr(api, "get_playlist_tracks", boom)
+        monkeypatch.setattr(api, "playlist_track_uris", boom)
 
-        api.clear_playlist("pl-x")
+        with pytest.raises(RuntimeError, match="network"):
+            api.clear_playlist("pl-x")
 
         assert client.remove_calls == []
+
+    def test_get_playlist_tracks_still_answers_empty_on_failure(self, monkeypatch):
+        mod, _ = _install_clear_playlist_stubs(monkeypatch)
+        api = mod.SpotifyAPI.from_env()
+
+        def boom(_pid):
+            raise RuntimeError("network")
+
+        monkeypatch.setattr(api, "playlist_track_uris", boom)
+        # Other suites leave a stub logger behind; this one takes exc_info.
+        monkeypatch.setattr(
+            mod, "log", types.SimpleNamespace(error=lambda *_a, **_k: None)
+        )
+
+        assert api.get_playlist_tracks("pl-x") == []
 
     def test_module_clear_playlist_delegates(self, monkeypatch):
         mod, _ = _install_clear_playlist_stubs(monkeypatch)

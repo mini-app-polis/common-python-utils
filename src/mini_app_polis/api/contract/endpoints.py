@@ -21,6 +21,7 @@ from .deejay import (
     IngestSet,
     LivePlaysIngest,
     LivePlaysResponseData,
+    SetListItem,
     SpotifyPlaylistsIngest,
     SpotifyPlaylistsIngestResponse,
 )
@@ -145,6 +146,15 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         response=PipelineEvaluationWriteResult,
         scope="pipeline.evaluations.write",
         callers=("evaluator-cog", "wiki-curator-cog", "common-python-utils"),
+    ),
+    Endpoint(
+        name="list_sets",
+        method="GET",
+        path="/v1/sets",
+        request=None,
+        response=list[SetListItem],
+        scope=None,
+        callers=("deejay-cog",),
     ),
     Endpoint(
         name="list_evaluations",
