@@ -1,3 +1,10 @@
+# [5.19.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.18.1...v5.19.0) (2026-10-05)
+
+
+### Features
+
+* **google:** let the .m3u helpers raise when Drive cannot be listed ([6af1f9f](https://github.com/mini-app-polis/common-python-utils/commit/6af1f9fbcfef64a9dcad427d0c474cde72badef9))
+
 ## [5.18.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.18.0...v5.18.1) (2026-10-05)
 
 
