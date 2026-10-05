@@ -43,6 +43,7 @@ body shape live here rather than in each cog. See
 
 from __future__ import annotations
 
+import datetime as dt
 import logging as _logging
 import os
 from functools import cache
@@ -66,6 +67,7 @@ from .contract import (
     PipelineEvaluationCreate,
     PipelineEvaluationItem,
     PipelineEvaluationWriteResult,
+    SetListItem,
     SpotifyPlaylistsIngest,
     SpotifyPlaylistsIngestResponse,
     TranscriptionRunAccepted,
@@ -331,6 +333,32 @@ class KaianoApiClient:
     def ingest(self, payload: IngestSet) -> IngestResponseData:
         """``POST /v1/ingest`` — one set and its tracks."""
         return cast(IngestResponseData, self._call("ingest", payload))
+
+    def list_sets(
+        self,
+        *,
+        date_from: dt.date | None = None,
+        date_to: dt.date | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[SetListItem]:
+        """``GET /v1/sets`` — one page of sets, filtered by date.
+
+        Unset filters are not sent, so the API's own defaults apply
+        (``limit`` 50, at most 200). Page with ``offset`` until a page
+        comes back shorter than ``limit``.
+        """
+        params = {
+            key: value
+            for key, value in {
+                "date_from": date_from.isoformat() if date_from else None,
+                "date_to": date_to.isoformat() if date_to else None,
+                "limit": limit,
+                "offset": offset,
+            }.items()
+            if value is not None
+        }
+        return cast(list[SetListItem], self._call("list_sets", params=params))
 
     def ingest_live_plays(self, payload: LivePlaysIngest) -> LivePlaysResponseData:
         """``POST /v1/live-plays`` — a batch of plays from the live history."""

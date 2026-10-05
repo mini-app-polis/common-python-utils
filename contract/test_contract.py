@@ -144,6 +144,13 @@ def test_ingest_is_idempotent_on_source_file(api: LedgerClient) -> None:
     assert again.tracks_created == 0
 
 
+def test_lists_the_ingested_set_by_source_file(api: LedgerClient) -> None:
+    """deejay-cog's repair pass reads this to see which sheets the API has."""
+    listed = api.list_sets(date_from=FIXTURE_DATE, date_to=FIXTURE_DATE, limit=200)
+
+    assert f"{FIXTURE}.csv" in {item.source_file for item in listed}
+
+
 def test_live_plays_skip_a_play_already_recorded(api: LedgerClient) -> None:
     payload = LivePlaysIngest(
         plays=[

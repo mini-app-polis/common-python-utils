@@ -304,35 +304,14 @@ class SpotifyAPI:
         log.info(f"Added {len(uris_to_add)} track(s) to playlist {playlist_id}.")
 
     def get_playlist_tracks(self, playlist_id: str) -> list[str]:
-        """Return all track URIs currently present in a playlist."""
-        if not playlist_id:
-            return []
+        """Return all track URIs currently present in a playlist.
 
-        sp = self.client
-        tracks: list[str] = []
-        offset = 0
-
+        Never raises: a failure is logged and answered with ``[]``. Use
+        :meth:`playlist_track_uris` where "could not read" must not look
+        like "empty".
+        """
         try:
-            while True:
-                response = self._call_with_retry(
-                    lambda offset=offset: sp.playlist_items(
-                        playlist_id,
-                        fields="items.track.uri,total,next",
-                        additional_types=["track"],
-                        limit=100,
-                        offset=offset,
-                    ),
-                    context=f"fetching playlist tracks for {playlist_id}",
-                )
-                items = response.get("items") or []
-                for item in items:
-                    track = item.get("track")
-                    if track and "uri" in track:
-                        tracks.append(track["uri"])
-                if not response.get("next"):
-                    break
-                offset += 100
-            return tracks
+            return self.playlist_track_uris(playlist_id)
         except Exception as e:
             log.error(
                 f"❌ Failed to retrieve playlist tracks for {playlist_id}: {e}",
@@ -340,60 +319,93 @@ class SpotifyAPI:
             )
             return []
 
+    def playlist_track_uris(self, playlist_id: str) -> list[str]:
+        """Return all track URIs in a playlist. Raises if Spotify does."""
+        if not playlist_id:
+            return []
+
+        sp = self.client
+        tracks: list[str] = []
+        offset = 0
+        while True:
+            response = self._call_with_retry(
+                lambda offset=offset: sp.playlist_items(
+                    playlist_id,
+                    fields="items.track.uri,total,next",
+                    additional_types=["track"],
+                    limit=100,
+                    offset=offset,
+                ),
+                context=f"fetching playlist tracks for {playlist_id}",
+            )
+            for item in response.get("items") or []:
+                track = item.get("track")
+                if track and "uri" in track:
+                    tracks.append(track["uri"])
+            if not response.get("next"):
+                break
+            offset += 100
+        return tracks
+
     def clear_playlist(self, playlist_id: str) -> None:
         """Remove all tracks from a playlist, leaving it empty.
 
-        Fetches current tracks via get_playlist_tracks, then removes them
-        in batches of 100 using playlist_remove_all_occurrences_of_items.
-        No-ops silently if the playlist is already empty.
-        Never raises — logs errors and returns.
-        """
-        try:
-            uris = self.get_playlist_tracks(playlist_id)
-            if not uris:
-                log.info(f"Playlist {playlist_id} is already empty")
-                return
+        Reads the current tracks, then removes them in batches of 100. A
+        playlist that is already empty is left alone.
 
-            sp = self.client
-            for i in range(0, len(uris), 100):
-                batch = uris[i : i + 100]
-                self._call_with_retry(
-                    lambda batch=batch: sp.playlist_remove_all_occurrences_of_items(
-                        playlist_id, batch
-                    ),
-                    context=f"clearing playlist {playlist_id} (batch of {len(batch)})",
-                )
-            log.info(f"Cleared {len(uris)} tracks from playlist {playlist_id}")
-        except Exception as e:
-            log.error(f"❌ Failed to clear playlist {playlist_id}: {e}")
+        Raises when Spotify does. It used to log and return, so a caller
+        that cleared and then refilled a playlist reported success while
+        appending to the old contents — the playlist doubled and nobody
+        was told.
+        """
+        uris = self.playlist_track_uris(playlist_id)
+        if not uris:
+            log.info(f"Playlist {playlist_id} is already empty")
+            return
+
+        sp = self.client
+        for i in range(0, len(uris), 100):
+            batch = uris[i : i + 100]
+            self._call_with_retry(
+                lambda batch=batch: sp.playlist_remove_all_occurrences_of_items(
+                    playlist_id, batch
+                ),
+                context=f"clearing playlist {playlist_id} (batch of {len(batch)})",
+            )
+        log.info(f"Cleared {len(uris)} tracks from playlist {playlist_id}")
 
     def find_playlist_by_name(self, name: str):
-        """Find a user playlist by exact name and return its ID payload."""
-        try:
-            sp = (
-                self._client_from_refresh()
-                if config.SPOTIPY_REFRESH_TOKEN
-                else self.client
-            )
-            results = self._call_with_retry(
-                lambda: sp.current_user_playlists(limit=50), context="listing playlists"
-            )
+        """Find a user playlist by exact name: ``{"id", "data"}``, or None.
 
+        Pages through every playlist on the account. It used to read only
+        the first 50, so once the account held more, a playlist that existed
+        was reported missing and the caller created a second one under the
+        same name. Raises when Spotify does, for the same reason: "could not
+        look" answered as "not there" also ends in a duplicate.
+        """
+        sp = (
+            self._client_from_refresh() if config.SPOTIPY_REFRESH_TOKEN else self.client
+        )
+        offset = 0
+        while True:
+            results = self._call_with_retry(
+                lambda offset=offset: sp.current_user_playlists(
+                    limit=50, offset=offset
+                ),
+                context="listing playlists",
+            )
             for playlist in results.get("items", []) or []:
                 if playlist.get("name") == name:
                     log.info(
                         f"✅ Match found: {playlist.get('name')} (ID={playlist.get('id')})"
                     )
                     return {"id": playlist["id"], "data": playlist}
+            if not results.get("next"):
+                break
+            offset += 50
 
-            log.warning(f"⚠️ No playlist found with name '{name}'")
-            return None
-        except Exception as e:
-            log.error(
-                f"❌ Exception while searching for playlist '{name}': {e}",
-                exc_info=True,
-            )
-            return None
+        log.warning(f"⚠️ No playlist found with name '{name}'")
+        return None
 
     def trim_playlist_to_limit(
         self, limit: int = 200, playlist_id: str | None = None

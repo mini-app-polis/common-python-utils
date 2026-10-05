@@ -1,6 +1,7 @@
-"""Contract for the catalog writes deejay-cog makes.
+"""Contract for the catalog calls deejay-cog makes.
 
-``POST /v1/ingest``, ``POST /v1/live-plays`` and ``POST /v1/spotify/playlists``.
+``POST /v1/ingest``, ``POST /v1/live-plays`` and ``POST /v1/spotify/playlists``,
+and ``GET /v1/sets`` to see which sets the API already holds.
 """
 
 from __future__ import annotations
@@ -128,3 +129,21 @@ class SpotifyPlaylistsIngestResponse(BaseModel):
 
     upserted: int = Field(..., description="Semantic value for upserted.")
     unchanged: int = Field(..., description="Semantic value for unchanged.")
+
+
+class SetListItem(BaseModel):
+    """One set as ``GET /v1/sets`` lists it.
+
+    ``source_file`` is what the cog sent as the set's source file: the
+    sheet's base name. It is how a caller tells which of its sheets the API
+    already has.
+    """
+
+    id: uuid.UUID = Field(..., description="The set's id.")
+    set_date: dt.date = Field(..., description="Calendar date the set was played.")
+    year: int = Field(..., description="Year of set_date.")
+    venue: str = Field(..., description="Venue name for the set.")
+    source_file: str | None = Field(
+        default=None, description="Source file the set was ingested from."
+    )
+    track_count: int = Field(default=0, description="Number of tracks in the set.")
