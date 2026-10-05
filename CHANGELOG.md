@@ -1,3 +1,10 @@
+# [5.20.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.19.0...v5.20.0) (2026-10-05)
+
+
+### Features
+
+* **api): list sets; fix(spotify:** page playlist lookup, let clear_playlist raise ([c4d10b8](https://github.com/mini-app-polis/common-python-utils/commit/c4d10b8f8740a2bb234db22c6f3378701e85a20a))
+
 # [5.19.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.18.1...v5.19.0) (2026-10-05)
 
 
