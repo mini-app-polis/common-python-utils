@@ -1,3 +1,10 @@
+# [5.21.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.20.2...v5.21.0) (2026-10-06)
+
+
+### Features
+
+* **ssm:** refresh settings per invocation and re-apply LOGGING_LEVEL ([ee22c34](https://github.com/mini-app-polis/common-python-utils/commit/ee22c34ab958d03de09b622cf6ad31249aff934c))
+
 ## [5.20.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.20.1...v5.20.2) (2026-10-06)
 
 
