@@ -169,6 +169,36 @@ _logger = logging.getLogger("mini_app_polis")
 # the root level, so third-party libraries keep whatever the host chose.
 _logger.setLevel(_level)
 
+
+def apply_level() -> str:
+    """Re-read ``LOGGING_LEVEL`` and apply it to the fleet's logger.
+
+    The level is read at import, which on a Lambda worker is once per cold
+    start — so changing ``LOGGING_LEVEL`` in Doppler did nothing until a
+    deploy. A worker that refreshes its settings per invocation
+    (``load_secrets(refresh=True)``) calls this afterwards, and the new
+    level applies from that run.
+
+    Sets the ``mini_app_polis`` logger, as at import, and leaves root alone.
+    The credential-bearing loggers stay at their floor whatever the level.
+    An unrecognised value is logged and ignored: a typo in a setting must
+    not take the worker down or silence it. Returns the level in effect.
+    """
+    global _level
+    requested = (os.getenv("LOGGING_LEVEL") or "INFO").strip().upper()
+    if requested not in logging.getLevelNamesMapping():
+        _logger.warning(
+            "LOGGING_LEVEL=%r is not a logging level; keeping %s", requested, _level
+        )
+        return _level
+    if requested != _level:
+        _logger.info("logging level %s -> %s", _level, requested)
+        _level = requested
+    _logger.setLevel(_level)
+    _clamp_credential_bearing_loggers()
+    return _level
+
+
 # Shortcut aliases — used across consumer repos
 debug = _logger.debug
 info = _logger.info
