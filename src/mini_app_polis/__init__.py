@@ -36,6 +36,7 @@ from ._version import __version__ as __version__
 if TYPE_CHECKING:
     from . import config as config
     from . import environment as environment
+    from . import timing as timing
     from .request_metrics import RequestMetricsMiddleware as RequestMetricsMiddleware
     from .serve_resilience import serve_with_retry as serve_with_retry
     from .ssm_secrets import load_secrets as load_secrets
@@ -46,6 +47,7 @@ __all__ = [
     "environment",
     "load_secrets",
     "serve_with_retry",
+    "timing",
 ]
 
 #: Public name → ``(module, attribute-or-None)``. ``None`` means the
@@ -55,6 +57,7 @@ _LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
     "environment": ("mini_app_polis.environment", None),
     "serve_with_retry": ("mini_app_polis.serve_resilience", "serve_with_retry"),
     "load_secrets": ("mini_app_polis.ssm_secrets", "load_secrets"),
+    "timing": ("mini_app_polis.timing", None),
     "RequestMetricsMiddleware": (
         "mini_app_polis.request_metrics",
         "RequestMetricsMiddleware",
