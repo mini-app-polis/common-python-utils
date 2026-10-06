@@ -50,9 +50,11 @@ import logging
 import os
 import re
 
-from dotenv import load_dotenv
-
-load_dotenv()
+# No load_dotenv(). Secrets and settings come from the process environment
+# only: Doppler (`doppler run` locally, SSM or the platform sync deployed).
+# This used to load a .env file at import, which made every consumer of the
+# library read one wherever it happened to sit, and hid where a value came
+# from.
 
 # Ecosystem log prefix conventions
 LOG_START = "🚀"
