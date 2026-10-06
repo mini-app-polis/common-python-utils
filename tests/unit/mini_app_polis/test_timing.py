@@ -21,6 +21,13 @@ def lines() -> list[dict]:
     return []
 
 
+@pytest.fixture(autouse=True)
+def _off_lambda(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No memory size and no cgroup counters, whatever runs the tests."""
+    monkeypatch.delenv("AWS_LAMBDA_FUNCTION_MEMORY_SIZE", raising=False)
+    monkeypatch.setattr(timing, "_CGROUP_THROTTLE", ())
+
+
 def _run(lines: list[dict], **labels: object):
     return timing.invocation(emit=lambda s: lines.append(json.loads(s)), **labels)
 
@@ -175,3 +182,62 @@ def test_the_default_emit_is_one_json_line_on_stdout(capsys) -> None:
     out = capsys.readouterr().out.splitlines()
     assert len(out) == 1
     assert json.loads(out[0])["timing"]["labels"] == {"cog": "evaluator"}
+
+
+def test_throttling_is_estimated_from_memory_and_left_out_of_idle() -> None:
+    """A measured evaluator job at 1,024 MB: 19.5s wall, 8.6s CPU, 2.4s
+    waiting on calls. The rest is the CPU quota, not idleness."""
+    record = timing._record(
+        19.463,
+        8.590,
+        {"github": (0.619, 1), "api": (1.278, 12), "registry": (0.482, 9)},
+        {},
+        memory_mb=1024,
+    )
+
+    assert record["memory_mb"] == 1024
+    assert record["throttled_from"] == "memory"
+    # 8.59 × (1769/1024 − 1)
+    assert record["throttled_ms"] == pytest.approx(6249, abs=2)
+    assert record["unattributed_ms"] == pytest.approx(2245, abs=2)
+    assert record["idle_pct"] == pytest.approx(23.8, abs=0.1)
+
+
+def test_the_estimate_never_eats_into_attributed_waiting() -> None:
+    record = timing._record(10.0, 5.0, {"anthropic": (4.5, 1)}, {}, memory_mb=512)
+
+    assert record["throttled_ms"] == 500  # capped: only 0.5s is unaccounted for
+    assert record["unattributed_ms"] == 0
+
+
+def test_a_full_vcpu_is_never_throttled_by_estimate() -> None:
+    record = timing._record(3.0, 1.0, {}, {}, memory_mb=3008)
+
+    assert record["throttled_ms"] == 0
+    assert record["idle_pct"] == pytest.approx(66.7, abs=0.1)
+
+
+def test_the_cgroup_counter_is_preferred(tmp_path, monkeypatch, lines) -> None:
+    stat = tmp_path / "cpu.stat"
+    stat.write_text("usage_usec 10\nthrottled_usec 1000\n")
+    monkeypatch.setattr(
+        timing, "_CGROUP_THROTTLE", ((str(stat), "throttled_usec", 1e6),)
+    )
+    monkeypatch.setenv("AWS_LAMBDA_FUNCTION_MEMORY_SIZE", "1024")
+
+    with _run(lines):
+        timing._real_sleep(0.05)
+        stat.write_text("usage_usec 10\nthrottled_usec 21000\n")  # +20ms
+
+    record = lines[0]["timing"]
+    assert record["throttled_from"] == "cgroup"
+    assert record["throttled_ms"] == 20
+    assert record["memory_mb"] == 1024
+
+
+def test_off_lambda_there_is_nothing_to_infer(lines) -> None:
+    with _run(lines):
+        pass
+
+    assert "throttled_ms" not in lines[0]["timing"]
+    assert "memory_mb" not in lines[0]["timing"]
