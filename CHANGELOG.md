@@ -1,3 +1,11 @@
+## [5.20.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.20.1...v5.20.2) (2026-10-06)
+
+
+### Bug Fixes
+
+* **logger:** stop loading .env at import; secrets come from the environment (Doppler) ([9482a4f](https://github.com/mini-app-polis/common-python-utils/commit/9482a4ff13aadbaee350d191fac925563e90891d))
+* **logger:** stop loading .env at import; secrets come from the environment (Doppler) ([0af28a0](https://github.com/mini-app-polis/common-python-utils/commit/0af28a0c5fca5f92f3c0f1eee27618411a458ee9))
+
 ## [5.20.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.20.0...v5.20.1) (2026-10-06)
 
 
