@@ -1,3 +1,10 @@
+## [5.22.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.22.0...v5.22.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* **timing:** count CPU-quota throttling apart from idle time ([782df62](https://github.com/mini-app-polis/common-python-utils/commit/782df62acb1562bbba0e211b81ba92a20c66277d))
+
 # [5.22.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.21.0...v5.22.0) (2026-10-06)
 
 
