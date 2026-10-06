@@ -49,6 +49,7 @@ dependencies = [
 | `mp3/` | `from mini_app_polis.mp3 import ...` | AcoustID identification, tagging, renaming |
 | `music/` | `from mini_app_polis.music import normalize_for_matching` | Music data normalization utilities |
 | `spotify/` | `from mini_app_polis.spotify import SpotifyAPI` | Spotipy wrapper |
+| `timing.py` | `from mini_app_polis import timing` | Per-invocation working vs waiting time, by service, as one CloudWatch line |
 | `vdj/` | `from mini_app_polis.vdj.m3u import ParseFacade` | VirtualDJ M3U parsing |
 
 ---
@@ -182,6 +183,21 @@ log = logger.get_logger()
 ```
 
 Set `LOGGING_LEVEL=INFO` (or DEBUG/WARNING/ERROR) in your environment.
+
+### Timing
+
+```python
+from mini_app_polis import timing
+
+with timing.invocation(cog="deejay", mode=mode):
+    run()
+```
+
+When the block ends, one JSON line goes to stdout: wall and CPU time, the
+idle share, and the waiting split by service (`google`, `spotify`,
+`anthropic`, `api`, `sleep`, …). CloudWatch Logs Insights reads it as
+fields (`timing.idle_pct`, `timing.wait.anthropic.ms`). See the module
+docstring for how calls are attributed.
 
 ---
 
