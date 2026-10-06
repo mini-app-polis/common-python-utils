@@ -1,3 +1,10 @@
+# [5.22.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.21.0...v5.22.0) (2026-10-06)
+
+
+### Features
+
+* **timing:** per-invocation working vs waiting time, by service ([41a13ff](https://github.com/mini-app-polis/common-python-utils/commit/41a13ff5f34868e3d00334e7115cf8d04eaa5286))
+
 # [5.21.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.20.2...v5.21.0) (2026-10-06)
 
 
