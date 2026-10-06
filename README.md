@@ -241,10 +241,26 @@ If any hook fails, the commit is blocked. Ruff will auto-fix in place — just `
 
 ### Environment variables
 
-No `.env` file is required to run tests. For local development against real services, copy `.env.example` to `.env` and fill in values:
+Tests need no secrets: `uv run pytest` runs anywhere.
+
+Everything else reads its settings from the process environment, supplied by
+[Doppler](https://docs.doppler.com/docs/install-cli). Nothing reads a `.env`
+file. Once per machine, then once per clone:
+
 ```bash
-cp .env.example .env
+brew install gnupg dopplerhq/cli/doppler
+doppler login
+doppler setup        # reads doppler.yaml: mini-app-polis-ecosystem / dev
 ```
+
+Then run anything that needs secrets under it — the contract suite, say:
+
+```bash
+doppler run -- uv run pytest contract --no-cov
+```
+
+Local runs use the `dev` config only. `.env.example` lists the names this
+library reads; the values live in Doppler.
 
 Key variables:
 
