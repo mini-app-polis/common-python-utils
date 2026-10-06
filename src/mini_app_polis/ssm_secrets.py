@@ -32,6 +32,15 @@ With none of the three variables set it does nothing, so a local run under
 
 A parameter's value replaces anything already in the environment under that
 name: Parameter Store is the source of truth for the names it is asked for.
+
+Refreshing. A warm Lambda container keeps what it loaded at cold start, so
+a value changed in Doppler did not reach a worker until a deploy. A worker
+also calls ``load_secrets(refresh=True)`` at the top of each invocation: the
+declared parameters are read again, changed values replace the old ones, an
+optional parameter that has gone is unset, and ``LOGGING_LEVEL`` is
+re-applied (:func:`mini_app_polis.logger.apply_level`). A change in Doppler
+then applies at the next invocation after the sync. Only settings a module
+reads at import — Sentry's DSN — still need a cold start.
 """
 
 from __future__ import annotations
@@ -56,26 +65,34 @@ _log = logging.getLogger(__name__)
 
 _loaded = False
 
+#: Optional variables this module set, so a refresh can unset one whose
+#: parameter has since been deleted — without touching a variable the
+#: function's own environment provides.
+_set_optional: set[str] = set()
+
 
 class MissingParameterError(RuntimeError):
     """A required parameter is not in Parameter Store."""
 
 
-def load_secrets(*, client: Any | None = None) -> list[str]:
-    """Load the declared parameters into ``os.environ``, once per process.
+def load_secrets(*, client: Any | None = None, refresh: bool = False) -> list[str]:
+    """Load the declared parameters into ``os.environ``.
 
-    Returns the environment variable names that were set — names only, so
-    it is safe to log. ``client`` is an SSM client; tests pass a fake, and
-    the default is ``boto3.client("ssm")``. boto3 ships in the Lambda
-    runtime and is imported only when there is something to load, so this
-    package takes no dependency on it.
+    Once per process by default; with ``refresh=True``, again on every call
+    (see the module docstring). Returns the environment variable names that
+    were set — names only, so it is safe to log. ``client`` is an SSM
+    client; tests pass a fake, and the default is ``boto3.client("ssm")``.
+    boto3 ships in the Lambda runtime and is imported only when there is
+    something to load, so this package takes no dependency on it.
 
     Raises :class:`MissingParameterError` naming every missing required
-    parameter, before setting anything: a worker either starts with all
-    of its secrets or does not start.
+    parameter, before setting anything: a worker either runs with all of
+    its secrets or does not run. On a refresh, a Parameter Store call that
+    fails is logged and the values already loaded are kept — an SSM blip
+    must not fail a run the last values would have served.
     """
     global _loaded
-    if _loaded:
+    if _loaded and not refresh:
         return []
 
     required = _read_map(REQUIRED_VAR)
@@ -101,7 +118,17 @@ def load_secrets(*, client: Any | None = None) -> list[str]:
         client = importlib.import_module("boto3").client("ssm")
 
     wanted = {**required, **optional}
-    values = _fetch(client, sorted({prefix + name for name in wanted.values()}))
+    refreshing = _loaded
+    try:
+        values = _fetch(client, sorted({prefix + name for name in wanted.values()}))
+    except Exception as exc:
+        if not refreshing:
+            raise
+        _log.warning(
+            "ssm_secrets: refresh failed, keeping the values already loaded: %s",
+            exc,
+        )
+        return []
 
     missing = sorted(
         f"{env} ({prefix}{name})"
@@ -117,21 +144,48 @@ def load_secrets(*, client: Any | None = None) -> list[str]:
         )
 
     loaded = []
+    changed = []
     for env, name in wanted.items():
         value = values.get(prefix + name)
         if value is not None:
+            if os.environ.get(env) != value:
+                changed.append(env)
             os.environ[env] = value
             loaded.append(env)
+            if env in optional:
+                _set_optional.add(env)
+        elif env in _set_optional:
+            # Deleted from Doppler since the last load: it goes here too.
+            os.environ.pop(env, None)
+            _set_optional.discard(env)
+            changed.append(env)
 
     skipped = sorted(env for env in optional if env not in loaded)
-    _log.info(
-        "ssm_secrets: loaded %d parameter(s) from %s%s",
-        len(loaded),
-        prefix,
-        f"; optional and absent: {', '.join(skipped)}" if skipped else "",
-    )
+    if not refreshing:
+        _log.info(
+            "ssm_secrets: loaded %d parameter(s) from %s%s",
+            len(loaded),
+            prefix,
+            f"; optional and absent: {', '.join(skipped)}" if skipped else "",
+        )
+    elif changed:
+        _log.info("ssm_secrets: refreshed %s", ", ".join(sorted(changed)))
     _loaded = True
+    _apply_logging_level()
     return sorted(loaded)
+
+
+def _apply_logging_level() -> None:
+    """Re-apply LOGGING_LEVEL, which may be one of the parameters just loaded.
+
+    Imported here rather than at module level, for the reason given on
+    ``_log`` above: the logger reads LOGGING_LEVEL when it is imported.
+    """
+    apply = getattr(
+        importlib.import_module("mini_app_polis.logger"), "apply_level", None
+    )
+    if apply is not None:
+        apply()
 
 
 def _read_map(var: str) -> dict[str, str]:

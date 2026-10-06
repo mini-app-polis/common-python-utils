@@ -38,6 +38,9 @@ class FakeSSM:
 def _clean(monkeypatch: pytest.MonkeyPatch) -> None:
     """Each test starts unloaded, with none of the variables set."""
     monkeypatch.setattr(ssm_secrets, "_loaded", False)
+    monkeypatch.setattr(ssm_secrets, "_set_optional", set())
+    # Loading re-applies LOGGING_LEVEL; these tests are not about logging.
+    monkeypatch.setattr(ssm_secrets, "_apply_logging_level", lambda: None)
     for var in (
         ssm_secrets.PREFIX_VAR,
         ssm_secrets.REQUIRED_VAR,
@@ -139,6 +142,101 @@ def test_second_call_does_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
     load_secrets(client=client)
     assert load_secrets(client=client) == []
     assert len(client.calls) == 1
+
+
+# ── refresh ───────────────────────────────────────────────────────────────
+
+
+def test_refresh_reads_again_and_replaces_a_changed_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KEY", raising=False)
+    _declare(monkeypatch, required={"KEY": "KEY"})
+    client = FakeSSM({f"{PREFIX}KEY": "old"})
+    load_secrets(client=client)
+
+    client.store[f"{PREFIX}KEY"] = "rotated"
+    assert load_secrets(client=client, refresh=True) == ["KEY"]
+
+    assert ssm_secrets.os.environ["KEY"] == "rotated"
+    assert len(client.calls) == 2
+
+
+def test_refresh_unsets_an_optional_parameter_that_was_deleted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in ("KEY", "LOGGING_LEVEL"):
+        monkeypatch.delenv(name, raising=False)
+    _declare(
+        monkeypatch,
+        required={"KEY": "KEY"},
+        optional={"LOGGING_LEVEL": "LOGGING_LEVEL"},
+    )
+    client = FakeSSM({f"{PREFIX}KEY": "v", f"{PREFIX}LOGGING_LEVEL": "DEBUG"})
+    load_secrets(client=client)
+    assert ssm_secrets.os.environ["LOGGING_LEVEL"] == "DEBUG"
+
+    del client.store[f"{PREFIX}LOGGING_LEVEL"]
+    load_secrets(client=client, refresh=True)
+
+    assert "LOGGING_LEVEL" not in ssm_secrets.os.environ
+
+
+def test_refresh_leaves_alone_a_variable_it_never_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The function's own environment is not this module's to remove."""
+    monkeypatch.setenv("LOGGING_LEVEL", "WARNING")
+    _declare(monkeypatch, optional={"LOGGING_LEVEL": "LOGGING_LEVEL"})
+    client = FakeSSM({})
+
+    load_secrets(client=client)
+    load_secrets(client=client, refresh=True)
+
+    assert ssm_secrets.os.environ["LOGGING_LEVEL"] == "WARNING"
+
+
+def test_a_failed_refresh_keeps_what_was_loaded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KEY", raising=False)
+    _declare(monkeypatch, required={"KEY": "KEY"})
+    client = FakeSSM({f"{PREFIX}KEY": "v"})
+    load_secrets(client=client)
+
+    def down(**_kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError("ThrottlingException")
+
+    client.get_parameters = down  # type: ignore[method-assign]
+    assert load_secrets(client=client, refresh=True) == []
+    assert ssm_secrets.os.environ["KEY"] == "v"
+
+
+def test_a_failed_first_load_still_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    _declare(monkeypatch, required={"KEY": "KEY"})
+    client = FakeSSM({})
+
+    def down(**_kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError("AccessDenied")
+
+    client.get_parameters = down  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="AccessDenied"):
+        load_secrets(client=client)
+
+
+def test_loading_re_applies_the_logging_level(monkeypatch: pytest.MonkeyPatch) -> None:
+    applied: list[bool] = []
+    monkeypatch.setattr(
+        ssm_secrets, "_apply_logging_level", lambda: applied.append(True)
+    )
+    monkeypatch.delenv("KEY", raising=False)
+    _declare(monkeypatch, required={"KEY": "KEY"})
+    client = FakeSSM({f"{PREFIX}KEY": "v"})
+
+    load_secrets(client=client)
+    load_secrets(client=client, refresh=True)
+
+    assert applied == [True, True]
 
 
 @pytest.mark.parametrize(

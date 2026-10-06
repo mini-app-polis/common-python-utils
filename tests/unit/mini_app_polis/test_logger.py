@@ -79,6 +79,32 @@ def test_logging_level_debug_does_not_reopen_the_credential_leak(
     assert logging.getLogger("websockets").level >= logging.INFO
 
 
+def test_apply_level_changes_the_level_without_a_reimport(monkeypatch) -> None:
+    """A warm worker picks up a new LOGGING_LEVEL from the next run."""
+    monkeypatch.delenv("LOGGING_LEVEL", raising=False)
+    logger_mod = _load_real_logger_module()
+    assert logger_mod.get_logger().level == logging.INFO
+
+    monkeypatch.setenv("LOGGING_LEVEL", "debug")
+    assert logger_mod.apply_level() == "DEBUG"
+    assert logger_mod.get_logger().level == logging.DEBUG
+    # The credential floor holds at any level.
+    assert logging.getLogger("websockets").level >= logging.INFO
+
+    monkeypatch.delenv("LOGGING_LEVEL")
+    assert logger_mod.apply_level() == "INFO"
+    assert logger_mod.get_logger().level == logging.INFO
+
+
+def test_apply_level_ignores_a_value_that_is_not_a_level(monkeypatch) -> None:
+    monkeypatch.setenv("LOGGING_LEVEL", "WARNING")
+    logger_mod = _load_real_logger_module()
+
+    monkeypatch.setenv("LOGGING_LEVEL", "LOUD")
+    assert logger_mod.apply_level() == "WARNING"
+    assert logger_mod.get_logger().level == logging.WARNING
+
+
 def test_clamp_does_not_lower_a_quieter_setting() -> None:
     """A consumer that already silenced one of these keeps its setting."""
     logger_mod = _load_real_logger_module()
