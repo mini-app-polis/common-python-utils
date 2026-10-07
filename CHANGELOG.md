@@ -1,3 +1,10 @@
+## [5.22.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.22.1...v5.22.2) (2026-10-07)
+
+
+### Bug Fixes
+
+* **deps:** bump openai ([3de37d5](https://github.com/mini-app-polis/common-python-utils/commit/3de37d5ba1181480a08557813e0f351492e15fd9))
+
 ## [5.22.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.22.0...v5.22.1) (2026-10-06)
 
 
