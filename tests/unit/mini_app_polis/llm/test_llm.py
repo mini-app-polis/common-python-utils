@@ -511,3 +511,402 @@ class TestOpenAILLM:
             ]
             == 32768
         )
+
+
+# ---------------------------------------------------------------------------
+# Construction and response-shape handling
+# ---------------------------------------------------------------------------
+
+
+def _anthropic(monkeypatch: pytest.MonkeyPatch) -> AnthropicLLM:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    with patch.dict("sys.modules", {"anthropic": MagicMock()}):
+        client = AnthropicLLM(_cfg("anthropic"))
+    client._client = MagicMock()
+    return client
+
+
+def _openai(monkeypatch: pytest.MonkeyPatch) -> OpenAILLM:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    with patch.dict("sys.modules", {"openai": MagicMock()}):
+        client = OpenAILLM(_cfg("openai"))
+    client._client = MagicMock()
+    return client
+
+
+class _Block:
+    """A content block that exposes text only by subscription."""
+
+    type = "text"
+    text = None
+
+    def __init__(self, text: object) -> None:
+        self._text = text
+
+    def __getitem__(self, key: str) -> object:
+        if isinstance(self._text, Exception):
+            raise self._text
+        return self._text
+
+
+class TestAnthropicRequestShape:
+    def test_system_messages_are_joined_into_the_system_field(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = _anthropic(monkeypatch)
+        client._client.messages.create.return_value = SimpleNamespace(
+            content=[SimpleNamespace(type="text", text='{"name": "A"}')]
+        )
+
+        client.generate_json(
+            messages=[
+                LLMMessage(role="system", content="Rule one."),
+                LLMMessage(role="user", content="Hi"),
+                LLMMessage(role="system", content="Rule two."),
+                LLMMessage(role="assistant", content="Hello"),
+            ],
+            json_schema=_SCHEMA,
+        )
+
+        kwargs = client._client.messages.create.call_args.kwargs
+        assert kwargs == {
+            "model": "test-model",
+            "max_tokens": 16384,
+            "messages": [
+                {"role": "user", "content": "Hi"},
+                {"role": "assistant", "content": "Hello"},
+            ],
+            "system": "Rule one.\n\nRule two.",
+        }
+
+    def test_no_system_field_without_system_messages(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = _anthropic(monkeypatch)
+        client._client.messages.create.return_value = SimpleNamespace(
+            content=[SimpleNamespace(type="text", text='{"name": "A"}')]
+        )
+
+        result = client.generate_json(
+            messages=[LLMMessage(role="user", content="Hi")], json_schema=_SCHEMA
+        )
+
+        assert "system" not in client._client.messages.create.call_args.kwargs
+        assert result.raw_text == '{"name": "A"}'
+        assert result.model == "test-model"
+
+
+class TestAnthropicExtractOutputText:
+    def test_prefers_get_final_text(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = _anthropic(monkeypatch)
+        resp = MagicMock()
+        resp.get_final_text.return_value = '  {"name": "F"}  '
+
+        assert client._extract_output_text(resp) == '{"name": "F"}'
+
+    @pytest.mark.parametrize(
+        "final", [RuntimeError("stream not finished"), "   ", None]
+    )
+    def test_falls_back_to_content_when_get_final_text_is_unusable(
+        self, monkeypatch: pytest.MonkeyPatch, final: object
+    ) -> None:
+        client = _anthropic(monkeypatch)
+        resp = MagicMock()
+        if isinstance(final, Exception):
+            resp.get_final_text.side_effect = final
+        else:
+            resp.get_final_text.return_value = final
+        resp.message = None
+        resp.content = [SimpleNamespace(type="text", text="from content")]
+
+        assert client._extract_output_text(resp) == "from content"
+
+    def test_joins_dict_and_object_text_blocks_skipping_others(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = _anthropic(monkeypatch)
+        resp = SimpleNamespace(
+            content=[
+                {"type": "thinking", "thinking": "hmm"},
+                {"type": "text", "text": "part one"},
+                {"type": "text", "text": "   "},
+                {"type": "text", "text": None},
+                SimpleNamespace(type="tool_use", text="not text"),
+                SimpleNamespace(type="text", text="part two"),
+                _Block("part three"),
+                _Block(KeyError("text")),
+            ]
+        )
+
+        assert client._extract_output_text(resp) == "part one\npart two\npart three"
+
+    def test_reports_block_types_when_no_text_is_found(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = _anthropic(monkeypatch)
+        resp = SimpleNamespace(
+            content=[
+                {"type": "tool_use"},
+                {"no_type": True},
+                SimpleNamespace(type="thinking"),
+                object(),
+            ]
+        )
+
+        with pytest.raises(LLMError) as ei:
+            client._extract_output_text(resp)
+
+        assert "content has 4 blocks" in str(ei.value)
+        assert "'tool_use', 'dict', 'thinking', 'object'" in str(ei.value)
+
+    def test_fence_without_closing_line_is_still_stripped(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = _anthropic(monkeypatch)
+        client._client.messages.create.return_value = SimpleNamespace(
+            content=[SimpleNamespace(type="text", text='```json\n{"name": "Eve"}')]
+        )
+
+        result = client.generate_json(messages=_messages(), json_schema=_SCHEMA)
+
+        assert result.output_json == {"name": "Eve"}
+        # raw_text keeps exactly what the model said.
+        assert result.raw_text.startswith("```json")
+
+
+class TestOpenAIConstructionAndRequests:
+    def test_sdk_client_gets_max_retries_only_when_configured(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        sdk = MagicMock()
+        cfg = LLMConfig(
+            provider="openai", model="m", api_key_env="OPENAI_API_KEY", max_retries=0
+        )
+        with patch.dict("sys.modules", {"openai": sdk}):
+            OpenAILLM(cfg)
+            OpenAILLM(_cfg("openai"))
+
+        first, second = sdk.OpenAI.call_args_list
+        assert first.kwargs == {"api_key": "sk-test", "max_retries": 0}
+        # timeout is per request, not on the client
+        assert second.kwargs == {"api_key": "sk-test"}
+
+    def test_responses_request_carries_a_strict_schema_and_the_timeout(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = _openai(monkeypatch)
+        client._client.responses.create.return_value = SimpleNamespace(
+            output_text='{"name": "A"}'
+        )
+
+        client.generate_json(
+            messages=_messages(), json_schema=_SCHEMA, schema_name="person"
+        )
+
+        kwargs = client._client.responses.create.call_args.kwargs
+        assert kwargs["input"] == [
+            {"role": "system", "content": "You output JSON."},
+            {"role": "user", "content": "Give me the data."},
+        ]
+        assert kwargs["timeout"] == 60.0
+        assert kwargs["text"]["format"]["name"] == "person"
+        assert kwargs["text"]["format"]["strict"] is True
+        assert kwargs["text"]["format"]["schema"]["additionalProperties"] is False
+        # The caller's schema is not mutated by the strict copy.
+        assert "additionalProperties" not in _SCHEMA
+
+    def test_chat_fallback_appends_a_json_only_instruction(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = _openai(monkeypatch)
+        client._client.responses.create.side_effect = RuntimeError("no responses")
+        client._client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content=' {"name": "Z"} '),
+                    finish_reason="stop",
+                )
+            ]
+        )
+
+        result = client.generate_json(messages=_messages(), json_schema=_SCHEMA)
+
+        kwargs = client._client.chat.completions.create.call_args.kwargs
+        assert kwargs["messages"][-1]["role"] == "system"
+        assert "ONLY valid JSON" in kwargs["messages"][-1]["content"]
+        assert kwargs["messages"][:-1] == [
+            {"role": "system", "content": "You output JSON."},
+            {"role": "user", "content": "Give me the data."},
+        ]
+        assert kwargs["temperature"] == 0.2
+        assert kwargs["timeout"] == 60.0
+        assert result.raw_text == '{"name": "Z"}'
+
+    def test_schema_invalid_structured_output_falls_back_to_chat(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = _openai(monkeypatch)
+        client._client.responses.create.return_value = SimpleNamespace(
+            output_text='{"wrong": 1}'
+        )
+        client._client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"name": "ok"}'))]
+        )
+
+        assert client.generate_json(
+            messages=_messages(), json_schema=_SCHEMA
+        ).output_json == {"name": "ok"}
+
+    def test_fallback_with_empty_content_raises_a_validation_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = _openai(monkeypatch)
+        client._client.responses.create.side_effect = RuntimeError("no responses")
+        client._client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=None))]
+        )
+
+        with pytest.raises(LLMValidationError, match="Failed to parse JSON"):
+            client.generate_json(messages=_messages(), json_schema=_SCHEMA)
+
+
+class TestOpenAIResponseHandling:
+    def test_extracts_text_from_output_items_when_output_text_is_absent(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = _openai(monkeypatch)
+        resp = SimpleNamespace(
+            output_text="  ",
+            output=[
+                SimpleNamespace(content=None),
+                SimpleNamespace(
+                    content=[
+                        SimpleNamespace(type="refusal", text="no"),
+                        SimpleNamespace(type="output_text", text="   "),
+                        SimpleNamespace(type="text", text=' {"a": 1} '),
+                    ]
+                ),
+            ],
+        )
+
+        assert client._extract_output_text(resp) == '{"a": 1}'
+
+    @pytest.mark.parametrize(
+        "resp",
+        [
+            SimpleNamespace(),
+            SimpleNamespace(
+                output=[SimpleNamespace(content=[SimpleNamespace(type="refusal")])]
+            ),
+            SimpleNamespace(
+                output=42
+            ),  # not iterable: swallowed, then raised as LLMError
+        ],
+        ids=["empty", "no-text-items", "malformed"],
+    )
+    def test_raises_when_no_text_can_be_found(
+        self, monkeypatch: pytest.MonkeyPatch, resp: object
+    ) -> None:
+        client = _openai(monkeypatch)
+
+        with pytest.raises(LLMError, match="Unable to extract text from OpenAI"):
+            client._extract_output_text(resp)
+
+    @pytest.mark.parametrize(
+        "resp",
+        [
+            SimpleNamespace(status="incomplete", incomplete_details=None),
+            SimpleNamespace(
+                status="incomplete",
+                incomplete_details=SimpleNamespace(reason="content_filter"),
+            ),
+        ],
+        ids=["no-details", "other-reason"],
+    )
+    def test_incomplete_for_another_reason_is_not_truncation(
+        self, monkeypatch: pytest.MonkeyPatch, resp: object
+    ) -> None:
+        client = _openai(monkeypatch)
+
+        client._raise_if_truncated_response(resp)  # does not raise
+
+    def test_chat_response_without_choices_is_not_truncation(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = _openai(monkeypatch)
+
+        client._raise_if_truncated_chat(SimpleNamespace(choices=[]))
+        client._raise_if_truncated_chat(SimpleNamespace())
+
+
+class TestSchemaStrictForApi:
+    def test_every_object_is_closed_and_fully_required(self) -> None:
+        from mini_app_polis.llm.openai_client import _schema_strict_for_api
+
+        schema = {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "address": {
+                    "type": "object",
+                    "properties": {
+                        "city": {"type": "string"},
+                        "zip": {"type": "string"},
+                    },
+                    "required": ["city"],
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"k": {"type": "string"}},
+                    },
+                },
+            },
+            "required": ["name"],
+        }
+
+        out = _schema_strict_for_api(schema)
+
+        assert out["additionalProperties"] is False
+        assert out["required"] == ["name", "address", "tags"]
+        assert out["properties"]["address"]["required"] == ["city", "zip"]
+        assert out["properties"]["address"]["additionalProperties"] is False
+        item = out["properties"]["tags"]["items"]
+        assert item == {
+            "type": "object",
+            "properties": {"k": {"type": "string"}},
+            "additionalProperties": False,
+            "required": ["k"],
+        }
+        # Validation still uses the caller's original schema.
+        assert schema["required"] == ["name"]
+        assert "additionalProperties" not in schema["properties"]["address"]
+
+    def test_one_of_is_replaced_by_its_first_branch(self) -> None:
+        from mini_app_polis.llm.openai_client import _schema_strict_for_api
+
+        schema = {
+            "type": "object",
+            "properties": {
+                "value": {
+                    "oneOf": [
+                        {"type": "object", "properties": {"n": {"type": "number"}}},
+                        {"type": "string"},
+                    ]
+                },
+                "empty": {"oneOf": []},
+            },
+        }
+
+        out = _schema_strict_for_api(schema)
+
+        assert out["properties"]["value"] == {
+            "type": "object",
+            "properties": {"n": {"type": "number"}},
+            "additionalProperties": False,
+            "required": ["n"],
+        }
+        # An empty oneOf has nothing to choose; it is left as is.
+        assert out["properties"]["empty"] == {"oneOf": []}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -794,3 +795,558 @@ def test_from_service_account_info_uses_exactly_the_given_scopes(monkeypatch):
         "info": {"client_email": "a@b", "private_key": "k", "token_uri": "t"},
         "scopes": ["https://www.googleapis.com/auth/drive.file"],
     }
+
+
+# ---------------------------------------------------------------------------
+# Lookup, export, versioning, in-memory download and delete fallbacks.
+# MagicMock services again, so assertions are on the exact Drive requests.
+# ---------------------------------------------------------------------------
+
+
+def _raises(exc):
+    def _fn():
+        raise exc
+
+    return _fn
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (
+            "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/view",
+            "1AbCdEfGhIjKlMnOpQrStUvWxYz012345",
+        ),
+        (
+            "https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123-_/edit#gid=0",
+            "1AbCdEfGhIjKlMnOpQrStUvWxYz0123-_",
+        ),
+        ("1AbCdEfGhIjKlMnOpQrStUvWxYz012345", "1AbCdEfGhIjKlMnOpQrStUvWxYz012345"),
+        ("https://example.com/short", None),
+        ("", None),
+    ],
+)
+def test_extract_drive_file_id(value, expected):
+    from mini_app_polis.google.drive import DriveFacade
+
+    assert DriveFacade.extract_drive_file_id(value) == expected
+
+
+def test_list_files_builds_the_query_from_every_filter():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    lst = svc.files.return_value.list
+    lst.return_value.execute.return_value = {"files": []}
+
+    DriveFacade(svc).list_files(
+        "parent",
+        mime_type="audio/mpeg",
+        name_contains="Bob's",
+        trashed=True,
+        include_folders=False,
+    )
+
+    assert lst.call_args.kwargs["q"] == (
+        "'parent' in parents"
+        " and mimeType != 'application/vnd.google-apps.folder'"
+        " and mimeType = 'audio/mpeg'"
+        " and name contains 'Bob\\'s'"
+        " and trashed = true"
+    )
+
+
+def test_find_file_in_folder_without_mime_type_returns_first_or_none():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    lst = svc.files.return_value.list
+    lst.return_value.execute.side_effect = [{"files": [{"id": "f1"}]}, {"files": []}]
+    drive = DriveFacade(svc)
+
+    assert drive.find_file_in_folder("p", name="It's") == "f1"
+    assert drive.find_file_in_folder("p", name="x") is None
+    assert lst.call_args_list[0].kwargs["q"] == (
+        "name = 'It\\'s' and 'p' in parents and trashed = false"
+    )
+
+
+def test_ensure_folder_creates_the_folder_when_none_exists(monkeypatch):
+    from mini_app_polis.google import drive as drive_mod
+
+    monkeypatch.setattr(drive_mod, "FOLDER_CACHE", {})
+    svc = _mock_service()
+    files = svc.files.return_value
+    files.list.return_value.execute.return_value = {"files": []}
+    files.create.return_value.execute.return_value = {"id": "new-folder"}
+    drive = drive_mod.DriveFacade(svc)
+
+    assert drive.ensure_folder("parent", "Mom's Music") == "new-folder"
+    assert drive.ensure_folder("parent", "Mom's Music") == "new-folder"
+
+    files.list.assert_called_once()
+    assert files.list.call_args.kwargs["q"] == (
+        "'parent' in parents and name = 'Mom\\'s Music' "
+        "and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+    )
+    files.create.assert_called_once_with(
+        body={
+            "name": "Mom's Music",
+            "mimeType": "application/vnd.google-apps.folder",
+            "parents": ["parent"],
+        },
+        fields="id",
+        supportsAllDrives=True,
+    )
+    assert drive_mod.FOLDER_CACHE == {"parent/Mom's Music": "new-folder"}
+
+
+def test_copy_file_raises_when_drive_returns_no_id():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    svc.files.return_value.copy.return_value.execute.return_value = {}
+
+    with pytest.raises(
+        RuntimeError, match="did not return an id for source_file_id=src"
+    ):
+        DriveFacade(svc).copy_file("src")
+    # A missing id is not a propagation 404: no retry.
+    svc.files.return_value.copy.assert_called_once()
+
+
+def test_move_file_can_keep_existing_parents():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    files = svc.files.return_value
+    files.get.return_value.execute.return_value = {"parents": ["old"]}
+
+    DriveFacade(svc).move_file("f", new_parent_id="new", remove_from_parents=False)
+
+    files.get.assert_called_once_with(
+        fileId="f", fields="parents", supportsAllDrives=True
+    )
+    files.update.assert_called_once_with(
+        fileId="f", addParents="new", fields="id, parents", supportsAllDrives=True
+    )
+
+
+def test_move_file_with_no_current_parents_removes_nothing():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    files = svc.files.return_value
+    files.get.return_value.execute.return_value = {}
+
+    DriveFacade(svc).move_file("f", new_parent_id="new")
+
+    assert "removeParents" not in files.update.call_args.kwargs
+
+
+def test_move_file_removes_every_previous_parent():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    files = svc.files.return_value
+    files.get.return_value.execute.return_value = {"parents": ["a", "b"]}
+
+    DriveFacade(svc).move_file("f", new_parent_id="new")
+
+    assert files.update.call_args.kwargs["removeParents"] == "a,b"
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        (b"\x00bytes", b"\x00bytes"),
+        (bytearray(b"ba"), b"ba"),
+        ("café", "café".encode()),
+    ],
+)
+def test_export_file_always_returns_bytes(payload, expected):
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    export = svc.files.return_value.export
+    export.return_value.execute.return_value = payload
+
+    out = DriveFacade(svc).export_file("doc", mime_type="text/csv")
+
+    assert out == expected
+    assert type(out) is bytes
+    export.assert_called_once_with(fileId="doc", mimeType="text/csv")
+
+
+def test_export_google_doc_as_text_exports_plain_text_and_replaces_bad_bytes():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    export = svc.files.return_value.export
+    export.return_value.execute.return_value = b"Hello \xff world"
+
+    assert DriveFacade(svc).export_google_doc_as_text("doc") == "Hello � world"
+    export.assert_called_once_with(fileId="doc", mimeType="text/plain")
+
+
+def test_find_or_create_spreadsheet_returns_an_existing_one():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    files = svc.files.return_value
+    files.list.return_value.execute.return_value = {"files": [{"id": "sheet-1"}]}
+
+    assert (
+        DriveFacade(svc).find_or_create_spreadsheet(parent_folder_id="p", name="Log")
+        == "sheet-1"
+    )
+    assert files.list.call_args.kwargs["q"].endswith(
+        "and mimeType = 'application/vnd.google-apps.spreadsheet'"
+    )
+    files.create.assert_not_called()
+
+
+def test_find_or_create_spreadsheet_creates_one_in_the_folder():
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    files = svc.files.return_value
+    files.list.return_value.execute.return_value = {"files": []}
+    files.create.return_value.execute.return_value = {"id": "sheet-new"}
+
+    assert (
+        DriveFacade(svc).find_or_create_spreadsheet(parent_folder_id="p", name="Log")
+        == "sheet-new"
+    )
+    files.create.assert_called_once_with(
+        body={
+            "name": "Log",
+            "mimeType": "application/vnd.google-apps.spreadsheet",
+            "parents": ["p"],
+        },
+        fields="id",
+        supportsAllDrives=True,
+    )
+
+
+def test_download_m3u_file_data_returns_no_lines_when_the_download_fails(
+    monkeypatch, as_http_error
+):
+    from mini_app_polis.google import drive as drive_mod
+
+    log = MagicMock()
+    monkeypatch.setattr(drive_mod, "log", log)
+    svc = _mock_service()
+    svc.files.return_value.get_media.side_effect = as_http_error(
+        status=404, message="File not found"
+    )
+
+    assert drive_mod.DriveFacade(svc).download_m3u_file_data("gone") == []
+    (msg,) = log.error.call_args.args
+    assert "gone" in msg and "File not found" in msg
+
+
+def test_download_m3u_file_data_returns_no_lines_for_undecodable_content(
+    monkeypatch,
+):
+    from mini_app_polis.google import drive as drive_mod
+
+    monkeypatch.setattr(drive_mod, "log", MagicMock())
+    svc = _mock_service()
+    svc.files.return_value.get_media.return_value = {"data": b"\xff\xfe"}
+
+    assert drive_mod.DriveFacade(svc).download_m3u_file_data("f") == []
+
+
+def _versioned_drive(names):
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    lst = svc.files.return_value.list
+    lst.return_value.execute.return_value = {"files": [{"name": n} for n in names]}
+    return DriveFacade(svc), lst
+
+
+def test_resolve_versioned_filename_returns_the_requested_version_when_free():
+    drive, lst = _versioned_drive([])
+
+    assert drive.resolve_versioned_filename(
+        parent_folder_id="p", desired_filename="Track_v1.mp3"
+    ) == ("Track_v1.mp3", 1)
+    assert lst.call_args.kwargs["q"] == (
+        "'p' in parents and trashed=false and name contains 'Track_v'"
+    )
+
+
+def test_resolve_versioned_filename_skips_every_used_version():
+    drive, _ = _versioned_drive(
+        [
+            "track_v1.MP3",  # case-insensitive match
+            "Track_v2.mp3",
+            "Track_v4.mp3",
+            "Track_v3.wav",  # other extension: not a clash
+            "OtherTrack_v3.mp3",  # different base
+        ]
+    )
+
+    assert drive.resolve_versioned_filename(
+        parent_folder_id="p", desired_filename="Track_v1.mp3"
+    ) == ("Track_v3.mp3", 3)
+
+
+def test_resolve_versioned_filename_starts_from_the_requested_version():
+    drive, _ = _versioned_drive(["Track_v1.mp3"])
+
+    assert drive.resolve_versioned_filename(
+        parent_folder_id="p", desired_filename="Track_v5.mp3"
+    ) == ("Track_v5.mp3", 5)
+
+
+def test_resolve_versioned_filename_without_an_extension():
+    drive, _ = _versioned_drive(["Notes_v1", "Notes_v1.txt"])
+
+    assert drive.resolve_versioned_filename(
+        parent_folder_id="p", desired_filename="Notes_v1"
+    ) == ("Notes_v2", 2)
+
+
+def test_resolve_versioned_filename_escapes_quotes_in_the_query():
+    drive, lst = _versioned_drive([])
+
+    drive.resolve_versioned_filename(
+        parent_folder_id="p", desired_filename="Rock'n Roll_v1.mp3"
+    )
+
+    assert "name contains 'Rock\\'n Roll_v'" in lst.call_args.kwargs["q"]
+
+
+def test_resolve_versioned_filename_requires_a_version_suffix():
+    drive, lst = _versioned_drive([])
+
+    with pytest.raises(ValueError, match="_vN suffix"):
+        drive.resolve_versioned_filename(
+            parent_folder_id="p", desired_filename="Track.mp3"
+        )
+    lst.assert_not_called()
+
+
+class _ChunkedDownload:
+    """Stand-in for MediaIoBaseDownload that writes the request in two chunks."""
+
+    def __init__(self, fh, request):
+        self._fh = fh
+        self._chunks = [request["data"][:2], request["data"][2:]]
+
+    def next_chunk(self):
+        self._fh.write(self._chunks.pop(0))
+        return None, not self._chunks
+
+
+def test_download_file_bytes_returns_metadata_and_every_chunk(monkeypatch):
+    from mini_app_polis.google import drive as drive_mod
+
+    monkeypatch.setattr(drive_mod, "MediaIoBaseDownload", _ChunkedDownload)
+    svc = _mock_service()
+    files = svc.files.return_value
+    files.get.return_value.execute.return_value = {
+        "id": "f",
+        "name": "song.mp3",
+        "mimeType": "audio/mpeg",
+    }
+    files.get_media.return_value = {"data": b"ID3abc"}
+
+    out = drive_mod.DriveFacade(svc).download_file_bytes("f")
+
+    assert out == drive_mod.DownloadedFile(
+        file_id="f", name="song.mp3", mime_type="audio/mpeg", data=b"ID3abc"
+    )
+    files.get.assert_called_once_with(
+        fileId="f", fields="id,name,mimeType", supportsAllDrives=True
+    )
+    files.get_media.assert_called_once_with(fileId="f", supportsAllDrives=True)
+
+
+def test_download_file_bytes_defaults_missing_metadata(monkeypatch):
+    from mini_app_polis.google import drive as drive_mod
+
+    monkeypatch.setattr(drive_mod, "MediaIoBaseDownload", _ChunkedDownload)
+    svc = _mock_service()
+    svc.files.return_value.get.return_value.execute.return_value = {"mimeType": None}
+    svc.files.return_value.get_media.return_value = {"data": b""}
+
+    out = drive_mod.DriveFacade(svc).download_file_bytes("f")
+
+    assert (out.name, out.mime_type, out.data) == ("", "application/octet-stream", b"")
+
+
+# --- delete_file_with_fallback ---------------------------------------------
+
+
+def _delete_drive(monkeypatch, *, caps=None, parents=None):
+    """A DriveFacade whose files().get answers by the ``fields`` requested.
+
+    ``caps`` / ``parents`` are either the value to return or an exception to
+    raise for the capabilities read and the parents read respectively.
+    """
+    from mini_app_polis.google import drive as drive_mod
+
+    monkeypatch.setattr(drive_mod, "FOLDER_CACHE", {})
+    monkeypatch.setattr(drive_mod, "log", MagicMock())
+    svc = _mock_service()
+    files = svc.files.return_value
+
+    def get(*, fileId, fields, supportsAllDrives):
+        assert supportsAllDrives is True
+        answer = caps if fields.startswith("capabilities") else parents
+        if isinstance(answer, Exception):
+            return _Exec(_raises(answer))
+        return _Exec(lambda: answer)
+
+    files.get.side_effect = get
+    # ensure_folder: the quarantine folder already exists.
+    files.list.return_value.execute.return_value = {"files": [{"id": "quarantine"}]}
+    return drive_mod.DriveFacade(svc), files
+
+
+def test_delete_with_fallback_hard_deletes_when_allowed(monkeypatch):
+    drive, files = _delete_drive(
+        monkeypatch, caps={"capabilities": {"canDelete": True, "canTrash": True}}
+    )
+
+    drive.delete_file_with_fallback("f", fallback_remove_parent_id="intake")
+
+    files.delete.assert_called_once_with(fileId="f", supportsAllDrives=True)
+    files.update.assert_not_called()
+
+
+def test_delete_with_fallback_trashes_when_only_trash_is_allowed(monkeypatch):
+    drive, files = _delete_drive(
+        monkeypatch, caps={"capabilities": {"canDelete": False, "canTrash": True}}
+    )
+
+    drive.delete_file_with_fallback("f")
+
+    files.delete.assert_not_called()
+    files.update.assert_called_once_with(
+        fileId="f", body={"trashed": True}, supportsAllDrives=True
+    )
+
+
+def test_delete_with_fallback_trashes_when_the_hard_delete_fails(
+    monkeypatch, as_http_error
+):
+    drive, files = _delete_drive(
+        monkeypatch, caps={"capabilities": {"canDelete": True, "canTrash": True}}
+    )
+    files.delete.return_value.execute.side_effect = as_http_error(
+        status=403, message="insufficientFilePermissions"
+    )
+
+    drive.delete_file_with_fallback("f")
+
+    files.delete.assert_called_once()
+    assert files.update.call_args.kwargs["body"] == {"trashed": True}
+
+
+def test_delete_with_fallback_tries_delete_when_capabilities_cannot_be_read(
+    monkeypatch, as_http_error
+):
+    drive, files = _delete_drive(
+        monkeypatch, caps=as_http_error(status=403, message="forbidden")
+    )
+
+    drive.delete_file_with_fallback("f")
+
+    files.delete.assert_called_once_with(fileId="f", supportsAllDrives=True)
+
+
+def test_delete_with_fallback_moves_to_quarantine_detaching_only_the_intake_folder(
+    monkeypatch,
+):
+    drive, files = _delete_drive(
+        monkeypatch,
+        caps={"capabilities": {"canDelete": False, "canTrash": False}},
+        parents={"id": "f", "parents": ["intake", "elsewhere"]},
+    )
+
+    drive.delete_file_with_fallback(
+        "f",
+        fallback_remove_parent_id="intake",
+        quarantine_folder_name="Q",
+        quarantine_parent_id="qroot",
+    )
+
+    files.delete.assert_not_called()
+    assert "name = 'Q'" in files.list.call_args.kwargs["q"]
+    assert "'qroot' in parents" in files.list.call_args.kwargs["q"]
+    files.update.assert_called_once_with(
+        fileId="f",
+        addParents="quarantine",
+        removeParents="intake",
+        fields="id,parents",
+        supportsAllDrives=True,
+    )
+
+
+def test_delete_with_fallback_detaches_every_parent_when_intake_is_not_one(
+    monkeypatch,
+):
+    drive, files = _delete_drive(
+        monkeypatch,
+        caps={"capabilities": {}},
+        parents={"parents": ["a", "b"]},
+    )
+
+    drive.delete_file_with_fallback("f", fallback_remove_parent_id="intake")
+
+    assert files.update.call_args.kwargs["removeParents"] == "a,b"
+
+
+def test_delete_with_fallback_still_moves_when_parents_cannot_be_read(
+    monkeypatch, as_http_error
+):
+    drive, files = _delete_drive(
+        monkeypatch,
+        caps={"capabilities": None},
+        parents=as_http_error(status=404, message="not found"),
+    )
+
+    drive.delete_file_with_fallback("f", fallback_remove_parent_id="intake")
+
+    assert files.update.call_args.kwargs["addParents"] == "quarantine"
+    assert files.update.call_args.kwargs["removeParents"] == ""
+
+
+def test_delete_with_fallback_raises_when_nothing_is_permitted_and_no_fallback(
+    monkeypatch,
+):
+    drive, files = _delete_drive(
+        monkeypatch, caps={"capabilities": {"canDelete": False, "canTrash": False}}
+    )
+
+    with pytest.raises(PermissionError, match="Unable to delete or trash Drive file f"):
+        drive.delete_file_with_fallback("f")
+    files.delete.assert_not_called()
+    files.update.assert_not_called()
+
+
+def test_delete_with_fallback_raises_when_every_path_fails(monkeypatch, as_http_error):
+    drive, files = _delete_drive(
+        monkeypatch,
+        caps={"capabilities": {"canDelete": True, "canTrash": True}},
+        parents={"parents": ["intake"]},
+    )
+    denied = as_http_error(status=403, message="insufficientFilePermissions")
+    files.delete.return_value.execute.side_effect = denied
+    files.update.return_value.execute.side_effect = denied
+
+    with pytest.raises(PermissionError):
+        drive.delete_file_with_fallback("f", fallback_remove_parent_id="intake")
+
+    # Delete, then trash, then the quarantine move were all attempted.
+    files.delete.assert_called_once()
+    assert [c.kwargs.get("body") for c in files.update.call_args_list] == [
+        {"trashed": True},
+        None,
+    ]
+    assert files.update.call_args.kwargs["addParents"] == "quarantine"
