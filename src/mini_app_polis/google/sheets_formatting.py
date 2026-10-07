@@ -83,7 +83,7 @@ class SheetsFormatter:
             props = s.get("properties", {})
             sid = props.get("sheetId")
             data = s.get("data", []) or []
-            if not sid or not data:
+            if sid is None or not data:
                 continue
             col_meta = (data[0] or {}).get("columnMetadata", []) or []
             sizes: list[int | None] = []
