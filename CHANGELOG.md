@@ -1,3 +1,10 @@
+# [5.23.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.22.3...v5.23.0) (2026-10-07)
+
+
+### Features
+
+* shared Discord transport and activity notifications ([c0bc9c7](https://github.com/mini-app-polis/common-python-utils/commit/c0bc9c70834c00b85a4cd53f2d638b1fc12b5b4d))
+
 ## [5.22.3](https://github.com/mini-app-polis/common-python-utils/compare/v5.22.2...v5.22.3) (2026-10-07)
 
 
