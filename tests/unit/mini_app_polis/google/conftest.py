@@ -80,6 +80,9 @@ def pytest_configure():
     mini_app_polis_logger.debug = _logger.debug  # type: ignore[attr-defined]
     mini_app_polis_logger.critical = _logger.critical  # type: ignore[attr-defined]
     mini_app_polis_logger.LOG_WARNING = "⚠️"  # type: ignore[attr-defined]
+    mini_app_polis_logger.LOG_START = "🚀"  # type: ignore[attr-defined]
+    mini_app_polis_logger.LOG_SUCCESS = "✅"  # type: ignore[attr-defined]
+    mini_app_polis_logger.LOG_FAILURE = "❌"  # type: ignore[attr-defined]
 
     def with_log_prefix(emoji: str, message: str) -> str:
         clean_message = " ".join(str(message).split())

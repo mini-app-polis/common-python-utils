@@ -40,10 +40,12 @@ dependencies = [
 
 | Module | Import | Description |
 |--------|--------|-------------|
+| `activity.py` | `from mini_app_polis import activity` | A FastAPI service's Discord feed: committed data changes, faults, announce-on-commit, background faults (`activity` extra) |
 | `api/` | `from mini_app_polis.api import KaianoApiClient` | HTTP client for internal FastAPI services |
 | `api/contract/` | `from mini_app_polis.api.contract import IngestSet, ENDPOINTS` | Typed request/response models for the Kaiano API endpoints the fleet calls |
 | `asana/` | `from mini_app_polis.asana import AsanaClient` | Asana task creation with external-id idempotency |
 | `config.py` | `from mini_app_polis import config` | Env-var driven shared config (Spotify, Google, VDJ) |
+| `discord.py` | `from mini_app_polis import discord` | Discord webhook transport: named channels, rate-limit cooldowns, environment labels, never raises |
 | `google/` | `from mini_app_polis.google import GoogleAPI` | Drive + Sheets facade |
 | `llm/` | `from mini_app_polis.llm import build_llm, LLMMessage` | OpenAI + Anthropic clients (optional extra) |
 | `mp3/` | `from mini_app_polis.mp3 import ...` | AcoustID identification, tagging, renaming |
@@ -170,6 +172,92 @@ result = llm.generate_json(
 print(result.output_json)  # {"artist": "...", "title": "..."}
 ```
 
+### Discord
+
+```python
+from mini_app_polis import discord
+
+await discord.send_message(
+    discord.CHANNEL_ERRORS,
+    content="Nightly export failed",
+    context="export",  # names the producer in the log line
+)
+```
+
+Four channels — `default`, `errors`, `activity`, `runs` — each read from its
+own `DISCORD_WEBHOOK_URL_<CHANNEL>` and falling back to `DISCORD_WEBHOOK_URL`
+when that is unset, so a channel can exist in code before it exists in
+Discord. Outside production, content and embed titles are prefixed
+`[DEVELOPMENT]`, and mentions are off (`allowed_mentions` pings nobody), so
+text a person typed cannot ping `@everyone`; `send_payload` posts a body
+exactly as given instead. Every
+call returns whether Discord accepted the message and never raises: failures
+are logged and, if the process has initialised `sentry_sdk`, reported there.
+A 429 holds every later send to that webhook (or all of them, for a global
+or Cloudflare limit) until its cooldown ends, rather than posting through
+it. `webhook_url(..., source=...)` and the `source=` argument on the send
+functions read the variables from a mapping instead of the environment.
+`post_webhook` is the cooldown-aware POST underneath, for payloads this
+module does not shape (GitHub events forwarded to the webhook's `/github`
+suffix). See the module docstring for the rest.
+
+### Activity feed (requires `activity` extra)
+
+Committed data changes to `activity`, faults to `errors`, for a FastAPI
+service on SQLAlchemy 2. Needs the `activity` extra and a release that has
+these modules: `>=5.0` is not enough, since earlier 5.x releases lack them.
+Use the minor release that introduced `mini_app_polis.activity` (and
+`mini_app_polis.discord`) as the lower bound:
+
+```toml
+dependencies = ["miniapppolis-common-utils[activity]>=<that release>,<6"]
+```
+
+```python
+from mini_app_polis import activity, discord
+
+config = activity.ActivityConfig(
+    service="api-deejaytools",                 # shown in every footer
+    suppressed_tables={"identity_audit_events"},
+    excluded_paths=("/health", "/version"),
+    # is_machine=lambda request: request.state.caller_kind == "machine",
+)
+# After the middleware whose status it should see, so it wraps them.
+app.middleware("http")(activity.activity_middleware(config))
+```
+
+Importing the module registers the session listeners. One message per
+request that committed something (rolled-back work reports nothing; bulk
+statements are counted as statements), and one per 5xx, unhandled
+exception, or — when `is_machine` is given — 4xx to a machine caller. The
+actor is `request.state.caller` unless `caller=` says otherwise. A fault
+names the exception's type and Sentry id, never its message. Titles carry
+the environment prefix only with `ActivityConfig(label=True)` (and
+`report_fault(..., label=True)`); the footer always names the environment. A handler, or
+a pure ASGI error middleware holding only the scope, can attach a reason
+with `activity.record_fault_detail(request_or_scope, "...")`.
+
+Two producers for what a request tally cannot say:
+
+```python
+# Posted when this session's transaction commits; never on rollback.
+# Works in a request and in a background job with its own session.
+# `title` is user-typed: mentions are off, so an "@everyone" in it stays
+# text, but escape Discord markdown in it yourself if that matters.
+activity.announce_on_commit(
+    session, discord.CHANNEL_ACTIVITY, content=f"Song added: {title}"
+)
+await session.commit()
+
+# A scheduler tick or job runner with no request around it.
+except Exception as exc:
+    await activity.report_fault("scheduler · drive_jobs", exc, service="api-deejaytools")
+```
+
+Delivery is fire-and-forget; `await activity.wait_for_deliveries()` lets
+tests (and a shutdown) wait for it. See the module docstring for what the
+listeners cannot see.
+
 ### Logger
 
 ```python
@@ -292,6 +380,8 @@ Key variables:
 | `SPOTIPY_CLIENT_ID` | `SpotifyAPI` | Spotify operations |
 | `SPOTIPY_CLIENT_SECRET` | `SpotifyAPI` | Spotify operations |
 | `SPOTIPY_REFRESH_TOKEN` | `SpotifyAPI` | Spotify operations |
+| `DISCORD_WEBHOOK_URL` | `discord`, `activity` | Fallback webhook for any channel whose own variable is unset |
+| `DISCORD_WEBHOOK_URL_DEFAULT` / `_ERRORS` / `_ACTIVITY` / `_RUNS` | `discord`, `activity` | One webhook per channel. Optional; each falls back to `DISCORD_WEBHOOK_URL` |
 | `ANTHROPIC_API_KEY` | `llm` extra | Anthropic LLM calls |
 | `OPENAI_API_KEY` | `llm` extra | OpenAI LLM calls |
 
