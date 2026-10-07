@@ -166,7 +166,7 @@ class SpotifyAPI:
                     continue
                 raise
             except SpotifyException as e:
-                if e.http_status == 429:
+                if e.http_status == 429 and attempt < max_retries:
                     log.warning(
                         f"Rate limited by Spotify API while {context}. Respecting Retry-After."
                     )

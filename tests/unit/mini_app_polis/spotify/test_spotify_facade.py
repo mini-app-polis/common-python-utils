@@ -701,6 +701,40 @@ def test_rate_limit_sleeps_for_retry_after(sp, headers, expected_sleep):
     assert sleeps == [expected_sleep]
 
 
+def test_call_with_retry_raises_when_rate_limited_on_every_attempt(sp):
+    # Exhausting the retries on 429 used to fall out of the loop and return
+    # None, which callers then treated as a Spotify response.
+    _, api, _, sleeps, _ = sp
+    calls = []
+
+    def fn():
+        calls.append(1)
+        raise _SpotifyError(429, {"Retry-After": "5"})
+
+    with pytest.raises(_SpotifyError) as exc:
+        api._call_with_retry(fn, context="t", max_retries=3)
+    assert exc.value.http_status == 429
+    assert len(calls) == 3
+    assert sleeps == [5, 5]  # no sleep after the last attempt
+
+
+def test_search_track_returns_none_when_rate_limited_throughout(sp):
+    _, api, client, _, log = sp
+    client.search.side_effect = _SpotifyError(429, {"Retry-After": "1"})
+
+    assert api.search_track("A", "T") is None
+    assert client.search.call_count == 3
+    log.error.assert_called_once()
+
+
+def test_create_playlist_does_not_create_for_no_user_when_rate_limited(sp):
+    _, api, client, _, _ = sp
+    client.current_user.side_effect = _SpotifyError(429, {"Retry-After": "1"})
+
+    assert api.create_playlist("Name", "Desc") is None
+    client.user_playlist_create.assert_not_called()
+
+
 # --- client / token refresh ------------------------------------------------
 
 

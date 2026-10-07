@@ -384,6 +384,28 @@ def test_width_buffer_pass_skips_sheets_without_an_id_or_sizes(monkeypatch):
     assert [r["updateDimensionProperties"]["range"]["sheetId"] for r in reqs] == [3]
 
 
+def test_width_buffer_pass_includes_the_first_tab_with_sheet_id_zero(monkeypatch):
+    # Google gives a spreadsheet's first tab sheetId 0; it is an id, not a
+    # missing one, so its columns must be buffered like any other tab's.
+    fmt_mod, fmt, svc, _, _ = _formatter(monkeypatch)
+    svc.spreadsheets.return_value.get.return_value.execute.return_value = _pixel_meta(
+        {0: [100], 7: [100]}
+    )
+
+    assert fmt._get_column_pixel_sizes("ssid") == {0: [100], 7: [100]}
+
+    fmt._apply_column_width_buffer_pass(
+        spreadsheet_id="ssid",
+        sheets_metadata=[_sheet_meta(0, "First", 1), _sheet_meta(7, "Other", 1)],
+    )
+
+    (reqs,) = _sent_requests(svc)
+    assert [r["updateDimensionProperties"]["range"]["sheetId"] for r in reqs] == [0, 7]
+    assert reqs[0]["updateDimensionProperties"]["properties"] == {
+        "pixelSize": 100 + fmt_mod.AUTORESIZE_BUFFER_PX
+    }
+
+
 def test_width_buffer_pass_sends_nothing_when_no_column_can_grow(monkeypatch):
     fmt_mod, fmt, svc, _, _ = _formatter(monkeypatch)
     at_cap = fmt_mod.AUTORESIZE_MAX_PX
