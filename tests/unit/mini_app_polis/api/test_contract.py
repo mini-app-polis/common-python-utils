@@ -296,3 +296,46 @@ def test_each_typed_method_calls_its_own_catalog_entry(
 
     assert seen == [endpoint.name]
     assert out is sentinel
+
+
+def test_notify_request_to_discord_omits_anything_unset() -> None:
+    assert NotifyRequest(content="deploy finished").to_discord() == {
+        "content": "deploy finished"
+    }
+    embed = {"title": "Run failed", "color": 0xFF0000}
+    assert NotifyRequest(embeds=[embed]).to_discord() == {"embeds": [embed]}
+    assert NotifyRequest(
+        content="hi", embeds=[embed], username="evaluator-cog"
+    ).to_discord() == {"content": "hi", "embeds": [embed], "username": "evaluator-cog"}
+
+
+def test_notify_request_to_discord_drops_empty_values() -> None:
+    """An empty string or list is not sent; Discord would reject or ignore it."""
+    out = NotifyRequest(content="x", embeds=[], username="").to_discord()
+
+    assert out == {"content": "x"}
+
+
+def test_notify_request_with_only_empty_bodies_is_refused() -> None:
+    with pytest.raises(ValidationError, match="one of content or embeds"):
+        NotifyRequest(content="", embeds=[])
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"content": "x" * 2001},
+        {"embeds": [{}] * 11},
+        {"content": "x", "username": "u" * 81},
+    ],
+    ids=["content", "embeds", "username"],
+)
+def test_notify_request_enforces_discords_limits(kwargs: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        NotifyRequest(**kwargs)
+
+
+def test_notify_request_accepts_values_at_discords_limits() -> None:
+    req = NotifyRequest(content="x" * 2000, embeds=[{}] * 10, username="u" * 80)
+
+    assert len(req.to_discord()["content"]) == 2000

@@ -2,6 +2,8 @@ import importlib
 import sys
 import types
 
+import pytest
+
 from mini_app_polis.mp3.tag.tagger import Mp3Tagger
 
 
@@ -293,3 +295,283 @@ def test_build_routine_tag_artist_never_returns_empty_string_when_base_present()
         personal_descriptor="",
     )
     assert artist.startswith("v1 | Open 2024")
+
+
+# ---------------------------------------------------------------------------
+# MusicTagIO, with music_tag and mutagen patched onto the module itself.
+# ---------------------------------------------------------------------------
+
+
+class _TagFile(dict):
+    """A music_tag file: dict access, optional failing keys, tracked saves."""
+
+    def __init__(self, values=None, *, bad_reads=(), bad_writes=(), bad_iter=False):
+        super().__init__(values or {})
+        self.bad_reads = set(bad_reads)
+        self.bad_writes = set(bad_writes)
+        self.bad_iter = bad_iter
+        self.saves = 0
+
+    def __getitem__(self, key):
+        if key in self.bad_reads:
+            raise RuntimeError(f"cannot read {key}")
+        return super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        if key in self.bad_writes:
+            raise ValueError(f"cannot write {key}")
+        super().__setitem__(key, value)
+
+    def __iter__(self):
+        if self.bad_iter:
+            raise RuntimeError("cannot iterate")
+        return super().__iter__()
+
+    def save(self):
+        self.saves += 1
+
+
+class _Frame:
+    def __init__(self, encoding, text):
+        self.encoding = encoding
+        self.text = text
+
+
+class _ID3:
+    """Records what the VirtualDJ compat pass does to the ID3 tag."""
+
+    instances: list["_ID3"] = []
+    fail_on_load = False
+    fail_on_save = False
+
+    def __init__(self, path=None):
+        if path is not None and type(self).fail_on_load:
+            raise RuntimeError("no ID3 header")
+        self.path = path
+        self.frames: dict[str, list] = {}
+        self.saved = None
+        type(self).instances.append(self)
+
+    def setall(self, key, frames):
+        self.frames[key] = [(f.encoding, f.text) for f in frames]
+
+    def save(self, path, v2_version=4):
+        if type(self).fail_on_save:
+            raise OSError("read-only")
+        self.saved = (path, v2_version)
+
+
+@pytest.fixture
+def tag_io(monkeypatch):
+    """(module, MusicTagIO(), files-by-path, log) with music_tag/ID3 faked."""
+    from unittest.mock import MagicMock
+
+    mod = importlib.import_module("mini_app_polis.mp3.tag.io.music_tag_io")
+    files: dict[str, object] = {}
+
+    def load_file(path):
+        f = files[path]
+        if isinstance(f, Exception):
+            raise f
+        return f
+
+    id3 = type("ID3", (_ID3,), {"instances": []})
+    log = MagicMock()
+    monkeypatch.setattr(mod, "music_tag", types.SimpleNamespace(load_file=load_file))
+    monkeypatch.setattr(mod, "ID3", id3)
+    monkeypatch.setattr(mod, "TYER", _Frame)
+    monkeypatch.setattr(mod, "TDRC", _Frame)
+    monkeypatch.setattr(mod, "ID3NoHeaderError", type("E", (Exception,), {}))
+    monkeypatch.setattr(mod, "log", log)
+    return mod, mod.MusicTagIO(), files, log
+
+
+def test_music_tag_io_read_joins_lists_and_logs_unreadable_keys(tag_io):
+    _, io, files, log = tag_io
+    files["a.mp3"] = _TagFile(
+        {
+            "tracktitle": "Song",
+            "artist": ["A1", None, "A2"],
+            "bpm": 120,
+            "genre": "x",
+            "unlisted": "ignored",
+        },
+        bad_reads={"genre"},
+    )
+
+    snap = io.read("a.mp3")
+
+    assert snap.tags == {"tracktitle": "Song", "artist": "A1, A2", "bpm": "120"}
+    assert snap.has_artwork is False
+    (msg,) = log.error.call_args.args
+    assert "failed reading genre" in msg
+
+
+@pytest.mark.parametrize(
+    ("file", "expected"),
+    [
+        (_TagFile({"artwork": b"jpeg"}), True),
+        (_TagFile({"artwork": b""}), False),
+        (_TagFile({"artwork": b"jpeg"}, bad_reads={"artwork"}), False),
+    ],
+    ids=["present", "empty", "unreadable"],
+)
+def test_music_tag_io_read_reports_artwork(tag_io, file, expected):
+    _, io, files, _ = tag_io
+    files["a.mp3"] = file
+
+    assert io.read("a.mp3").has_artwork is expected
+
+
+def test_music_tag_io_write_maps_aliases_and_skips_unset_values(tag_io):
+    _, io, files, _ = tag_io
+    f = files["a.mp3"] = _TagFile()
+
+    io.write(
+        "a.mp3",
+        {
+            "tracktitle": "Song",
+            "albumartist": "AA",
+            "date": "2021",
+            "track_number": 3,
+            "discnumber": 1,
+            "genre": None,
+            "unknown": "ignored",
+        },
+    )
+
+    assert dict(f) == {
+        "tracktitle": "Song",
+        "albumartist": "AA",
+        "year": "2021",
+        "tracknumber": "3",
+        "discnumber": "1",
+    }
+    assert f.saves == 1
+
+
+def test_music_tag_io_write_logs_a_rejected_field_and_still_saves(tag_io):
+    _, io, files, log = tag_io
+    f = files["a.mp3"] = _TagFile(bad_writes={"bpm"})
+
+    io.write("a.mp3", {"title": "Song", "bpm": "fast"})
+
+    assert dict(f) == {"tracktitle": "Song"}
+    assert f.saves == 1
+    (msg,) = log.error.call_args.args
+    assert "failed setting bpm='fast'" in msg
+
+
+def test_music_tag_io_write_without_compat_leaves_id3_alone(tag_io):
+    mod, io, files, _ = tag_io
+    files["a.mp3"] = _TagFile()
+
+    io.write("a.mp3", {"title": "Song", "year": "2020"})
+
+    assert mod.ID3.instances == []
+
+
+def test_virtualdj_compat_saves_id3v23_with_a_four_digit_year(tag_io):
+    mod, io, files, _ = tag_io
+    files["a.MP3"] = _TagFile()
+
+    io.write("a.MP3", {"year": "2020-05-01"}, ensure_virtualdj_compat=True)
+
+    (id3,) = mod.ID3.instances
+    assert id3.path == "a.MP3"
+    assert id3.frames == {"TYER": [(3, "2020")], "TDRC": [(3, "2020")]}
+    assert id3.saved == ("a.MP3", 3)
+
+
+@pytest.mark.parametrize("year", [None, "", "  ", "c. 1999", "99"])
+def test_virtualdj_compat_writes_no_year_frames_for_an_unusable_year(tag_io, year):
+    mod, io, files, _ = tag_io
+    files["a.mp3"] = _TagFile()
+
+    io.write("a.mp3", {"year": year, "title": "T"}, ensure_virtualdj_compat=True)
+
+    (id3,) = mod.ID3.instances
+    assert id3.frames == {}
+    assert id3.saved == ("a.mp3", 3)
+
+
+def test_virtualdj_compat_starts_a_new_tag_when_none_can_be_loaded(tag_io):
+    mod, io, files, _ = tag_io
+    mod.ID3.fail_on_load = True
+    files["a.mp3"] = _TagFile()
+
+    io.write("a.mp3", {"year": "2019"}, ensure_virtualdj_compat=True)
+
+    (id3,) = mod.ID3.instances
+    assert id3.path is None
+    assert id3.saved == ("a.mp3", 3)
+
+
+def test_virtualdj_compat_is_skipped_for_non_mp3_files(tag_io):
+    mod, io, files, _ = tag_io
+    files["a.flac"] = _TagFile()
+
+    io.write("a.flac", {"year": "2019"}, ensure_virtualdj_compat=True)
+
+    assert mod.ID3.instances == []
+    assert files["a.flac"].saves == 1
+
+
+def test_virtualdj_compat_failure_does_not_fail_the_write(tag_io):
+    mod, io, files, _ = tag_io
+    mod.ID3.fail_on_save = True
+    files["a.mp3"] = _TagFile()
+
+    io.write("a.mp3", {"year": "2019"}, ensure_virtualdj_compat=True)
+
+    assert files["a.mp3"]["year"] == "2019"
+    assert files["a.mp3"].saves == 1
+
+
+def test_dump_tags_lists_curated_fields_then_extras_sorted(tag_io):
+    mod, io, files, _ = tag_io
+    files["a.mp3"] = _TagFile(
+        {
+            "tracktitle": "Song",
+            "artist": ["A1", None, "A2"],
+            "comment": None,
+            "zeta": "z",
+            "alpha": ["x", "y"],
+            "empty": None,
+            "artwork": b"jpeg",
+        }
+    )
+
+    out = io.dump_tags("a.mp3")
+
+    assert list(out)[: len(mod.TAG_FIELDS)] == mod.TAG_FIELDS
+    assert out["tracktitle"] == "Song"
+    assert out["artist"] == "A1, A2"
+    assert out["comment"] == ""
+    assert out["album"] == ""  # missing curated field
+    assert list(out)[len(mod.TAG_FIELDS) :] == ["alpha", "empty", "zeta"]
+    assert out["alpha"] == "x, y"
+    assert out["empty"] == ""
+    assert "artwork" not in out
+
+
+def test_dump_tags_skips_unreadable_extras_and_survives_iteration_failure(tag_io):
+    mod, io, files, _ = tag_io
+    files["a.mp3"] = _TagFile({"extra": "x", "bad": "y"}, bad_reads={"bad"})
+    files["b.mp3"] = _TagFile({"extra": "x"}, bad_iter=True)
+
+    a = io.dump_tags("a.mp3")
+    b = io.dump_tags("b.mp3")
+
+    assert a["extra"] == "x"
+    assert "bad" not in a
+    assert list(b) == mod.TAG_FIELDS
+
+
+def test_dump_tags_returns_empty_when_the_file_cannot_be_loaded(tag_io):
+    _, io, files, log = tag_io
+    files["/music/broken.mp3"] = RuntimeError("not an audio file")
+
+    assert io.dump_tags("/music/broken.mp3") == {}
+    (msg,) = log.error.call_args.args
+    assert "broken.mp3" in msg and "not an audio file" in msg
