@@ -1,3 +1,10 @@
+## [5.22.3](https://github.com/mini-app-polis/common-python-utils/compare/v5.22.2...v5.22.3) (2026-10-07)
+
+
+### Bug Fixes
+
+* format the first sheet's columns and raise when Spotify rate limits exhaust retries ([e7b8863](https://github.com/mini-app-polis/common-python-utils/commit/e7b8863e75063edb6e74b09e8fcd3856106d30ea))
+
 ## [5.22.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.22.1...v5.22.2) (2026-10-07)
 
 
