@@ -42,6 +42,13 @@ dependencies = [
 # so anything tighter than <4 forces one of them to move. Matches
 # api-kaianolevine-com's own pin deliberately.
 llm = ["openai>=1.40,<4", "anthropic>=1,<2"]
+# mini_app_polis.activity registers SQLAlchemy session listeners at import.
+# Every service that wants it already depends on SQLAlchemy 2; the extra is
+# for the declaration, and so `uv sync --all-extras` installs it for the
+# tests. Nothing else in the package imports it. FastAPI is deliberately
+# not here: the middleware only reads attributes off Starlette's request
+# and response, as request_metrics only reads the ASGI scope.
+activity = ["sqlalchemy>=2.0,<3"]
 dev = [
   "pytest>=9.0.3,<10.0.0",
   "pytest-cov>=6.2.1,<8.0.0",
