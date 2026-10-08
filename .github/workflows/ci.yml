@@ -100,6 +100,53 @@ jobs:
           npm install --no-save semantic-release @semantic-release/commit-analyzer @semantic-release/release-notes-generator @semantic-release/changelog @semantic-release/exec @semantic-release/git @semantic-release/github
           npx semantic-release
 
+      # semantic-release tags the release commit it leaves at HEAD, and the
+      # step above succeeds only once `uv publish` has. A tag here therefore
+      # means a version reached PyPI in this run; none means the push
+      # carried nothing releasable.
+      - name: Record the release
+        id: released
+        run: echo "version=$(git tag --points-at HEAD --list 'v*' | head -n1 | sed 's/^v//')" >> "$GITHUB_OUTPUT"
+
+      # The fleet re-locks onto the release today rather than on
+      # Dependabot's schedule: commons-update.yml in mini-app-polis/.github
+      # does it on this dispatch. A repository_dispatch needs Contents: write
+      # on .github, which GITHUB_TOKEN never has, so this asks as the promote
+      # App. It runs after the publish, so a failure here cannot undo the
+      # release; it fails the job so that it is seen.
+      - name: Mint an App token for mini-app-polis/.github
+        if: steps.released.outputs.version != ''
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.PROMOTE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PROMOTE_APP_PRIVATE_KEY }}
+          owner: mini-app-polis
+          repositories: .github
+          permission-contents: write
+
+      - name: Ask the fleet to take this release
+        if: steps.released.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ steps.released.outputs.version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh api repos/mini-app-polis/.github/dispatches \
+            -f event_type=commons-released \
+            -f "client_payload[package]=miniapppolis-common-utils" \
+            -f "client_payload[version]=$VERSION" \
+            -f "client_payload[repository]=$GITHUB_REPOSITORY" \
+            -f "client_payload[run_url]=$RUN_URL"
+          echo "Asked mini-app-polis/.github to roll out miniapppolis-common-utils $VERSION."
+
+      - name: Say how to finish a release whose dispatch failed
+        if: failure() && steps.released.outputs.version != ''
+        env:
+          VERSION: ${{ steps.released.outputs.version }}
+        run: |
+          echo "::error::miniapppolis-common-utils $VERSION is published, but the fleet was not asked to take it. Run commons-update in mini-app-polis/.github by hand (package miniapppolis-common-utils, version $VERSION)."
+
   # Conformance is graded when the repository changes, and this is where
   # that is said. The evaluation runs after this job ends, so what the job
   # reports is whether the request landed — never what was found.
