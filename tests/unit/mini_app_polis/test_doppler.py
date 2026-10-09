@@ -116,6 +116,20 @@ def test_a_cli_failure_is_an_error(
         check_keys(_repo(tmp_path, "A_KEY=\n"))
 
 
+def test_output_that_is_not_json_is_an_error_not_a_missing_name(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _cli(
+        monkeypatch,
+        lambda args, **_: subprocess.CompletedProcess(
+            args, 0, stdout="Doppler Error: …", stderr=""
+        ),
+    )
+
+    with pytest.raises(DopplerError, match="not JSON"):
+        check_keys(_repo(tmp_path, "A_KEY=\n"))
+
+
 def test_without_the_cli_it_says_how_to_install_it(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
