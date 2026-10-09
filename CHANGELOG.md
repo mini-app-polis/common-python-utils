@@ -1,3 +1,10 @@
+# [5.24.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.23.1...v5.24.0) (2026-10-09)
+
+
+### Features
+
+* **doppler:** add DopplerClient and the check-doppler-keys console script ([4cb2886](https://github.com/mini-app-polis/common-python-utils/commit/4cb2886bff3fb946cd2eb472fb76343ae29fa643))
+
 ## [5.23.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.23.0...v5.23.1) (2026-10-08)
 
 
