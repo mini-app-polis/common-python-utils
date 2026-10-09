@@ -1,3 +1,10 @@
+## [5.24.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.24.0...v5.24.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **doppler:** report non-JSON CLI output as an error, not a missing name ([5acc42a](https://github.com/mini-app-polis/common-python-utils/commit/5acc42afbfa7ec0c374ed78ae7aeed6dc7676e65))
+
 # [5.24.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.23.1...v5.24.0) (2026-10-09)
 
 
