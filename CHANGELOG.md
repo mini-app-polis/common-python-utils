@@ -1,3 +1,10 @@
+# [5.25.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.24.1...v5.25.0) (2026-10-09)
+
+
+### Features
+
+* **spotify): raise SpotifyTokenExpired on invalid_grant without retrying and feat(doppler:** add DopplerClient.get_secret ([d5dcf78](https://github.com/mini-app-polis/common-python-utils/commit/d5dcf78f351cd8881e031537c8976ce5b818197b))
+
 ## [5.24.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.24.0...v5.24.1) (2026-10-09)
 
 
