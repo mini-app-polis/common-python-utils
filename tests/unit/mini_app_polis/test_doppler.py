@@ -262,6 +262,66 @@ def test_from_env_names_what_is_missing(monkeypatch: pytest.MonkeyPatch) -> None
         DopplerClient.from_env()
 
 
+def test_get_secret_reads_one_name_from_the_config() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={"name": "A", "value": {"raw": "${B}", "computed": "2026-03-29"}},
+        )
+
+    assert _client(handler).get_secret("A") == "2026-03-29"
+
+    req = seen[0]
+    assert req.method == "GET"
+    assert req.url.copy_with(query=None) == httpx.URL(doppler.SECRET_URL)
+    assert dict(req.url.params) == {"project": "proj", "config": "prd", "name": "A"}
+    assert req.headers["Authorization"] == "Bearer dp.st.dev.x"
+
+
+def test_get_secret_falls_back_to_raw() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"value": {"raw": "1"}})
+
+    assert _client(handler).get_secret("A") == "1"
+
+
+def test_get_secret_answers_none_for_a_missing_name() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"messages": ["Could not find secret"]})
+
+    assert _client(handler).get_secret("A") is None
+
+
+def test_get_secret_refusal_never_carries_the_body() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"echo": "super-secret"})
+
+    with pytest.raises(DopplerError) as exc:
+        _client(handler).get_secret("A")
+    assert "HTTP 401" in str(exc.value)
+    assert "reading A" in str(exc.value)
+    assert "super-secret" not in str(exc.value)
+
+
+def test_get_secret_unexpected_body_is_a_doppler_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="not json")
+
+    with pytest.raises(DopplerError, match="unexpected body"):
+        _client(handler).get_secret("A")
+
+
+def test_get_secret_transport_failure_is_a_doppler_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("boom")
+
+    with pytest.raises(DopplerError, match="unreachable reading A"):
+        _client(handler).get_secret("A")
+
+
 # -- set_secrets_with_cli ------------------------------------------------------
 
 

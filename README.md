@@ -46,12 +46,12 @@ dependencies = [
 | `asana/` | `from mini_app_polis.asana import AsanaClient` | Asana task creation with external-id idempotency |
 | `config.py` | `from mini_app_polis import config` | Env-var driven shared config (Spotify, Google, VDJ) |
 | `discord.py` | `from mini_app_polis import discord` | Discord webhook transport: named channels, rate-limit cooldowns, environment labels, never raises |
-| `doppler.py` | `from mini_app_polis.doppler import DopplerClient` | Writes secrets back to Doppler (API or CLI), and the `check-doppler-keys` console script |
+| `doppler.py` | `from mini_app_polis.doppler import DopplerClient` | Reads and writes secrets in one Doppler config (API or CLI), and the `check-doppler-keys` console script |
 | `google/` | `from mini_app_polis.google import GoogleAPI` | Drive + Sheets facade |
 | `llm/` | `from mini_app_polis.llm import build_llm, LLMMessage` | OpenAI + Anthropic clients (optional extra) |
 | `mp3/` | `from mini_app_polis.mp3 import ...` | AcoustID identification, tagging, renaming |
 | `music/` | `from mini_app_polis.music import normalize_for_matching` | Music data normalization utilities |
-| `spotify/` | `from mini_app_polis.spotify import SpotifyAPI` | Spotipy wrapper |
+| `spotify/` | `from mini_app_polis.spotify import SpotifyAPI` | Spotipy wrapper; raises `SpotifyTokenExpired` when Spotify refuses the refresh token (`invalid_grant`, not retried) |
 | `timing.py` | `from mini_app_polis import timing` | Per-invocation working vs waiting time, by service, as one CloudWatch line |
 | `vdj/` | `from mini_app_polis.vdj.m3u import ParseFacade` | VirtualDJ M3U parsing |
 

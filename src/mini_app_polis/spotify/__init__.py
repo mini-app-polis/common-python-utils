@@ -1,3 +1,3 @@
-from .spotify import SpotifyAPI
+from .spotify import SpotifyAPI, SpotifyTokenExpired
 
-__all__ = ["SpotifyAPI"]
+__all__ = ["SpotifyAPI", "SpotifyTokenExpired"]
