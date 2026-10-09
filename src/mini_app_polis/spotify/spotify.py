@@ -37,6 +37,27 @@ def _sleep_for_rate_limit(e: SpotifyException, default_seconds: int = 2) -> None
 _spotify_api: SpotifyAPI | None = None
 
 
+class SpotifyTokenExpired(RuntimeError):
+    """Spotify refused the refresh token: it has expired or been revoked.
+
+    Spotify answers ``invalid_grant``, and no retry can change that — only a
+    person signing in again can. Refresh tokens expire six months after
+    sign-in (enforced from 2026-07-20) and refreshing does not extend them.
+    Raised instead of :class:`SpotifyOauthError` so a caller can report
+    "renew the token" rather than a generic Spotify failure. The message
+    never carries the token.
+    """
+
+
+def _is_invalid_grant(e: Exception) -> bool:
+    """Whether a token-endpoint error is ``invalid_grant``.
+
+    spotipy puts the OAuth error code on ``.error``; the message is checked
+    too, for versions or wrappers that only format it into the text.
+    """
+    return getattr(e, "error", None) == "invalid_grant" or "invalid_grant" in str(e)
+
+
 class NoopCacheHandler(CacheHandler):
     """Disable token cache persistence for refresh-token authentication flows."""
 
@@ -133,7 +154,26 @@ class SpotifyAPI:
                 log.info("✅ Obtained new Spotify access token.")
                 return Spotify(auth=token_info["access_token"])
 
-            except (SpotifyOauthError, requests.exceptions.RequestException) as e:
+            except SpotifyOauthError as e:
+                if _is_invalid_grant(e):
+                    log.error(
+                        "❌ Spotify refused the refresh token (invalid_grant): it "
+                        "has expired or been revoked. Re-authorise to renew it."
+                    )
+                    raise SpotifyTokenExpired(
+                        "Spotify refresh token expired or revoked (invalid_grant)"
+                    ) from None
+                log.warning(
+                    f"Spotify token refresh failed "
+                    f"(attempt {attempt}/{max_retries}): {e}"
+                )
+                if attempt < max_retries:
+                    _sleep_backoff(attempt, base_seconds=base_backoff_seconds)
+                    continue
+                log.error("❌ Exceeded maximum retries while refreshing Spotify token.")
+                raise
+
+            except requests.exceptions.RequestException as e:
                 log.warning(
                     f"Spotify token refresh failed "
                     f"(attempt {attempt}/{max_retries}): {e}"

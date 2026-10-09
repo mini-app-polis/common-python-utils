@@ -41,6 +41,7 @@ import httpx
 LOCAL_CONFIG = "dev"
 
 API_URL = "https://api.doppler.com/v3/configs/config/secrets"
+SECRET_URL = "https://api.doppler.com/v3/configs/config/secret"
 
 _REQUIRED = re.compile(r"^([A-Z][A-Z0-9_]*)=")
 _OPTIONAL = re.compile(r"^#\s*([A-Z][A-Z0-9_]*)=")
@@ -185,6 +186,33 @@ class DopplerClient:
         except KeyError as exc:
             raise DopplerError(f"{exc.args[0]} is not set") from None
 
+    def get_secret(self, name: str) -> str | None:
+        """The value of ``name``, or None when the config does not hold it.
+
+        Raises :class:`DopplerError` on any other failure, naming the
+        secret but never carrying its value.
+        """
+        resp = self._send(
+            "GET",
+            SECRET_URL,
+            params={"project": self.project, "config": self.config, "name": name},
+            doing=f"reading {name} from",
+        )
+        if resp.status_code == 404:
+            return None
+        self._raise_for_status(resp, f"reading {name} from")
+        try:
+            value = resp.json()["value"]
+            # computed: references to other secrets resolved, as a
+            # consumer sees it; raw is what was typed.
+            out = value.get("computed")
+            return out if out is not None else value.get("raw")
+        except (ValueError, KeyError, TypeError, AttributeError):
+            raise DopplerError(
+                f"Doppler returned an unexpected body reading {name} from "
+                f"{self.project}/{self.config}"
+            ) from None
+
     def set_secrets(self, secrets: Mapping[str, str]) -> list[str]:
         """Create or update ``secrets``; returns the names written.
 
@@ -199,27 +227,32 @@ class DopplerClient:
             "config": self.config,
             "secrets": dict(secrets),
         }
+        resp = self._send("POST", API_URL, json=body, doing="writing")
+        self._raise_for_status(resp, "writing")
+        return sorted(secrets)
+
+    def _send(self, method: str, url: str, *, doing: str, **kwargs) -> httpx.Response:
         headers = {
             "Authorization": f"Bearer {self._token}",
             "Accept": "application/json",
         }
         try:
             if self._http is not None:
-                resp = self._http.post(API_URL, json=body, headers=headers)
-            else:
-                with httpx.Client(timeout=self._timeout) as client:
-                    resp = client.post(API_URL, json=body, headers=headers)
+                return self._http.request(method, url, headers=headers, **kwargs)
+            with httpx.Client(timeout=self._timeout) as client:
+                return client.request(method, url, headers=headers, **kwargs)
         except httpx.HTTPError as exc:
             raise DopplerError(
-                f"Doppler unreachable writing {self.project}/{self.config}: "
+                f"Doppler unreachable {doing} {self.project}/{self.config}: "
                 f"{type(exc).__name__}"
             ) from None
+
+    def _raise_for_status(self, resp: httpx.Response, doing: str) -> None:
         if resp.status_code != 200:
             raise DopplerError(
-                f"Doppler refused writing {self.project}/{self.config}: "
+                f"Doppler refused {doing} {self.project}/{self.config}: "
                 f"HTTP {resp.status_code}"
             )
-        return sorted(secrets)
 
 
 def set_secrets_with_cli(
