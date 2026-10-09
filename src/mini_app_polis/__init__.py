@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from . import activity as activity
     from . import config as config
     from . import discord as discord
+    from . import doppler as doppler
     from . import environment as environment
     from . import timing as timing
     from .request_metrics import RequestMetricsMiddleware as RequestMetricsMiddleware
@@ -48,6 +49,7 @@ __all__ = [
     "activity",
     "config",
     "discord",
+    "doppler",
     "environment",
     "load_secrets",
     "serve_with_retry",
@@ -61,6 +63,7 @@ _LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
     "activity": ("mini_app_polis.activity", None),
     "config": ("mini_app_polis.config", None),
     "discord": ("mini_app_polis.discord", None),
+    "doppler": ("mini_app_polis.doppler", None),
     "environment": ("mini_app_polis.environment", None),
     "serve_with_retry": ("mini_app_polis.serve_resilience", "serve_with_retry"),
     "load_secrets": ("mini_app_polis.ssm_secrets", "load_secrets"),

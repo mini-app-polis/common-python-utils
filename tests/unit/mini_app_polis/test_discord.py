@@ -1,4 +1,4 @@
-"""Discord transport: where each channel goes, what is labeled, and the cooldown.
+"""Discord transport: where each channel goes, what is labeled, and rate limits.
 
 The rate-limit cases are ported from api-kaianolevine-com, where they were
 written after production on 2026-09-23: Cloudflare answered every webhook
@@ -307,79 +307,184 @@ def test_no_sentry_installed_is_silent(channels, fake, monkeypatch) -> None:
 # ── Rate limits ─────────────────────────────────────────────────────────
 
 
-def test_bucket_429_holds_only_that_webhook(channels, fake) -> None:
-    fake.answer(RUNS_URL, httpx.Response(429, json={"retry_after": 5, "global": False}))
+@pytest.fixture
+def clock(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """Discord's clock, run by the test: a wait advances it instead of waiting."""
+    state: dict[str, Any] = {"now": 1000.0, "slept": []}
+
+    async def sleep(secs: float) -> None:
+        state["slept"].append(round(secs, 3))
+        state["now"] += secs
+        await asyncio.sleep(0)
+
+    monkeypatch.setattr(discord, "_now", lambda: state["now"])
+    monkeypatch.setattr(discord, "_sleep", sleep)
+    return state
+
+
+def _limited(secs: float, *, scope_global: bool = False) -> httpx.Response:
+    return httpx.Response(429, json={"retry_after": secs, "global": scope_global})
+
+
+def _ok(remaining: int = 4, reset_after: float = 0.4) -> httpx.Response:
+    return httpx.Response(
+        204,
+        headers={
+            "X-RateLimit-Remaining": str(remaining),
+            "X-RateLimit-Reset-After": str(reset_after),
+        },
+    )
+
+
+def test_bucket_429_is_waited_out_and_the_message_sent(channels, fake, clock) -> None:
+    """The production failure: a sub-second bucket 429 used to drop the
+    message and everything after it."""
+    fake.answer(RUNS_URL, _limited(0.3), httpx.Response(204))
 
     async def scenario() -> list[bool]:
-        return [
-            await _send(discord.CHANNEL_RUNS),
-            await _send(discord.CHANNEL_RUNS),
-            await _send(discord.CHANNEL_ACTIVITY),
-        ]
+        return [await _send(discord.CHANNEL_RUNS), await _send(discord.CHANNEL_RUNS)]
 
-    assert run(scenario) == [False, False, True]
-    assert len(fake.calls(RUNS_URL)) == 1
+    assert run(scenario) == [True, True]
+    assert len(fake.calls(RUNS_URL)) == 3
+    assert clock["slept"] == [0.3]
+
+
+def test_bucket_429_holds_only_that_webhook(channels, fake, clock) -> None:
+    fake.answer(RUNS_URL, _limited(5), httpx.Response(204))
+    assert run(lambda: _send(discord.CHANNEL_RUNS)) is True
+    assert clock["slept"] == [5]
+    assert discord._cooldown_remaining(ACTIVITY_URL) <= 0
+
+
+def test_global_429_holds_every_webhook(channels, fake, clock) -> None:
+    """A webhook left on a global hold makes the next webhook wait too."""
+    fake.answer(RUNS_URL, _limited(5, scope_global=True))
+    assert run(lambda: _send(discord.CHANNEL_RUNS)) is False  # refused 3 times
+    assert discord._cooldown_remaining(ACTIVITY_URL) == 5
+
+    assert run(lambda: _send("activity")) is True
+    assert clock["slept"] == [5, 5, 5]
     assert len(fake.calls(ACTIVITY_URL)) == 1
 
 
-def test_global_429_holds_every_webhook(channels, fake) -> None:
-    fake.answer(RUNS_URL, httpx.Response(429, json={"retry_after": 5, "global": True}))
-
-    async def scenario() -> list[bool]:
-        return [await _send(discord.CHANNEL_RUNS), await _send("activity")]
-
-    assert run(scenario) == [False, False]
-    assert len(fake.calls(RUNS_URL)) == 1
-    assert fake.calls(ACTIVITY_URL) == []
-
-
-def test_cloudflare_1015_holds_every_webhook_for_the_default(channels, fake) -> None:
+def test_cloudflare_1015_drops_rather_than_posting_through_it(
+    channels, fake, clock
+) -> None:
+    """A minute's hold is past any send's budget: dropped, not argued with."""
     fake.answer(RUNS_URL, httpx.Response(429, text=CLOUDFLARE_1015))
 
     async def scenario() -> list[bool]:
         return [await _send(discord.CHANNEL_RUNS), await _send("activity")]
 
     assert run(scenario) == [False, False]
+    assert len(fake.calls(RUNS_URL)) == 1
     assert fake.calls(ACTIVITY_URL) == []
+    assert clock["slept"] == []
     remaining = discord._cooldown_remaining(ACTIVITY_URL)
     assert 50 < remaining <= discord._DEFAULT_COOLDOWN_SECS
 
 
-def test_retry_after_header_sets_the_cooldown(channels, fake) -> None:
+def test_retry_after_header_sets_the_cooldown(channels, fake, clock) -> None:
     fake.answer(
         RUNS_URL,
         httpx.Response(429, text="slow down", headers={"Retry-After": "120"}),
     )
-    run(lambda: _send(discord.CHANNEL_RUNS))
+    assert run(lambda: _send(discord.CHANNEL_RUNS)) is False
     assert 110 < discord._cooldown_remaining(RUNS_URL) <= 120
 
 
-def test_absurd_retry_after_is_capped(channels, fake) -> None:
-    fake.answer(
-        RUNS_URL, httpx.Response(429, json={"retry_after": 10**9, "global": True})
-    )
+def test_absurd_retry_after_is_capped(channels, fake, clock) -> None:
+    fake.answer(RUNS_URL, _limited(10**9, scope_global=True))
     run(lambda: _send(discord.CHANNEL_RUNS))
     assert discord._cooldown_remaining(RUNS_URL) <= discord._MAX_COOLDOWN_SECS
 
 
-def test_sends_resume_after_the_cooldown(
-    channels, fake, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_sends_resume_after_a_long_cooldown(channels, fake, clock) -> None:
     fake.answer(
-        RUNS_URL,
-        httpx.Response(429, json={"retry_after": 5, "global": False}),
-        httpx.Response(204),
+        RUNS_URL, httpx.Response(429, text=CLOUDFLARE_1015), httpx.Response(204)
     )
-    now = discord.time.monotonic()
-    monkeypatch.setattr(discord.time, "monotonic", lambda: now)
     assert run(lambda: _send(discord.CHANNEL_RUNS)) is False
 
-    monkeypatch.setattr(discord.time, "monotonic", lambda: now + 6)
+    clock["now"] += discord._DEFAULT_COOLDOWN_SECS + 1
     assert run(lambda: _send(discord.CHANNEL_RUNS)) is True
     assert len(fake.calls(RUNS_URL)) == 2
 
 
-def test_rate_limit_reported_to_sentry_once(channels, fake, sentry) -> None:
+def test_a_webhook_that_keeps_refusing_is_given_up_on(
+    channels, fake, clock, sentry
+) -> None:
+    fake.answer(RUNS_URL, _limited(0.5))
+    assert run(lambda: _send(discord.CHANNEL_RUNS)) is False
+    assert len(fake.calls(RUNS_URL)) == discord._MAX_ATTEMPTS
+    assert len(sentry["messages"]) == 1
+
+
+def test_an_emptied_bucket_is_waited_for_before_a_429(channels, fake, clock) -> None:
+    fake.answer(ACTIVITY_URL, _ok(remaining=0, reset_after=1.5), _ok())
+
+    async def scenario() -> list[bool]:
+        return [await _send("activity"), await _send("activity")]
+
+    assert run(scenario) == [True, True]
+    assert clock["slept"] == [1.5]
+
+
+def test_a_burst_is_delivered_in_order_at_the_buckets_pace(
+    channels, fake, clock, sentry
+) -> None:
+    """Twelve at once — an evaluator pass — all arrive, in order, unrefused."""
+    fake.answer(ACTIVITY_URL, _ok(remaining=0, reset_after=0.4))
+
+    async def scenario() -> list[bool]:
+        return await asyncio.gather(
+            *(discord.send_payload("activity", {"content": str(n)}) for n in range(12))
+        )
+
+    assert run(scenario) == [True] * 12
+    assert [b["content"] for b in fake.bodies(ACTIVITY_URL)] == [
+        str(n) for n in range(12)
+    ]
+    assert clock["slept"] == [0.4] * 11
+    assert sentry["messages"] == []
+
+
+def test_a_burst_past_the_budget_loses_its_tail_and_reports_once(
+    channels, fake, clock, sentry
+) -> None:
+    """Every send waits at most MAX_WAIT_SECS; the rest are dropped, and
+    Sentry hears of the episode once."""
+    fake.answer(ACTIVITY_URL, _ok(remaining=0, reset_after=2))
+
+    async def scenario() -> list[bool]:
+        return await asyncio.gather(
+            *(discord.send_payload("activity", {"content": str(n)}) for n in range(10))
+        )
+
+    results = run(scenario)
+    # One every two seconds until the waiting sends' budgets run out: the
+    # head delivered in order, the tail dropped.
+    assert results == sorted(results, reverse=True)
+    assert 5 <= results.count(True) < 10
+    delivered = [b["content"] for b in fake.bodies(ACTIVITY_URL)]
+    assert delivered == [str(n) for n in range(results.count(True))]
+    assert max(clock["slept"]) <= 2
+    assert len(sentry["messages"]) == 1
+    assert "rate limit" in sentry["messages"][0]
+
+
+def test_max_wait_bounds_an_awaited_send(channels, fake, clock) -> None:
+    fake.answer(RUNS_URL, _limited(3), httpx.Response(204))
+
+    async def scenario() -> bool:
+        return await discord.send_payload(
+            discord.CHANNEL_RUNS, {"content": "x"}, max_wait=1
+        )
+
+    assert run(scenario) is False
+    assert clock["slept"] == []
+
+
+def test_rate_limit_reported_to_sentry_once(channels, fake, clock, sentry) -> None:
     fake.answer(RUNS_URL, httpx.Response(429, text=CLOUDFLARE_1015))
 
     async def scenario() -> None:
@@ -391,9 +496,23 @@ def test_rate_limit_reported_to_sentry_once(channels, fake, sentry) -> None:
     assert "rate limit" in sentry["messages"][0]
 
 
-def test_reset_cooldowns_unmutes(channels, fake) -> None:
+def test_a_successful_post_ends_the_episode(channels, fake, clock, sentry) -> None:
     fake.answer(
-        RUNS_URL, httpx.Response(429, json={"retry_after": 5}), httpx.Response(204)
+        RUNS_URL,
+        httpx.Response(429, text=CLOUDFLARE_1015),
+        httpx.Response(204),
+        httpx.Response(429, text=CLOUDFLARE_1015),
+    )
+    run(lambda: _send(discord.CHANNEL_RUNS))
+    clock["now"] += discord._DEFAULT_COOLDOWN_SECS + 1
+    run(lambda: _send(discord.CHANNEL_RUNS))
+    run(lambda: _send(discord.CHANNEL_RUNS))
+    assert len(sentry["messages"]) == 2
+
+
+def test_reset_cooldowns_unmutes(channels, fake, clock) -> None:
+    fake.answer(
+        RUNS_URL, httpx.Response(429, text=CLOUDFLARE_1015), httpx.Response(204)
     )
     assert run(lambda: _send(discord.CHANNEL_RUNS)) is False
     discord.reset_cooldowns()

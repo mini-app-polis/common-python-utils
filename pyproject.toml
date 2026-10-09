@@ -30,6 +30,10 @@ dependencies = [
   "pydantic>=2.6,<3.0",
 ]
 
+[project.scripts]
+# Run from a repo root: lists the .env.example names Doppler dev lacks.
+check-doppler-keys = "mini_app_polis.doppler:check_keys_main"
+
 [project.optional-dependencies]
 # Upper bounds are load-bearing, not ceremony: these were unbounded, so
 # `anthropic` resolved across a major boundary into 1.x, which dropped

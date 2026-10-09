@@ -31,15 +31,31 @@ to use this. ``source`` replaces the environment with any mapping of
 variable name to value: a test's fixed URLs, or a service whose own settings
 class also reads a ``.env`` file and must keep resolving from it.
 
-**Rate limits hold every send, not just the one refused.** A 429 starts a
-cooldown for its scope — one webhook when Discord says the limit is that
-webhook's bucket, all of them when it is global or when Cloudflare refused
-the request before Discord saw it (error 1015, an HTML page rather than
-JSON, applied to the caller's IP). Until the cooldown ends nothing is posted
-to that scope: posting through a 1015 is what extends it. The limit is
-reported to Sentry once, when it starts; the dropped sends are logged as
-warnings. Cooldowns are process state, shared by every caller in the
-process, because the limit Discord applies is too.
+**Rate limits are waited out, within a budget.** Sends to one webhook go
+out one at a time, in order. Discord says on every answer how many posts
+its bucket has left and when it refills (``X-RateLimit-Remaining``,
+``X-RateLimit-Reset-After``); at zero the next send waits for the refill
+instead of earning a 429. A 429 starts a cooldown for its scope — one
+webhook when Discord says the limit is that webhook's bucket, all of them
+when it is global or when Cloudflare refused the request before Discord saw
+it (error 1015, an HTML page rather than JSON, applied to the caller's IP)
+— and the refused message is sent again when it ends. Nothing is posted to
+a scope while it is cooling down: posting through a 1015 is what extends
+it.
+
+Waiting is bounded. A send spends at most ``max_wait`` seconds (default
+``MAX_WAIT_SECS``) queued behind others and waiting out limits; a message
+that would need longer is dropped and logged — a burst larger than the
+bucket loses its tail, a 1015's minute-long hold loses what is sent during
+it — rather than holding its caller indefinitely. The first drop of an
+episode is reported to Sentry; the next successful post to that webhook
+ends the episode. Cooldowns, buckets and the queue are process state,
+shared by every caller in the process, because the limit Discord applies
+is too.
+
+Before 2026-10, a 429 dropped everything sent until its cooldown ended. A
+bucket's cooldown is a fraction of a second, so an evaluator pass posting a
+dozen messages a second lost most of them, each refusal a Sentry event.
 
 **Environment labeling.** ``send_message`` prefixes its content and embed
 titles with ``[DEVELOPMENT]`` (or ``[LOCAL]``) outside production — the same
@@ -76,9 +92,11 @@ Usage::
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
+import weakref
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from typing import Any
@@ -137,6 +155,16 @@ NO_MENTIONS: Mapping[str, Any] = {"parse": []}
 #: Seconds before a post is abandoned.
 DEFAULT_TIMEOUT_SECS = 10.0
 
+#: Seconds a send may spend queued behind other sends to its webhook and
+#: waiting out rate limits, before it is dropped. Long enough for a burst to
+#: drain at Discord's per-webhook rate (about five posts per two seconds);
+#: short enough that a caller awaiting the send is not held for a 1015.
+MAX_WAIT_SECS = 10.0
+
+#: Attempts at one message, the first included: a 429 is retried after its
+#: cooldown, but a webhook that keeps refusing is not argued with.
+_MAX_ATTEMPTS = 3
+
 #: Cooldown key for a limit on every webhook at once.
 _ALL_WEBHOOKS = "*"
 #: When a 429 names no wait. Cloudflare's 1015 page usually does not.
@@ -149,19 +177,52 @@ _MAX_COOLDOWN_SECS = 3600.0
 _BODY_LOG_LIMIT = 500
 
 #: Cooldown scope (a webhook URL, or ``_ALL_WEBHOOKS``) -> the
-#: ``time.monotonic()`` value before which nothing is posted to it.
+#: ``time.monotonic()`` value before which nothing is posted to it. An
+#: emptied bucket is recorded here too, as a cooldown for its webhook.
 _cooldowns: dict[str, float] = {}
+
+#: Webhook URLs whose current rate-limit episode has been reported to
+#: Sentry. Cleared for a URL by its next successful post.
+_reported_drops: set[str] = set()
+
+#: Event loop -> webhook URL -> the lock that sends to it one at a time.
+#: Per loop, because an asyncio lock belongs to the loop it first waited
+#: on, and a test runner (or a sync caller using ``asyncio.run``) makes
+#: many loops in one process.
+_locks: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, dict[str, asyncio.Lock]]
+_locks = weakref.WeakKeyDictionary()
 
 
 def reset_cooldowns() -> None:
-    """Forget every cooldown. For tests: one test's 429 must not mute the next."""
+    """Forget every cooldown and episode. For tests: one test's 429 must not
+    mute the next."""
     _cooldowns.clear()
+    _reported_drops.clear()
+
+
+def _lock(url: str) -> asyncio.Lock:
+    """This loop's lock for ``url``."""
+    per_loop = _locks.setdefault(asyncio.get_running_loop(), {})
+    lock = per_loop.get(url)
+    if lock is None:
+        lock = per_loop[url] = asyncio.Lock()
+    return lock
+
+
+def _now() -> float:
+    """``time.monotonic()``. Here so a test can run the clock instead of waiting."""
+    return time.monotonic()
+
+
+async def _sleep(secs: float) -> None:
+    """``asyncio.sleep``. Here so a test can run the clock instead of waiting."""
+    await asyncio.sleep(secs)
 
 
 def _cooldown_remaining(url: str) -> float:
     """Seconds until ``url`` may be posted to again; zero or less means now."""
     deadline = max(_cooldowns.get(url, 0.0), _cooldowns.get(_ALL_WEBHOOKS, 0.0))
-    return deadline - time.monotonic()
+    return deadline - _now()
 
 
 def _start_cooldown(url: str, resp: httpx.Response) -> tuple[float, str]:
@@ -192,8 +253,44 @@ def _start_cooldown(url: str, resp: httpx.Response) -> tuple[float, str]:
     if not secs or secs <= 0:
         secs = _DEFAULT_COOLDOWN_SECS
     secs = min(secs, _MAX_COOLDOWN_SECS)
-    _cooldowns[scope] = time.monotonic() + secs
+    _cooldowns[scope] = max(_cooldowns.get(scope, 0.0), _now() + secs)
     return secs, scope
+
+
+def _note_bucket(url: str, resp: httpx.Response) -> None:
+    """Hold ``url`` until its bucket refills, if this answer emptied it.
+
+    Discord reports the bucket on every answer. Waiting for the refill here
+    is what keeps a burst from being answered with 429s at all.
+    """
+    if resp.headers.get("X-RateLimit-Remaining") != "0":
+        return
+    try:
+        secs = float(resp.headers.get("X-RateLimit-Reset-After", ""))
+    except ValueError:
+        return
+    if secs <= 0:
+        return
+    secs = min(secs, _MAX_COOLDOWN_SECS)
+    _cooldowns[url] = max(_cooldowns.get(url, 0.0), _now() + secs)
+
+
+def _drop(url: str, channel: str, context: str, why: str) -> bool:
+    """Log a send given up on for a rate limit; report the episode once."""
+    logger.warning(
+        with_log_prefix(
+            LOG_WARNING,
+            f"discord rate-limited; dropping ({context}) channel={channel}: {why}",
+        )
+    )
+    if url not in _reported_drops:
+        _reported_drops.add(url)
+        _sentry.capture_message(
+            f"Discord rate limit is dropping notifications ({context}) "
+            f"channel={channel}: {why}",
+            level="error",
+        )
+    return False
 
 
 def environment_prefix() -> str:
@@ -246,82 +343,117 @@ async def post_webhook(
     channel: str,
     context: str,
     timeout: float = DEFAULT_TIMEOUT_SECS,
+    max_wait: float = MAX_WAIT_SECS,
 ) -> bool:
-    """POST to one webhook URL with cooldown handling; return whether accepted.
+    """POST to one webhook URL, waiting out rate limits; return whether accepted.
 
     The lowest level here, for a payload shape this module does not build —
     a GitHub event forwarded byte-for-byte to the ``/github`` suffix, say.
     ``channel`` and ``context`` name the destination and the producer in the
     log line only: a failure that says merely "notify" cannot be traced back
-    to which caller it was. Never raises.
+    to which caller it was. ``max_wait`` bounds the time spent queued and
+    waiting on limits, not the request itself (``timeout``). Never raises.
     """
-    remaining = _cooldown_remaining(url)
-    if remaining > 0:
-        logger.warning(
-            with_log_prefix(
-                LOG_WARNING,
-                f"discord rate-limited; not sending ({context}) channel={channel} "
-                f"for another {remaining:.0f}s",
-            )
-        )
-        return False
-
+    deadline = _now() + max_wait
+    lock = _lock(url)
     try:
-        async with _client(timeout) as client:
-            resp = await client.post(url, content=content, json=json, headers=headers)
-    except Exception as exc:  # httpx.HTTPError, and anything else: never raise
+        await asyncio.wait_for(lock.acquire(), timeout=max(max_wait, 0.0))
+    except TimeoutError:
+        return _drop(url, channel, context, f"still queued after {max_wait:.0f}s")
+    try:
+        return await _post_in_turn(
+            url,
+            json=json,
+            content=content,
+            headers=headers,
+            channel=channel,
+            context=context,
+            timeout=timeout,
+            deadline=deadline,
+        )
+    finally:
+        lock.release()
+
+
+async def _post_in_turn(
+    url: str,
+    *,
+    json: dict[str, Any] | None,
+    content: bytes | None,
+    headers: dict[str, str] | None,
+    channel: str,
+    context: str,
+    timeout: float,
+    deadline: float,
+) -> bool:
+    """``post_webhook`` once it holds the webhook's lock."""
+    for _attempt in range(_MAX_ATTEMPTS):
+        wait = _cooldown_remaining(url)
+        if wait > 0:
+            if _now() + wait > deadline:
+                return _drop(url, channel, context, f"held for another {wait:.0f}s")
+            await _sleep(wait)
+
+        try:
+            async with _client(timeout) as client:
+                resp = await client.post(
+                    url, content=content, json=json, headers=headers
+                )
+        except Exception as exc:  # httpx.HTTPError, and anything else: never raise
+            logger.error(
+                with_log_prefix(
+                    LOG_FAILURE,
+                    f"discord post failed ({context}) channel={channel}: {exc!r}",
+                )
+            )
+            _sentry.capture_exception(exc)
+            return False
+
+        _note_bucket(url, resp)
+
+        if resp.is_success:
+            _reported_drops.discard(url)
+            logger.info(
+                with_log_prefix(
+                    LOG_SUCCESS,
+                    f"discord notified ({context}) channel={channel} "
+                    f"status={resp.status_code}",
+                )
+            )
+            return True
+
+        if resp.status_code == 429:
+            secs, scope = _start_cooldown(url, resp)
+            held = "every webhook" if scope == _ALL_WEBHOOKS else "this webhook"
+            # A warning, not a fault: waiting it out is the plan. A message
+            # that cannot be is reported by _drop.
+            logger.warning(
+                with_log_prefix(
+                    LOG_WARNING,
+                    f"discord rate-limited ({context}) channel={channel}; "
+                    f"holding {held} for {secs:.1f}s",
+                )
+            )
+            continue
+
+        # A non-2xx is Discord rejecting the message, not a transport fault:
+        # the body says why, since the usual causes are a malformed embed or
+        # a revoked webhook. Its start is enough for that.
         logger.error(
             with_log_prefix(
                 LOG_FAILURE,
-                f"discord post failed ({context}) channel={channel}: {exc!r}",
-            )
-        )
-        _sentry.capture_exception(exc)
-        return False
-
-    if resp.is_success:
-        logger.info(
-            with_log_prefix(
-                LOG_SUCCESS,
-                f"discord notified ({context}) channel={channel} "
-                f"status={resp.status_code}",
-            )
-        )
-        return True
-
-    if resp.status_code == 429:
-        secs, scope = _start_cooldown(url, resp)
-        held = "every webhook" if scope == _ALL_WEBHOOKS else "this webhook"
-        logger.error(
-            with_log_prefix(
-                LOG_FAILURE,
-                f"discord rate-limited ({context}) channel={channel}; "
-                f"holding {held} for {secs:.0f}s",
+                f"discord rejected ({context}) channel={channel} "
+                f"status={resp.status_code} body={resp.text[:_BODY_LOG_LIMIT]}",
             )
         )
         _sentry.capture_message(
-            f"Discord rate limit ({context}) channel={channel}: holding {held} "
-            f"for {secs:.0f}s",
+            f"Discord rejected notification ({context}) channel={channel}: "
+            f"{resp.status_code}",
             level="error",
         )
         return False
 
-    # A non-2xx is Discord rejecting the message, not a transport fault: the
-    # body says why, since the usual causes are a malformed embed or a revoked
-    # webhook. Its start is enough for that.
-    logger.error(
-        with_log_prefix(
-            LOG_FAILURE,
-            f"discord rejected ({context}) channel={channel} "
-            f"status={resp.status_code} body={resp.text[:_BODY_LOG_LIMIT]}",
-        )
-    )
-    _sentry.capture_message(
-        f"Discord rejected notification ({context}) channel={channel}: "
-        f"{resp.status_code}",
-        level="error",
-    )
-    return False
+    return _drop(url, channel, context, f"refused {_MAX_ATTEMPTS} times")
 
 
 async def send_payload(
@@ -331,6 +463,7 @@ async def send_payload(
     context: str = "notify",
     source: Mapping[str, str | None] | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECS,
+    max_wait: float = MAX_WAIT_SECS,
 ) -> bool:
     """Post a Discord message body, exactly as given, to this channel.
 
@@ -352,7 +485,12 @@ async def send_payload(
         )
         return False
     return await post_webhook(
-        base, json=payload, channel=channel, context=context, timeout=timeout
+        base,
+        json=payload,
+        channel=channel,
+        context=context,
+        timeout=timeout,
+        max_wait=max_wait,
     )
 
 
@@ -403,6 +541,7 @@ async def send_message(
     allowed_mentions: Mapping[str, Any] | None = NO_MENTIONS,
     source: Mapping[str, str | None] | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECS,
+    max_wait: float = MAX_WAIT_SECS,
 ) -> bool:
     """Post one message to this channel; return whether Discord accepted it.
 
@@ -439,5 +578,10 @@ async def send_message(
         _sentry.capture_exception(exc)
         return False
     return await send_payload(
-        channel, payload, context=context, source=source, timeout=timeout
+        channel,
+        payload,
+        context=context,
+        source=source,
+        timeout=timeout,
+        max_wait=max_wait,
     )
