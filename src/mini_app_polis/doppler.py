@@ -103,7 +103,10 @@ def doppler_names(project: str, config: str = LOCAL_CONFIG) -> set[str]:
     )
     if result.returncode != 0:
         raise DopplerError(f"doppler failed: {result.stderr.strip()}")
-    return set(json.loads(result.stdout))
+    try:
+        return set(json.loads(result.stdout))
+    except ValueError:
+        raise DopplerError("doppler returned output that is not JSON") from None
 
 
 def check_keys(root: Path) -> int:
