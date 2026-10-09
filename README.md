@@ -46,6 +46,7 @@ dependencies = [
 | `asana/` | `from mini_app_polis.asana import AsanaClient` | Asana task creation with external-id idempotency |
 | `config.py` | `from mini_app_polis import config` | Env-var driven shared config (Spotify, Google, VDJ) |
 | `discord.py` | `from mini_app_polis import discord` | Discord webhook transport: named channels, rate-limit cooldowns, environment labels, never raises |
+| `doppler.py` | `from mini_app_polis.doppler import DopplerClient` | Writes secrets back to Doppler (API or CLI), and the `check-doppler-keys` console script |
 | `google/` | `from mini_app_polis.google import GoogleAPI` | Drive + Sheets facade |
 | `llm/` | `from mini_app_polis.llm import build_llm, LLMMessage` | OpenAI + Anthropic clients (optional extra) |
 | `mp3/` | `from mini_app_polis.mp3 import ...` | AcoustID identification, tagging, renaming |
@@ -193,11 +194,15 @@ text a person typed cannot ping `@everyone`; `send_payload` posts a body
 exactly as given instead. Every
 call returns whether Discord accepted the message and never raises: failures
 are logged and, if the process has initialised `sentry_sdk`, reported there.
-A 429 holds every later send to that webhook (or all of them, for a global
-or Cloudflare limit) until its cooldown ends, rather than posting through
-it. `webhook_url(..., source=...)` and the `source=` argument on the send
+Sends to one webhook go out one at a time, in order, paced by the
+bucket Discord reports on every answer; a 429 holds that webhook (or all of
+them, for a global or Cloudflare limit) and the message is sent again when
+the hold ends, rather than posting through it. A send waits at most
+`MAX_WAIT_SECS` (10 s; `max_wait=` to change it) — a burst larger than that
+loses its tail, a Cloudflare 1015 drops what is sent during it — and the
+first drop of an episode is reported to Sentry. `webhook_url(..., source=...)` and the `source=` argument on the send
 functions read the variables from a mapping instead of the environment.
-`post_webhook` is the cooldown-aware POST underneath, for payloads this
+`post_webhook` is the rate-limit-aware POST underneath, for payloads this
 module does not shape (GitHub events forwarded to the webhook's `/github`
 suffix). See the module docstring for the rest.
 
@@ -364,7 +369,14 @@ doppler run -- uv run pytest contract --no-cov
 ```
 
 Local runs use the `dev` config only. `.env.example` lists the names this
-library reads; the values live in Doppler.
+library reads; the values live in Doppler. Uncommented names are required,
+commented ones optional. Every repo that depends on this library gets the
+`check-doppler-keys` console script, which lists any required name that
+`dev` is missing (names only, never values):
+
+```bash
+uv run check-doppler-keys
+```
 
 Key variables:
 
@@ -384,6 +396,7 @@ Key variables:
 | `DISCORD_WEBHOOK_URL_DEFAULT` / `_ERRORS` / `_ACTIVITY` / `_RUNS` | `discord`, `activity` | One webhook per channel. Optional; each falls back to `DISCORD_WEBHOOK_URL` |
 | `ANTHROPIC_API_KEY` | `llm` extra | Anthropic LLM calls |
 | `OPENAI_API_KEY` | `llm` extra | OpenAI LLM calls |
+| `DOPPLER_TOKEN` / `DOPPLER_PROJECT` / `DOPPLER_CONFIG` | `DopplerClient.from_env()` | Writing a secret back to Doppler from a service. The token is a service token with write access to that one config; Doppler's syncs inject the other two |
 
 ---
 
