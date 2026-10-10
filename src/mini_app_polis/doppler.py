@@ -25,7 +25,6 @@ SSM and Railway through the existing syncs; nobody copies it by hand.
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import shutil
@@ -35,6 +34,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 import httpx
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 #: The config local runs use. Never ``prd``: that one is synced to the
 #: platforms, and a laptop has no business reading production credentials.
@@ -50,6 +50,32 @@ _PROJECT = re.compile(r"^\s*-?\s*project:\s*(\S+)\s*$", re.MULTILINE)
 
 class DopplerError(RuntimeError):
     """Doppler refused a request, or could not be reached."""
+
+
+# ---------------------------------------------------------------------------
+# What Doppler answers with
+# ---------------------------------------------------------------------------
+#
+# Both are validated with the input dropped from any error: a secret body
+# carries the value, so a ValidationError (which quotes its input) must
+# never be chained or logged.
+
+#: ``doppler secrets --only-names --json``: an object keyed by secret name.
+_SecretNames = TypeAdapter(dict[str, object])
+
+
+class _SecretValue(BaseModel):
+    """``value`` in a secret body. ``computed`` has references to other
+    secrets resolved, as a consumer sees it; ``raw`` is what was typed."""
+
+    raw: str | None = None
+    computed: str | None = None
+
+
+class _SecretBody(BaseModel):
+    """``GET /v3/configs/config/secret``."""
+
+    value: _SecretValue
 
 
 # ---------------------------------------------------------------------------
@@ -105,8 +131,8 @@ def doppler_names(project: str, config: str = LOCAL_CONFIG) -> set[str]:
     if result.returncode != 0:
         raise DopplerError(f"doppler failed: {result.stderr.strip()}")
     try:
-        return set(json.loads(result.stdout))
-    except ValueError:
+        return set(_SecretNames.validate_json(result.stdout))
+    except ValidationError:
         raise DopplerError("doppler returned output that is not JSON") from None
 
 
@@ -202,16 +228,13 @@ class DopplerClient:
             return None
         self._raise_for_status(resp, f"reading {name} from")
         try:
-            value = resp.json()["value"]
-            # computed: references to other secrets resolved, as a
-            # consumer sees it; raw is what was typed.
-            out = value.get("computed")
-            return out if out is not None else value.get("raw")
-        except (ValueError, KeyError, TypeError, AttributeError):
+            value = _SecretBody.model_validate_json(resp.content).value
+        except ValidationError:
             raise DopplerError(
                 f"Doppler returned an unexpected body reading {name} from "
                 f"{self.project}/{self.config}"
             ) from None
+        return value.computed if value.computed is not None else value.raw
 
     def set_secrets(self, secrets: Mapping[str, str]) -> list[str]:
         """Create or update ``secrets``; returns the names written.
