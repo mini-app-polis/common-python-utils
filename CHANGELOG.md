@@ -1,3 +1,10 @@
+## [5.25.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.25.0...v5.25.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **doppler:** validate CLI and API payloads through pydantic models ([0f3c3cb](https://github.com/mini-app-polis/common-python-utils/commit/0f3c3cb58b108a617a40124608eb8286d1118937))
+
 # [5.25.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.24.1...v5.25.0) (2026-10-09)
 
 
