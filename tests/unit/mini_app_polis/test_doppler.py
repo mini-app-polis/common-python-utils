@@ -314,6 +314,17 @@ def test_get_secret_unexpected_body_is_a_doppler_error() -> None:
         _client(handler).get_secret("A")
 
 
+def test_get_secret_wrong_shape_never_carries_the_value() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"value": {"raw": ["super-secret"]}})
+
+    with pytest.raises(DopplerError, match="unexpected body") as exc:
+        _client(handler).get_secret("A")
+    assert "super-secret" not in str(exc.value)
+    assert exc.value.__cause__ is None
+    assert exc.value.__suppress_context__ is True
+
+
 def test_get_secret_transport_failure_is_a_doppler_error() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("boom")
