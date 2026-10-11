@@ -1,3 +1,10 @@
+## [5.25.2](https://github.com/mini-app-polis/common-python-utils/compare/v5.25.1...v5.25.2) (2026-10-11)
+
+
+### Bug Fixes
+
+* **google:** retry Google API calls on dropped connections ([a36c723](https://github.com/mini-app-polis/common-python-utils/commit/a36c7234928258693c6f9e29f05bc59aa37a1b2c))
+
 ## [5.25.1](https://github.com/mini-app-polis/common-python-utils/compare/v5.25.0...v5.25.1) (2026-10-10)
 
 
