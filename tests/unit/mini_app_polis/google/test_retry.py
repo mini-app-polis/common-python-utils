@@ -101,3 +101,35 @@ def test_execute_with_retry_non_http_error_does_not_retry(monkeypatch):
         raise AssertionError("Expected ValueError")
 
     assert calls["n"] == 1
+
+
+def test_is_retryable_non_http_error_connection_errors():
+    from mini_app_polis.google._retry import is_retryable_non_http_error
+
+    # A dropped keep-alive connection: EPIPE on write, reset or abort otherwise.
+    assert is_retryable_non_http_error(BrokenPipeError(32, "Broken pipe")) is True
+    assert is_retryable_non_http_error(OSError(32, "Broken pipe")) is True
+    assert is_retryable_non_http_error(ConnectionResetError(104, "reset")) is True
+    assert is_retryable_non_http_error(ConnectionAbortedError(103, "aborted")) is True
+
+    # Not transport failures.
+    assert is_retryable_non_http_error(OSError(2, "No such file")) is False
+    assert is_retryable_non_http_error(ValueError("boom")) is False
+
+
+def test_execute_with_retry_retries_broken_pipe(monkeypatch):
+    from mini_app_polis.google._retry import RetryConfig, execute_with_retry
+
+    monkeypatch.setattr("mini_app_polis.google._retry.time.sleep", lambda _s: None)
+
+    state = {"n": 0}
+
+    def fn():
+        state["n"] += 1
+        if state["n"] == 1:
+            raise BrokenPipeError(32, "Broken pipe")
+        return "ok"
+
+    retry = RetryConfig(max_retries=3, base_delay_s=0.01, max_delay_s=0.02)
+    assert execute_with_retry(fn, context="finding folder", retry=retry) == "ok"
+    assert state["n"] == 2

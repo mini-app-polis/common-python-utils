@@ -108,6 +108,13 @@ def is_retryable_non_http_error(error: Exception) -> bool:
     if isinstance(error, httplib2.HttpLib2Error):
         return True
 
+    # A pooled connection the peer has dropped: BrokenPipeError (EPIPE) when
+    # writing to it after an idle spell, ConnectionResetError /
+    # ConnectionAbortedError otherwise. httplib2 leaves the dead connection in
+    # its pool, but the next attempt finds it unusable and reconnects.
+    if isinstance(error, ConnectionError):
+        return True
+
     # Some transient connection resets/aborts surface as generic OSError
     # (keep conservative by checking errno when available).
     if isinstance(error, OSError):
