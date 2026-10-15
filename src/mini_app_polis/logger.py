@@ -115,10 +115,19 @@ _clamp_credential_bearing_loggers()
 
 #: Secrets that travel in a URL's path, where the floor above cannot keep
 #: them out of an INFO line. Each pattern's first group is kept and the rest
-#: of the match is replaced. Discord's webhook token is the observed one; add
-#: a pattern here for any other service that puts a credential in a URL.
+#: of the match is replaced. Add a pattern here for any other service that
+#: puts a credential in a URL.
+#:
+#: * Discord: the webhook token, ``/api/webhooks/<id>/<token>`` — the
+#:   observed leak.
+#: * Healthchecks.io: the check's UUID, or the project ping key in the
+#:   ``/<ping-key>/<slug>`` form, is the whole credential — anyone holding
+#:   the URL can mark the check up or down, which is exactly the silence a
+#:   dead-man's switch exists to catch. The ``/start``, ``/fail`` or slug
+#:   after it is kept.
 _URL_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(/api/webhooks/\d+/)[^/\s\"'?#]+"),
+    re.compile(r"(hc-ping\.com/)[^/\s\"'?#]+"),
 )
 
 _REDACTED = "<redacted>"

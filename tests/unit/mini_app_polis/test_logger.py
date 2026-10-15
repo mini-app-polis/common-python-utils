@@ -5,6 +5,8 @@ import importlib
 import logging
 import sys
 
+import pytest
+
 
 def _load_real_logger_module():
     # tests/unit/mini_app_polis/google/conftest.py stubs mini_app_polis.logger for the whole session;
@@ -181,6 +183,31 @@ def test_discord_webhook_token_is_redacted_from_httpx_lines() -> None:
     assert "AbC-123_xyz" not in line
     assert "/api/webhooks/1546975930675765312/<redacted>/github" in line
     assert line.startswith("HTTP Request: POST")
+
+
+@pytest.mark.parametrize(
+    ("url", "kept"),
+    [
+        (
+            "https://hc-ping.com/5a1c8f0e-3b7d-4e2a-9c61-0d4f8e2b7a19",
+            "https://hc-ping.com/<redacted>",
+        ),
+        (
+            "https://hc-ping.com/5a1c8f0e-3b7d-4e2a-9c61-0d4f8e2b7a19/start",
+            "https://hc-ping.com/<redacted>/start",
+        ),
+        (
+            "https://hc-ping.com/fqOOd6-F4MMNuCEnzTU01w/db-backup/fail",
+            "https://hc-ping.com/<redacted>/db-backup/fail",
+        ),
+    ],
+)
+def test_healthchecks_ping_credential_is_redacted(url: str, kept: str) -> None:
+    """A ping URL is itself the credential that marks a check up or down."""
+    _load_real_logger_module()
+    line = _httpx_request_line(url)
+    assert "5a1c8f0e" not in line and "fqOOd6" not in line
+    assert kept in line
 
 
 def test_urls_without_a_secret_are_left_alone() -> None:
