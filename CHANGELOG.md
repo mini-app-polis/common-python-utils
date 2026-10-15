@@ -1,3 +1,10 @@
+## [5.25.4](https://github.com/mini-app-polis/common-python-utils/compare/v5.25.3...v5.25.4) (2026-10-15)
+
+
+### Bug Fixes
+
+* **logger:** redact Healthchecks.io ping credentials from request lines ([82f35cf](https://github.com/mini-app-polis/common-python-utils/commit/82f35cf24b2b2d021fdc2a7c88965fc9bc4f6f92))
+
 ## [5.25.3](https://github.com/mini-app-polis/common-python-utils/compare/v5.25.2...v5.25.3) (2026-10-12)
 
 
