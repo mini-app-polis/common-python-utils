@@ -1,3 +1,10 @@
+## [5.25.5](https://github.com/mini-app-polis/common-python-utils/compare/v5.25.4...v5.25.5) (2026-10-16)
+
+
+### Bug Fixes
+
+* **logger:** write Railway structured JSON to stdout so log levels are read correctly ([029cc54](https://github.com/mini-app-polis/common-python-utils/commit/029cc546f7b5b6f1fd5c0c71d456189adab6b7b7))
+
 ## [5.25.4](https://github.com/mini-app-polis/common-python-utils/compare/v5.25.3...v5.25.4) (2026-10-15)
 
 
