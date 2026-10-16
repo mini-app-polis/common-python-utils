@@ -45,7 +45,7 @@ dependencies = [
 | `api/contract/` | `from mini_app_polis.api.contract import IngestSet, ENDPOINTS` | Typed request/response models for the Kaiano API endpoints the fleet calls |
 | `asana/` | `from mini_app_polis.asana import AsanaClient` | Asana task creation with external-id idempotency |
 | `config.py` | `from mini_app_polis import config` | Env-var driven shared config (Spotify, Google, VDJ) |
-| `deadline.py` | `from mini_app_polis.deadline import run_deadline` | A run deadline the library's retry loops respect: no attempt starts, and no backoff is waited out, past it |
+| `deadline.py` | `from mini_app_polis.deadline import run_deadline` | A run deadline the library's retry loops respect: no attempt starts, and no backoff is waited out, past it; `without_run_deadline()` lifts it for cleanup |
 | `discord.py` | `from mini_app_polis import discord` | Discord webhook transport: named channels, rate-limit cooldowns, environment labels, never raises |
 | `doppler.py` | `from mini_app_polis.doppler import DopplerClient` | Reads and writes secrets in one Doppler config (API or CLI), and the `check-doppler-keys` console script |
 | `google/` | `from mini_app_polis.google import GoogleAPI` | Drive + Sheets facade |
@@ -288,6 +288,22 @@ is skipped, re-raising the error that prompted it. An attempt already in
 flight is not interrupted, so leave room for one call's own timeout. Nesting
 keeps the earlier deadline; `remaining_seconds()` returns `None` when none is
 set, and without one nothing changes.
+
+Cleanup that must happen because the run is out of time — rolling back a
+half-finished write — would be refused by the deadline that triggered it.
+`without_run_deadline()` clears the deadline for its block and restores it on
+exit, so that cleanup gets the ordinary retries:
+
+```python
+from mini_app_polis.deadline import without_run_deadline
+
+with without_run_deadline():
+    drive.delete_file(half_written_id)
+```
+
+Keep such blocks short: they spend the headroom between the deadline and the
+hard ceiling. A `run_deadline` nested inside starts afresh and can bound the
+cleanup itself.
 
 The deadline is a `contextvars` value: `asyncio.to_thread` and new asyncio
 tasks inherit it, a plain `threading.Thread` does not. See the module
