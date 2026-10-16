@@ -1,3 +1,10 @@
+# [6.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.1.1...v6.2.0) (2026-10-16)
+
+
+### Features
+
+* **deadline:** add without_run_deadline() for cleanup that must outlive the run deadline ([ee35246](https://github.com/mini-app-polis/common-python-utils/commit/ee352462feec4142b6b10a036f92d716573360d6))
+
 ## [6.1.1](https://github.com/mini-app-polis/common-python-utils/compare/v6.1.0...v6.1.1) (2026-10-16)
 
 
