@@ -64,11 +64,12 @@ dependencies = [
 ```python
 from mini_app_polis.api import KaianoApiClient
 
-# Set KAIANO_API_BASE_URL and this machine's own key
-# (deejay-cog -> DEEJAY_COG_API_KEY) in the environment.
-# The machine name is what selects the key variable, and the key is
-# what names this caller to the API. There is no fallback: without it,
-# every call returns 401.
+# Set KAIANO_API_BASE_URL (KAIANO_API_BASE_URL_DEV outside production)
+# and this machine's own key (deejay-cog -> DEEJAY_COG_API_KEY) in the
+# environment. The machine name is what selects the key variable, and the
+# key is what names this caller to the API. Without it the client falls
+# back to KAIANO_API_KEY; with neither set, every call raises
+# KaianoApiError before any request is sent.
 client = KaianoApiClient.from_env("deejay-cog")
 result = client.post("/sets", {"name": "My Set"})
 ```
@@ -345,6 +346,7 @@ On every `git commit`, the following run automatically:
 - **ruff-format** — formats code
 - **python-check-mock-methods** — catches incorrect mock usage
 - **python-use-type-annotations** — flags old-style type comments
+- **gitleaks** — blocks commits that contain secrets
 
 If any hook fails, the commit is blocked. Ruff will auto-fix in place — just `git add .` and re-commit.
 
@@ -382,7 +384,7 @@ Key variables:
 
 | Variable | Used by | Required for |
 |---|---|---|
-| `KAIANO_API_BASE_URL` | `KaianoApiClient` | Calling internal FastAPI services |
+| `KAIANO_API_BASE_URL` | `KaianoApiClient` | Calling internal FastAPI services, in production. Every other environment reads `KAIANO_API_BASE_URL_DEV`, with no fallback between the two |
 | `<MACHINE_NAME>_API_KEY` | `KaianoApiClient` | This machine's own named key, e.g. `DEEJAY_COG_API_KEY`. Derived from the machine name by `machine_key_env_var()` |
 | `KAIANO_API_KEY` | `KaianoApiClient` | Unnamed fallback for a caller that declares no machine name. Authenticates, but its writes are unattributable |
 | `ASANA_ACCESS_TOKEN` | `AsanaClient` | Asana personal access token. Read per request, so rotation needs no restart |

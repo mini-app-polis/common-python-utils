@@ -32,11 +32,10 @@ import pytest
 
 import mini_app_polis.pipeline_status as ps
 
-# post_findings and make_failure_hook are deprecated but still tested until
-# they are removed; their warning is asserted once, below, not on every test.
+# post_findings is deprecated but still tested until it is removed; its
+# warning is asserted once, below, not on every test.
 pytestmark = pytest.mark.filterwarnings(
-    "ignore:pipeline_status\\.(post_findings|make_failure_hook) is deprecated"
-    ":DeprecationWarning"
+    "ignore:pipeline_status\\.post_findings is deprecated:DeprecationWarning"
 )
 
 
@@ -300,11 +299,6 @@ def test_post_findings_is_deprecated(monkeypatch) -> None:
         ps.post_findings(repo="r", flow_name="f", findings=[])
 
 
-def test_make_failure_hook_is_deprecated() -> None:
-    with pytest.warns(DeprecationWarning, match="Prefect"):
-        ps.make_failure_hook("f", repo="r")
-
-
 def test_dimension_override(monkeypatch) -> None:
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
     with captured() as cap:
@@ -457,54 +451,6 @@ def test_capture_reports_when_sentry_is_present() -> None:
         ps._capture(RuntimeError("boom"))
 
     sentry.capture_exception.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# make_failure_hook
-# ---------------------------------------------------------------------------
-
-
-def test_failure_hook_crashed_reports_error(monkeypatch) -> None:
-    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
-    hook = ps.make_failure_hook("fl", repo="my-cog")
-    state = SimpleNamespace(name="Crashed", type="CRASHED")
-    with captured() as cap:
-        hook(None, None, state)
-    built = _built(cap)
-    assert built["severity"] == "ERROR"
-    assert built["source"] == "flow_hook"
-    assert built["repo"] == "my-cog"
-
-
-def test_failure_hook_failed_reports_warn(monkeypatch) -> None:
-    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
-    hook = ps.make_failure_hook("fl", repo="my-cog")
-    state = SimpleNamespace(name="Failed", type="FAILED")
-    with captured() as cap:
-        hook(None, None, state)
-    assert _built(cap)["severity"] == "WARN"
-
-
-def test_failure_hook_production_only_false_no_delivery(monkeypatch) -> None:
-    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
-    hook = ps.make_failure_hook("fl", repo="my-cog", production_only=False)
-    state = SimpleNamespace(name="Failed", type="FAILED")
-    with captured() as cap:
-        hook(None, None, state)
-    cap.deliver.assert_not_called()
-
-
-def test_failure_hook_swallows_post_run_finding_exception(monkeypatch) -> None:
-    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
-    hook = ps.make_failure_hook("fl", repo="my-cog")
-    state = SimpleNamespace(name="Failed", type="FAILED")
-    mock_log = MagicMock()
-    with (
-        patch.object(ps, "post_run_finding", side_effect=RuntimeError("x")),
-        patch.object(ps, "get_prefect_logger", return_value=mock_log),
-    ):
-        hook(None, None, state)
-    mock_log.exception.assert_called()
 
 
 # ---------------------------------------------------------------------------
@@ -859,27 +805,15 @@ def test_processor_version_stamped_on_suppressed_success(monkeypatch) -> None:
     assert "All good. (processor=1.2.3)" in mock_log.info.call_args.args
 
 
-def test_processor_version_failure_hook_stamps(monkeypatch) -> None:
-    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
-    _reset_version_cache()
-    monkeypatch.setattr(ps, "version", lambda _: "1.2.3")
-    hook = ps.make_failure_hook("fl", repo="my-cog")
-    state = SimpleNamespace(name="Failed", type="FAILED")
-    with captured() as cap:
-        hook(None, None, state)
-    assert "(processor=1.2.3)" in _built(cap)["text"]
-
-
 # ---------------------------------------------------------------------------
 # CRITICAL severity
 # ---------------------------------------------------------------------------
 #
-# CRITICAL is for the pre-flow process lifecycle only —
-# serve_resilience.serve_with_retry emits it with source="startup" when a
-# cog cannot register its deployments and is exiting. These tests pin the
-# two properties that matter: CRITICAL is carried verbatim (no downgrade,
-# the same class of bug as the old evaluator-cog SUCCESS→WARN downgrade),
-# and it stays scoped to startup — the flow-run paths cap at ERROR.
+# CRITICAL is for the pre-flow process lifecycle only, with
+# source="startup". Nothing in the library emits it since the Prefect-era
+# startup helper went, but it stays in the Literal. These tests pin that
+# CRITICAL is carried verbatim (no downgrade, the same class of bug as the
+# old evaluator-cog SUCCESS→WARN downgrade).
 
 
 def test_critical_severity_preserved(monkeypatch) -> None:
@@ -916,26 +850,6 @@ def test_critical_available_via_post_findings_batch(monkeypatch) -> None:
             source="startup",
         )
     assert post.call_args.args[0]["severity"] == "CRITICAL"
-
-
-def test_failure_hook_never_emits_critical(monkeypatch) -> None:
-    """Scope guard: flow-run outcomes cap at ERROR, however bad the state.
-
-    CRITICAL means "no flow ran at all". If make_failure_hook ever starts
-    emitting it, the one signal that distinguishes a dead process from a
-    crashed run is diluted.
-    """
-    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
-    _reset_version_cache()
-    hook = ps.make_failure_hook("fl", repo="my-cog")
-    for state in (
-        SimpleNamespace(name="Crashed", type="CRASHED"),
-        SimpleNamespace(name="Failed", type="FAILED"),
-        SimpleNamespace(name="Weird", type="SOMETHING_ELSE"),
-    ):
-        with captured() as cap:
-            hook(None, None, state)
-        assert _built(cap)["severity"] in {"WARN", "ERROR"}
 
 
 # ---------------------------------------------------------------------------

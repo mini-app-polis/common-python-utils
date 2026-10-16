@@ -1,8 +1,9 @@
 """Shared pipeline-status reporting for Kaiano cogs.
 
-Each cog (deejay-cog, evaluator-cog, retag-cog, …) runs as one or more
-Prefect flows and reports what happened. This module centralises that
-wiring so no cog has to hand-roll the helpers, hooks, or payload shapes.
+Each cog (deejay-cog, evaluator-cog, transcription-cog, …) runs as a
+Lambda worker or a Railway one-shot and reports what happened. This
+module centralises that wiring so no cog has to hand-roll the helpers or
+payload shapes.
 
 **Two sinks, because there are two different things being reported.**
 
@@ -11,7 +12,7 @@ an evaluator judged about a repo against a revision of the standards
 catalog. These are records. They are compared, counted and burned down
 over time, so they are written to a table and stay there.
 
-:func:`post_run_finding` and :func:`make_failure_hook` → ``POST
+:func:`post_run_finding` and :class:`RunReport` → ``POST
 /v1/notify``. Run status: this flow finished, this flow crashed. Nothing
 is persisted. It used to travel the findings path, which is why the API
 had to null out ``standards_version`` on those rows to stop Pipeline
@@ -34,9 +35,9 @@ Two entry points cover the common cases:
 
 - :func:`post_run_finding` — called at the end of a flow run to report a
   single SUCCESS/WARN outcome with optional free-form counter extras.
-- :func:`make_failure_hook` — returns a Prefect ``on_failure`` /
-  ``on_crashed`` hook that reports WARN (Failed) or ERROR (Crashed)
-  when the flow itself dies.
+- :meth:`RunReport.send` — a run's issues and outcomes, accumulated as
+  the work goes and reported as one message (:func:`run_report` sends it
+  however the block ends).
 
 Both are **best-effort** — they swallow every exception they can so a
 broken notification never masks the real failure of the flow it is
@@ -59,10 +60,10 @@ delivers at all" — deejay-cog's manual flows pass ``production_only=False``
 so their reports stay local. Renaming it is a 6.0 change; every consumer
 pins ``>=5,<6``. Development *does* deliver, to the development API.
 
-This module deliberately performs Prefect imports lazily so consumers
-that don't use Prefect (or test harnesses without it) don't pay the
-import cost. ``mini_app_polis`` does not declare Prefect as a runtime
-dependency.
+The fleet no longer runs on Prefect. :func:`get_prefect_logger` and
+:func:`get_run_id` still import it lazily, and fall back when it is
+absent, because callers still use them; ``mini_app_polis`` does not
+declare Prefect as a dependency.
 
 Severity classification:
 
@@ -70,15 +71,12 @@ Severity classification:
              review. Includes "nothing to do" (empty input) and
              intentional skip paths.
   WARN     — run completed but produced results worth a human look
-             (e.g. some items failed, some inputs malformed). Also used
-             by :func:`make_failure_hook` for Prefect "Failed" state.
-  ERROR    — flow-level crash. Emitted only by :func:`make_failure_hook`
-             when Prefect reports the run as "Crashed".
-  CRITICAL — process-level failure with no flow run at all: the cog
-             could not register its deployments and is exiting. Emitted
-             only by :mod:`mini_app_polis.serve_resilience` with
-             ``source="startup"``. See the :data:`Severity` docstring
-             for why this is deliberately narrow.
+             (e.g. some items failed, some inputs malformed).
+  ERROR    — the run itself crashed or terminally failed.
+  CRITICAL — process-level failure with no run at all: the cog could
+             not start and is exiting. Nothing in this library emits it
+             any more. See the :data:`Severity` docstring for why it is
+             deliberately narrow.
 
 The Kaiano API's ``PipelineEvaluationCreate`` schema is the source of
 truth for the findings payload; :func:`post_findings` sends ``run_id``,
@@ -106,7 +104,7 @@ import os
 import time
 import warnings
 from collections import Counter
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import cache
@@ -135,8 +133,7 @@ job?" — the question every self-reporting cog is answering:
   WARN     — run completed but produced something worth a look.
   ERROR    — flow itself crashed or terminally failed.
   CRITICAL — the cog process itself could not start or stay up; no
-             flow run exists to report on. Emitted only from the
-             pre-flow lifecycle (see :mod:`mini_app_polis.serve_resilience`).
+             flow run exists to report on. Pre-flow lifecycle only.
 
 ``INFO`` is intentionally absent from this enum. It belongs to the
 LLM-evaluator and webhook paths, where a neutral observation ("flow
@@ -154,15 +151,12 @@ reporting". That reasoning was correct for its scope and is preserved
 here, because it still governs how CRITICAL may be used.
 
 The July 2026 fleet-down incident produced the exception the original
-note anticipated. A transient Prefect Cloud 503 on the deployment-
-registration endpoint killed all four ``serve()``-based cogs at
-startup. The crash happened *before any flow run existed*, so the
-``on_failure`` / ``on_crashed`` hooks — which attach to flow runs —
-could not fire, and the fleet went down silently. With
-:func:`mini_app_polis.serve_resilience.serve_with_retry`, that path is
-now reachable: the process is alive enough to POST one finding on its
-way out. "All four cogs are down and no flow will ever run" is exactly
-the cross-cog, fleet-wide signal CRITICAL was reserved for.
+note anticipated: a transient Prefect Cloud 503 on deployment
+registration killed every ``serve()``-based cog at startup, before any
+flow run existed to report on. The Prefect-era startup retry helper
+that answered it reported that case as CRITICAL. That helper went with
+Prefect, and nothing in this library emits CRITICAL now; the value is
+kept so a consumer that has the same need can.
 
 CRITICAL therefore remains **narrowly scoped**, and the original
 prohibition still stands for everything else:
@@ -509,7 +503,7 @@ def _build_message(
 
     Everything a person needs to decide whether to go look, and nothing
     else. The run id is in the footer rather than the body because it is
-    what you copy into Prefect once you have decided to.
+    what you search the logs for once you have decided to.
     """
     embed: dict[str, Any] = {
         # Prefix, not a footer field: the footer is where the metadata
@@ -617,7 +611,7 @@ def post_findings(
         Name of the repo the finding is about. Also the machine name used
         to authenticate, so the audit trail names the caller.
     flow_name:
-        Name of the flow as it appears in Prefect.
+        Name of the flow, as it appears in the report.
     findings:
         Iterable of :class:`Finding` dicts. Each must have ``severity``
         and ``finding``; may carry ``dimension`` and ``suggestion``.
@@ -663,8 +657,8 @@ def post_findings(
         return DeliveryReport()
 
     # The caller's own id wins. See get_run_id: its resolution order is
-    # Prefect's, and a converted cog would otherwise file every row under
-    # "local-run".
+    # Prefect's, and a cog not under Prefect would otherwise file every row
+    # under "local-run".
     run_id = run_id or get_run_id()
     sent = failed = skipped = 0
 
@@ -761,7 +755,7 @@ def post_run_finding(
     Parameters
     ----------
     flow_name:
-        Name of the flow as it appears in Prefect.
+        Name of the flow, as it appears in the report.
     severity:
         One of ``"SUCCESS"``, ``"WARN"``, ``"ERROR"``, ``"CRITICAL"``.
     text:
@@ -779,8 +773,7 @@ def post_run_finding(
     production_only:
         When False, this call is a no-op regardless of env vars.
     source:
-        ``"flow_inline"`` for end-of-flow calls, ``"flow_hook"`` for Prefect
-        on_failure/on_crashed hook calls. Free-form otherwise.
+        ``"flow_inline"`` for end-of-flow calls. Free-form otherwise.
     notable:
         Send this even at ``SUCCESS``. Set it when the run was *triggered*
         — a file arrived, a webhook fired, a condition was met — rather
@@ -859,7 +852,7 @@ def post_run_finding(
         delivered = _deliver(message, repo=repo, logger=logger)
     except Exception as exc:
         # Defense in depth: _deliver handles its own exceptions, but this
-        # must never propagate into flow code or a Prefect hook.
+        # must never propagate into flow code.
         _capture(exc)
         with contextlib.suppress(Exception):
             logger.exception(
@@ -880,81 +873,6 @@ def post_run_finding(
         return DeliveryReport(failed=1)
 
     return DeliveryReport(sent=1)
-
-
-def make_failure_hook(
-    flow_name: str,
-    *,
-    repo: str,
-    production_only: bool = True,
-    dimension: str = DEFAULT_DIMENSION,
-) -> Callable[..., None]:
-    """Return a Prefect ``on_failure`` / ``on_crashed`` hook.
-
-    .. deprecated::
-        The fleet no longer runs on Prefect and nothing calls this. Removed
-        in the next major release.
-
-    The returned hook reports severity ``WARN`` for the ``Failed`` state
-    and ``ERROR`` for ``Crashed``. Both reach the notification channel —
-    this hook is the fleet's crash ping. It always logs the failure
-    locally; delivery is gated the same way as :func:`post_run_finding`.
-
-    Parameters
-    ----------
-    flow_name:
-        Name of the flow this hook reports on.
-    repo:
-        Name of the cog. Required.
-    production_only:
-        Same semantics as :func:`post_run_finding`.
-    dimension:
-        Evaluation dimension; defaults to ``"pipeline_consistency"``.
-
-    The returned callable never raises — hooks that raise can mask the
-    underlying flow failure.
-    """
-    warnings.warn(
-        "pipeline_status.make_failure_hook is deprecated: the fleet no longer "
-        "runs on Prefect. It will be removed in the next major release.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-
-    def _hook(flow, flow_run, state) -> None:  # noqa: ARG001
-        logger = get_prefect_logger()
-        try:
-            state_name = str(getattr(state, "name", "FAILED"))
-            state_type = str(getattr(state, "type", "")).upper()
-            severity: Severity = (
-                "ERROR"
-                if state_type == "CRASHED" or state_name == "Crashed"
-                else "WARN"
-            )
-
-            logger.error(
-                "Flow failure hook fired: repo=%s flow=%s run_id=%s "
-                "state=%s production_only=%s",
-                repo,
-                flow_name,
-                get_run_id(),
-                state_name,
-                production_only,
-            )
-
-            post_run_finding(
-                flow_name,
-                severity,
-                text=f"Flow entered {state_name} unexpectedly",
-                repo=repo,
-                dimension=dimension,
-                production_only=production_only,
-                source="flow_hook",
-            )
-        except Exception:
-            logger.exception("Flow failure hook failed unexpectedly")
-
-    return _hook
 
 
 # ---------------------------------------------------------------------------
@@ -1079,9 +997,8 @@ class RunReport:
         rather than of per-flow configuration.
 
     There is deliberately no verb for ERROR. ERROR means a flow died, and
-    a flow that died is reported by :func:`make_failure_hook` with the
-    Prefect state that killed it — a state this object does not have and
-    should not guess at.
+    how it died is the caller's to say — this object does not know and
+    should not guess at it.
 
     The report times itself from construction to :meth:`send`, so the
     duration on the headline is the run's and not a stopwatch every flow
@@ -1103,7 +1020,7 @@ class RunReport:
     #: The run this report belongs to.
     #:
     #: ``None`` falls back to :func:`get_run_id`, whose resolution order is
-    #: Prefect's — so a cog that has left Prefect and does not set this
+    #: Prefect's — so a cog that does not set this
     #: sends every run report under ``"local-run"``, unattributable and
     #: unjoinable to the findings the same run filed. A caller that mints
     #: its own id should set this as soon as it has one; it may be assigned
@@ -1306,11 +1223,7 @@ def run_report(
 
     On an exception the accumulated report is sent with the exception
     recorded as an issue, and the exception is re-raised unchanged — so
-    the flow still fails and ``make_failure_hook`` still fires. That is
-    two messages about one bad run, and it is the same trade the Prefect
-    webhook backstop already makes: the hook knows the Prefect state, this
-    knows what the run had managed to do first, and neither is derivable
-    from the other. They are told apart by ``source``.
+    the flow still fails and the caller's own failure handling still runs.
 
     ``BaseException`` is caught rather than ``Exception`` so a run killed
     by SIGTERM mid-batch still says what it had processed. It is re-raised
@@ -1347,7 +1260,6 @@ __all__ = [
     "format_duration",
     "get_prefect_logger",
     "get_run_id",
-    "make_failure_hook",
     "post_findings",
     "post_run_finding",
     "run_report",

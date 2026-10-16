@@ -2,10 +2,7 @@
 
 This is the canonical reference for how the fleet's Python libraries
 authenticate when they publish, what the failure modes look like, and how
-to get out of each one. It is the Python counterpart to
-`common-typescript-utils/docs/npm-package-publishing.md`, and it exists
-because that document's §7 asked the right question about the npm path and
-the Python path had never been asked it at all.
+to get out of each one.
 
 Two libraries are in scope: `common-python-utils` (published as
 `miniapppolis-common-utils`) and `identity` (published as
@@ -19,8 +16,8 @@ consumers pulled them by git ref.
 ```
   GitHub Actions release job  (permissions: id-token: write)
     └─ npx semantic-release
-         ├─ prepare  → uv version <next> && uv lock
-         ├─ prepare  → @semantic-release/git commits the bump
+         ├─ prepare  → writes <next> to src/<package>/_version.py
+         ├─ prepare  → @semantic-release/git commits the bump and CHANGELOG.md
          ├─ publish  → uv build
          │            uv publish --trusted-publishing always
          │              └─ exchanges the job's OIDC token for a
@@ -106,15 +103,11 @@ PyPI still issues API tokens, and the migration could have used one. It
 was rejected:
 
 - A token needs a home. That home is Doppler, which is one more secret to
-  rotate and one more place a failure can originate — the npm playbook's
-  §3 exists entirely because of that shape.
+  rotate and one more place a failure can originate.
 - PyPI's trusted publishing is more mature than npm's. It has been GA
   since 2023, `uv publish` supports it natively, and there is no
-  equivalent of npm's Bypass-2FA trap (npm playbook §5), where `whoami`
-  passes and only the final `PUT` is refused.
-
-The npm playbook's §6 lists trusted publishing as *the exit* for the
-TypeScript path. The Python path starts there.
+  equivalent of npm's Bypass-2FA trap, where `whoami` passes and only
+  the final `PUT` is refused.
 
 ---
 
@@ -133,10 +126,7 @@ unrelated Microsoft auth library holds it. That forced a prefix on one
 library, and two shared libraries named on different principles is worse
 than one awkward name. `common-python-utils` was available, which is
 precisely the problem: it is a name anyone could reasonably want, and
-claiming it in a public namespace is squatting on a generic term. The npm
-playbook closes by noting that `common-typescript-utils` being public and
-unscoped "was never a decision, only a default." This is that decision,
-made the other way.
+claiming it in a public namespace is squatting on a generic term.
 
 **Why the imports did not change.** Renaming `mini_app_polis` would touch
 every call site in six repos and buy nothing. The distribution name is what
