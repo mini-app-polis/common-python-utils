@@ -1,3 +1,10 @@
+## [6.0.1](https://github.com/mini-app-polis/common-python-utils/compare/v6.0.0...v6.0.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* **google:** retry dropped TLS sessions ([45dad79](https://github.com/mini-app-polis/common-python-utils/commit/45dad7945bf127dc5c128565fa0adbed8f9cd843))
+
 # [6.0.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.25.5...v6.0.0) (2026-10-16)
 
 
