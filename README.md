@@ -52,7 +52,7 @@ dependencies = [
 | `llm/` | `from mini_app_polis.llm import build_llm, LLMMessage` | OpenAI + Anthropic clients (optional extra) |
 | `mp3/` | `from mini_app_polis.mp3 import ...` | AcoustID identification, tagging, renaming |
 | `music/` | `from mini_app_polis.music import normalize_for_matching` | Music data normalization utilities |
-| `spotify/` | `from mini_app_polis.spotify import SpotifyAPI` | Spotipy wrapper; raises `SpotifyTokenExpired` when Spotify refuses the refresh token (`invalid_grant`, not retried) |
+| `spotify/` | `from mini_app_polis.spotify import SpotifyAPI` | Spotipy wrapper; raises `SpotifyTokenExpired` when Spotify refuses the refresh token (`invalid_grant`, not retried); every request, token refresh included, is bounded by `SPOTIFY_REQUEST_TIMEOUT_SECONDS` |
 | `timing.py` | `from mini_app_polis import timing` | Per-invocation working vs waiting time, by service, as one CloudWatch line |
 | `vdj/` | `from mini_app_polis.vdj.m3u import ParseFacade` | VirtualDJ M3U parsing |
 

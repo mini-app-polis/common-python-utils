@@ -54,7 +54,7 @@ def _install_stubs(monkeypatch, *, uris: list[str], configured_playlist="pl-main
     class Spotify:
         """A playlist that actually shrinks when tracks are removed."""
 
-        def __init__(self, auth=None, auth_manager=None):
+        def __init__(self, auth=None, auth_manager=None, **_kwargs):
             self.auth = auth
             self.auth_manager = auth_manager
             self.uris = list(uris)

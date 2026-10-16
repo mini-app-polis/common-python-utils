@@ -61,7 +61,7 @@ def test_spotify_retry_helpers_and_client_from_refresh(monkeypatch):
             return {"access_token": f"token-{self.calls}"}
 
     class Spotify:
-        def __init__(self, auth=None, auth_manager=None):
+        def __init__(self, auth=None, auth_manager=None, **_kwargs):
             self.auth = auth
             self.auth_manager = auth_manager
             self._search_calls = 0
@@ -197,7 +197,7 @@ def test_spotify_call_with_retry_respects_rate_limit(monkeypatch):
                 return {"access_token": "token"}
 
         class Spotify:
-            def __init__(self, auth=None, auth_manager=None):
+            def __init__(self, auth=None, auth_manager=None, **_kwargs):
                 self.auth = auth
                 self.auth_manager = auth_manager
 
@@ -273,7 +273,7 @@ def _install_clear_playlist_stubs(monkeypatch):
             return {"access_token": f"token-{self.calls}"}
 
     class Spotify:
-        def __init__(self, auth=None, auth_manager=None):
+        def __init__(self, auth=None, auth_manager=None, **_kwargs):
             self.auth = auth
             self.auth_manager = auth_manager
             self.remove_calls: list[tuple[str, list[str]]] = []
@@ -429,7 +429,7 @@ def _install_trim_playlist_stubs(monkeypatch, *, total: int):
             return {"access_token": f"token-{self.calls}"}
 
     class Spotify:
-        def __init__(self, auth=None, auth_manager=None):
+        def __init__(self, auth=None, auth_manager=None, **_kwargs):
             self.auth = auth
             self.auth_manager = auth_manager
             self.playlist_items_calls = 0
@@ -499,7 +499,7 @@ def test_spotify_client_raises_when_client_id_missing(monkeypatch):
             return {"access_token": "token"}
 
     class Spotify:
-        def __init__(self, auth=None, auth_manager=None):
+        def __init__(self, auth=None, auth_manager=None, **_kwargs):
             self.auth = auth
             self.auth_manager = auth_manager
 
@@ -758,8 +758,12 @@ def test_client_uses_interactive_oauth_without_a_refresh_token(sp, monkeypatch):
         scope="playlist-modify-public playlist-modify-private",
         cache_path=".cache-ci",
         open_browser=False,
+        requests_timeout=mod.SPOTIFY_REQUEST_TIMEOUT_SECONDS,
     )
-    spotipy_mod.Spotify.assert_called_once_with(auth_manager="auth-manager")
+    spotipy_mod.Spotify.assert_called_once_with(
+        auth_manager="auth-manager",
+        requests_timeout=mod.SPOTIFY_REQUEST_TIMEOUT_SECONDS,
+    )
 
 
 def _refreshing(mod, monkeypatch, refresh_outcomes):
@@ -768,7 +772,7 @@ def _refreshing(mod, monkeypatch, refresh_outcomes):
     manager = MagicMock()
     manager.refresh_access_token.side_effect = refresh_outcomes
     oauth = MagicMock(return_value=manager)
-    spotify_cls = MagicMock(side_effect=lambda auth: ("client", auth))
+    spotify_cls = MagicMock(side_effect=lambda auth, **_kw: ("client", auth))
     monkeypatch.setattr(mod, "SpotifyOAuth", oauth)
     monkeypatch.setattr(mod, "Spotify", spotify_cls)
     mod.config.SPOTIPY_REFRESH_TOKEN = "refresh-tok"
@@ -793,6 +797,20 @@ def test_token_refresh_retries_transient_failures(sp, monkeypatch):
     assert sleeps == [2, 4]
     # Refresh flow never persists a token cache.
     assert isinstance(oauth.call_args.kwargs["cache_handler"], mod.NoopCacheHandler)
+
+
+def test_token_refresh_bounds_oauth_and_web_api_requests(sp, monkeypatch):
+    # spotipy leaves OAuth requests unbounded by default; a stalled token
+    # refresh POST must not hang the run, so both clients get the timeout.
+    mod, _, _, _, _ = sp
+    _, oauth = _refreshing(mod, monkeypatch, [{"access_token": "AT"}])
+
+    assert mod.SpotifyAPI().client == ("client", "AT")
+
+    timeout = mod.SPOTIFY_REQUEST_TIMEOUT_SECONDS
+    assert timeout > 0
+    assert oauth.call_args.kwargs["requests_timeout"] == timeout
+    mod.Spotify.assert_called_once_with(auth="AT", requests_timeout=timeout)
 
 
 def test_token_refresh_gives_up_after_three_attempts(sp, monkeypatch):

@@ -85,6 +85,12 @@ class NoopCacheHandler(CacheHandler):
 #: Spotify caps both a playlist-items page and a remove request at 100.
 _TRIM_PAGE_SIZE = 100
 
+#: Per-request HTTP timeout (seconds) for every Spotify call this module makes:
+#: Web API requests and the OAuth token-refresh POST. spotipy's OAuth managers
+#: default to no timeout, so a stalled token refresh could hang a run forever;
+#: one explicit value covers both. 5 s keeps Web API calls at spotipy's default.
+SPOTIFY_REQUEST_TIMEOUT_SECONDS: float = 5
+
 
 class SpotifyAPI:
     """Single entry point for Spotify operations.
@@ -120,7 +126,9 @@ class SpotifyAPI:
                     scope="playlist-modify-public playlist-modify-private",
                     cache_path=".cache-ci",
                     open_browser=False,
-                )
+                    requests_timeout=SPOTIFY_REQUEST_TIMEOUT_SECONDS,
+                ),
+                requests_timeout=SPOTIFY_REQUEST_TIMEOUT_SECONDS,
             )
 
         return self._client
@@ -149,6 +157,7 @@ class SpotifyAPI:
             redirect_uri=redirect_uri,
             scope="playlist-modify-public playlist-modify-private",
             cache_handler=NoopCacheHandler(),
+            requests_timeout=SPOTIFY_REQUEST_TIMEOUT_SECONDS,
         )
 
         max_retries = 3
@@ -161,7 +170,10 @@ class SpotifyAPI:
                 )
                 token_info = auth_manager.refresh_access_token(refresh_token)
                 log.info("✅ Obtained new Spotify access token.")
-                return Spotify(auth=token_info["access_token"])
+                return Spotify(
+                    auth=token_info["access_token"],
+                    requests_timeout=SPOTIFY_REQUEST_TIMEOUT_SECONDS,
+                )
 
             except SpotifyOauthError as e:
                 if _is_invalid_grant(e):
