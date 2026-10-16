@@ -1113,3 +1113,79 @@ def test_add_tracks_to_playlist_requires_the_configured_playlist(sp):
 
     with pytest.raises(ValueError, match="SPOTIFY_PLAYLIST_ID is not set"):
         mod.add_tracks_to_playlist(["u1"])
+
+
+# --- _call_with_retry under a run deadline ---------------------------------
+
+
+@pytest.fixture
+def frozen_clock(monkeypatch):
+    """Freeze the deadline module's clock at 1000 s; returns the state dict."""
+    from mini_app_polis import deadline
+
+    state = {"now": 1000.0}
+    monkeypatch.setattr(
+        deadline, "time", types.SimpleNamespace(monotonic=lambda: state["now"])
+    )
+    return state
+
+
+def test_call_with_retry_skips_a_backoff_that_would_cross_the_deadline(
+    sp, frozen_clock
+):
+    from mini_app_polis.deadline import run_deadline
+
+    _, api, _, sleeps, _ = sp
+    calls = []
+
+    def fn():
+        calls.append(1)
+        raise _SpotifyError(503)
+
+    with run_deadline(2), pytest.raises(_SpotifyError):  # backoff is 2 s
+        api._call_with_retry(fn, context="t")
+    assert calls == [1]
+    assert sleeps == []
+
+
+def test_call_with_retry_skips_a_read_timeout_backoff_past_the_deadline(
+    sp, frozen_clock
+):
+    from mini_app_polis.deadline import run_deadline
+
+    _, api, _, sleeps, _ = sp
+
+    def fn():
+        raise _ReadTimeout("slow")
+
+    with run_deadline(1), pytest.raises(_ReadTimeout):
+        api._call_with_retry(fn, context="t")
+    assert sleeps == []
+
+
+def test_call_with_retry_does_not_wait_out_a_long_retry_after(sp, frozen_clock):
+    from mini_app_polis.deadline import run_deadline
+
+    _, api, _, sleeps, _ = sp
+    calls = []
+
+    def fn():
+        calls.append(1)
+        raise _SpotifyError(429, {"Retry-After": "600"})
+
+    with run_deadline(60), pytest.raises(_SpotifyError) as exc:
+        api._call_with_retry(fn, context="t")
+    assert exc.value.http_status == 429
+    assert calls == [1]
+    assert sleeps == []
+
+
+def test_call_with_retry_refuses_to_start_past_the_deadline(sp, frozen_clock):
+    from mini_app_polis.deadline import RunDeadlineReached, run_deadline
+
+    _, api, _, _, _ = sp
+    calls = []
+
+    with run_deadline(0), pytest.raises(RunDeadlineReached):
+        api._call_with_retry(lambda: calls.append(1), context="t")
+    assert calls == []

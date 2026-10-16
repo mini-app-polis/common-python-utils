@@ -12,6 +12,11 @@ import httplib2
 from googleapiclient.errors import HttpError
 
 from mini_app_polis import logger as logger_mod
+from mini_app_polis.deadline import (
+    RunDeadlineReached,
+    _ensure_time_left,
+    _wait_crosses_deadline,
+)
 
 log = logger_mod.get_logger()
 
@@ -101,6 +106,10 @@ def is_retryable_non_http_error(error: Exception) -> bool:
     that can happen in CI or on flaky networks.
     """
 
+    # The run's own deadline is a TimeoutError, but retrying cannot help.
+    if isinstance(error, RunDeadlineReached):
+        return False
+
     # Common timeout signals
     if isinstance(error, (TimeoutError, socket.timeout)):
         return True
@@ -142,14 +151,26 @@ def is_retryable_non_http_error(error: Exception) -> bool:
 
 def _sleep_with_backoff(
     *, delay_s: float, max_delay_s: float, attempt: int, context: str
-) -> None:
+) -> bool:
+    """Sleep for the next backoff and return True, or return False unslept.
+
+    Returns False when a run deadline is set and the backoff would end at
+    or past it: the caller then stops retrying and re-raises.
+    """
     # exponential backoff with jitter (0.7x–1.3x)
     wait = min(max_delay_s, delay_s) * (0.7 + random.random() * 0.6)
+    if _wait_crosses_deadline(wait):
+        log.error(
+            f"❌ Run deadline cuts Google API retries short while {context}: "
+            f"next backoff {wait:.1f}s would pass it (attempt {attempt})"
+        )
+        return False
     log.warning(
         f"⚠️ Retryable Google API error while {context}; retrying in {wait:.1f}s "
         f"(attempt {attempt})"
     )
     time.sleep(wait)
+    return True
 
 
 def execute_with_retry(
@@ -158,13 +179,21 @@ def execute_with_retry(
     context: str,
     retry: RetryConfig | None = None,
 ) -> T:
-    """Execute a Google API call with consistent retry/backoff."""
+    """Execute a Google API call with consistent retry/backoff.
+
+    Inside :func:`mini_app_polis.deadline.run_deadline`, an attempt is not
+    started once the deadline has passed (raises
+    :class:`~mini_app_polis.deadline.RunDeadlineReached`, chained from the
+    previous error), and a backoff that would end past it is skipped: the
+    error that prompted it is re-raised instead.
+    """
 
     retry = retry or RetryConfig()
     delay = retry.base_delay_s
     last_error: Exception | None = None
 
     for attempt in range(1, retry.max_retries + 1):
+        _ensure_time_left(context, last_error)
         try:
             return fn()
 
@@ -177,12 +206,13 @@ def execute_with_retry(
                 )
                 raise
 
-            _sleep_with_backoff(
+            if not _sleep_with_backoff(
                 delay_s=delay,
                 max_delay_s=retry.max_delay_s,
                 attempt=attempt,
                 context=context,
-            )
+            ):
+                raise
             delay *= 2
 
         except Exception as e:
@@ -196,12 +226,13 @@ def execute_with_retry(
                 )
                 raise
 
-            _sleep_with_backoff(
+            if not _sleep_with_backoff(
                 delay_s=delay,
                 max_delay_s=retry.max_delay_s,
                 attempt=attempt,
                 context=context,
-            )
+            ):
+                raise
             delay *= 2
 
     # Defensive: should be unreachable

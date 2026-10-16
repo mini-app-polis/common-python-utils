@@ -10,6 +10,7 @@ from spotipy.oauth2 import CacheHandler, SpotifyOAuth
 
 import mini_app_polis.config as config
 from mini_app_polis import logger as logger_mod
+from mini_app_polis.deadline import _ensure_time_left, _wait_crosses_deadline
 
 log = logger_mod.get_logger()
 
@@ -17,8 +18,12 @@ log = logger_mod.get_logger()
 # --- Centralized retry helpers ---
 
 
+def _backoff_seconds(attempt: int, base_seconds: int = 2) -> int:
+    return base_seconds * attempt
+
+
 def _sleep_backoff(attempt: int, base_seconds: int = 2) -> None:
-    time.sleep(base_seconds * attempt)
+    time.sleep(_backoff_seconds(attempt, base_seconds))
 
 
 def _is_retryable_spotify_exception(e: SpotifyException) -> bool:
@@ -26,12 +31,16 @@ def _is_retryable_spotify_exception(e: SpotifyException) -> bool:
     return status == 429 or (status is not None and status >= 500)
 
 
-def _sleep_for_rate_limit(e: SpotifyException, default_seconds: int = 2) -> None:
+def _rate_limit_seconds(e: SpotifyException, default_seconds: int = 2) -> int:
     try:
         retry_after = int((e.headers or {}).get("Retry-After", default_seconds))
     except Exception:
         retry_after = default_seconds
-    time.sleep(max(1, retry_after))
+    return max(1, retry_after)
+
+
+def _sleep_for_rate_limit(e: SpotifyException, default_seconds: int = 2) -> None:
+    time.sleep(_rate_limit_seconds(e, default_seconds))
 
 
 _spotify_api: SpotifyAPI | None = None
@@ -194,25 +203,42 @@ class SpotifyAPI:
                 raise
 
     def _call_with_retry(self, fn, *, context: str, max_retries: int = 3):
+        # Inside mini_app_polis.deadline.run_deadline: no attempt starts past
+        # the deadline, and a wait that would cross it re-raises instead.
+        last_error: Exception | None = None
         for attempt in range(1, max_retries + 1):
+            _ensure_time_left(context, last_error)
             try:
                 return fn()
             except requests.exceptions.ReadTimeout as e:
+                last_error = e
                 log.warning(
                     f"Spotify timeout while {context} (attempt {attempt}/{max_retries}): {e}"
                 )
-                if attempt < max_retries:
+                if attempt < max_retries and not _wait_crosses_deadline(
+                    _backoff_seconds(attempt)
+                ):
                     _sleep_backoff(attempt)
                     continue
                 raise
             except SpotifyException as e:
-                if e.http_status == 429 and attempt < max_retries:
+                last_error = e
+                if (
+                    e.http_status == 429
+                    and attempt < max_retries
+                    and not _wait_crosses_deadline(_rate_limit_seconds(e))
+                ):
                     log.warning(
                         f"Rate limited by Spotify API while {context}. Respecting Retry-After."
                     )
                     _sleep_for_rate_limit(e)
                     continue
-                if _is_retryable_spotify_exception(e) and attempt < max_retries:
+                if (
+                    e.http_status != 429
+                    and _is_retryable_spotify_exception(e)
+                    and attempt < max_retries
+                    and not _wait_crosses_deadline(_backoff_seconds(attempt))
+                ):
                     log.warning(
                         f"Retryable Spotify error while {context} (attempt {attempt}/{max_retries}): {e}"
                     )
