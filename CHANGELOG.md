@@ -1,3 +1,10 @@
+## [6.1.1](https://github.com/mini-app-polis/common-python-utils/compare/v6.1.0...v6.1.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* **spotify:** bound the OAuth token refresh with a request timeout ([b9b5356](https://github.com/mini-app-polis/common-python-utils/commit/b9b5356af3618461cc92ed7b0f689a498c59e39a))
+
 # [6.1.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.0.1...v6.1.0) (2026-10-16)
 
 
