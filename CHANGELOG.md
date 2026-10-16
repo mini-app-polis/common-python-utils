@@ -1,3 +1,18 @@
+# [6.0.0](https://github.com/mini-app-polis/common-python-utils/compare/v5.25.5...v6.0.0) (2026-10-16)
+
+
+### Code Refactoring
+
+* remove Prefect-era serve_with_retry, make_failure_hook and PREFECT_* effects ([c166b44](https://github.com/mini-app-polis/common-python-utils/commit/c166b44b28ee5de2776905c514aa3107851c47c2))
+
+
+### BREAKING CHANGES
+
+* mini_app_polis.serve_resilience (serve_with_retry),
+pipeline_status.make_failure_hook, and Effect.PREFECT_TRIGGER /
+Effect.PREFECT_SERVE are removed. environment.summary() no longer
+reports prefect_trigger/prefect_serve gates.
+
 ## [5.25.5](https://github.com/mini-app-polis/common-python-utils/compare/v5.25.4...v5.25.5) (2026-10-16)
 
 
