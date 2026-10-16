@@ -1,3 +1,10 @@
+# [6.1.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.0.1...v6.1.0) (2026-10-16)
+
+
+### Features
+
+* **deadline:** run deadline that Google and Spotify retries respect; bound the Spotify token refresh ([6d288ed](https://github.com/mini-app-polis/common-python-utils/commit/6d288ed7e4be94697b7727317164f42afba70a75))
+
 ## [6.0.1](https://github.com/mini-app-polis/common-python-utils/compare/v6.0.0...v6.0.1) (2026-10-16)
 
 
