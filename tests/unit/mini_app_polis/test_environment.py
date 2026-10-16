@@ -103,8 +103,8 @@ def test_explicit_flag_overrides_both_directions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("ENVIRONMENT", "dev")
-    monkeypatch.setenv("PREFECT_TRIGGER_ENABLED", "true")
-    assert effect_enabled(Effect.PREFECT_TRIGGER) is True
+    monkeypatch.setenv("CLOUDWATCH_METRICS_ENABLED", "true")
+    assert effect_enabled(Effect.CLOUDWATCH_METRICS) is True
     # ...and the other gate is untouched by it.
     assert effect_enabled(Effect.HEALTHCHECKS) is False
 
@@ -149,8 +149,6 @@ def test_summary_names_environment_source_and_gates(
     line = summary()
     assert "environment=development" in line
     assert "from RAILWAY_ENVIRONMENT_NAME" in line
-    assert "prefect_trigger=off" in line
-    assert "prefect_serve=off" in line
     assert "healthchecks=off" in line
     assert "cloudwatch_metrics=off" in line
     assert "api_base_url=https://dev-api.example" in line

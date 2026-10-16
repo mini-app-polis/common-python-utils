@@ -19,7 +19,6 @@ They should only interact with Google via `GoogleAPI`.
 - **Centralized retry/backoff** for all Google API calls
 - **Small, intentional surface area**
 - **Plain Python inputs & outputs**
-- **Backwards compatible** with legacy helpers
 - **Safe for reuse across many repos**
 
 ---
@@ -29,11 +28,12 @@ They should only interact with Google via `GoogleAPI`.
 ```text
 google/
 ├── __init__.py          # exports GoogleAPI
-├── api.py               # GoogleAPI (public entry point)
+├── google.py            # GoogleAPI (public entry point)
 ├── _auth.py             # credentials + service builders (private)
 ├── _retry.py            # retry/backoff logic (private)
-├── sheets.py            # SheetsFacade (+ legacy helpers)
-├── drive.py             # DriveFacade (+ legacy helpers)
+├── sheets.py            # SheetsFacade
+├── sheets_formatting.py # SheetsFormatter (SheetsFacade.formatter)
+├── drive.py             # DriveFacade
 ├── types.py             # small dataclasses (e.g. DriveFile)
 └── errors.py            # custom exceptions
 ```
@@ -65,7 +65,6 @@ Supported construction methods:
 |------|------------|
 | `GoogleAPI.from_env()` | Load credentials from environment (recommended) |
 | `GoogleAPI.from_service_account_file(path)` | Load from a service account JSON file |
-| `GoogleAPI.from_service_account_info(info)` | Load from a dict (useful for secrets managers) |
 
 ---
 
@@ -104,8 +103,8 @@ get_sheet_id(spreadsheet_id, sheet_name) -> int
 ### Write Operations
 
 ```python
-write_values(spreadsheet_id, a1_range, values, value_input="RAW")
-append_values(spreadsheet_id, a1_range, values, value_input="RAW")
+write_values(spreadsheet_id, a1_range, values, value_input_option="RAW")
+append_values(spreadsheet_id, a1_range, values, value_input_option="RAW")
 clear(spreadsheet_id, a1_range)
 ```
 
@@ -149,7 +148,7 @@ drive = DriveFacade.from_service_account_info(
 
 ```python
 list_files(parent_id, mime_type=None, name_contains=None, trashed=False) -> list[DriveFile]
-find_first(parent_id, name, mime_type=None) -> DriveFile | None
+find_file_in_folder(parent_folder_id, name=..., mime_type=None) -> file_id | None
 find_files_by_app_property(parent_folder_id, key=..., value=...) -> list[file_id]
 get_file_name(file_id) -> str
 ```
@@ -172,8 +171,8 @@ folder no longer exists, call the module-level
 
 ```python
 copy_file(file_id, parent_folder_id=None, name=None, app_properties=None) -> new_file_id
-move_file(file_id, new_parent_id, remove_from_parents=True)
-upload_file(src_path, parent_id, mime_type=None, name=None) -> file_id
+move_file(file_id, new_parent_id=..., remove_from_parents=True)
+upload_file(filepath, parent_id=..., dest_name=None, mime_type=None) -> file_id
 upload_bytes(parent_id=..., filename=..., content=..., mime_type=..., app_properties=None, resumable=False) -> file_id  # resumable=True for files over 5 MB
 download_file(file_id, dst_path)
 delete_file(file_id)

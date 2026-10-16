@@ -18,8 +18,8 @@ one never exercised in dev.
 
 Effects are gated only where the target has no environment of its own.
 Sentry and Discord both carry the environment on the message and stay on
-everywhere; Healthchecks.io has one check and Prefect Cloud has one
-workspace across both environments, so dev must not reach them.
+everywhere; Healthchecks.io has one check across both environments, so
+dev must not reach it.
 
 Resolution is fail-closed: an environment this module cannot name is
 treated as non-production. That direction is chosen because it announces
@@ -46,8 +46,8 @@ class Environment(StrEnum):
 class Effect(StrEnum):
     """One named outbound effect that a non-production process must not perform.
 
-    The member name derives its override variable — ``PREFECT_TRIGGER`` ->
-    ``PREFECT_TRIGGER_ENABLED`` — so there is one rule rather than a
+    The member name derives its override variable — ``HEALTHCHECKS`` ->
+    ``HEALTHCHECKS_ENABLED`` — so there is one rule rather than a
     mapping to keep in step on both sides, the same convention
     ``machine_key_env_var`` uses for API keys.
 
@@ -57,20 +57,6 @@ class Effect(StrEnum):
     actively breaking.
     """
 
-    PREFECT_TRIGGER = "prefect_trigger"
-    #: Registering deployments with Prefect Cloud and running the serve
-    #: loop that polls them. Separate from PREFECT_TRIGGER because they are
-    #: different reaches into the same workspace — triggering fires one run,
-    #: serving claims every run of a deployment — and because a deliberate
-    #: dev test of one should not silently unmute the other.
-    #:
-    #: Ungated, two environments running the same cog register the *same*
-    #: deployment name in the one Prefect Cloud workspace and both poll it,
-    #: so whichever runner claims a scheduled run executes it. A production
-    #: run claimed by the development container resolves development
-    #: correctly and writes its results to the development API — which is
-    #: not a resolution bug and does not announce itself as one.
-    PREFECT_SERVE = "prefect_serve"
     HEALTHCHECKS = "healthchecks"
     #: Publishing request metrics to CloudWatch (``request_metrics``).
     #: CloudWatch could carry the environment as a dimension instead, but

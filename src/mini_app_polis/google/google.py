@@ -27,7 +27,7 @@ class GoogleAPI:
     directly.
 
     Example:
-        from mini_app_polis.api.google import GoogleAPI
+        from mini_app_polis.google import GoogleAPI
         g = GoogleAPI.from_env()
         rows = g.sheets.read_values(spreadsheet_id, "Sheet1!A2:C")
     """
