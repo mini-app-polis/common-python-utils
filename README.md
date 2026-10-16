@@ -45,6 +45,7 @@ dependencies = [
 | `api/contract/` | `from mini_app_polis.api.contract import IngestSet, ENDPOINTS` | Typed request/response models for the Kaiano API endpoints the fleet calls |
 | `asana/` | `from mini_app_polis.asana import AsanaClient` | Asana task creation with external-id idempotency |
 | `config.py` | `from mini_app_polis import config` | Env-var driven shared config (Spotify, Google, VDJ) |
+| `deadline.py` | `from mini_app_polis.deadline import run_deadline` | A run deadline the library's retry loops respect: no attempt starts, and no backoff is waited out, past it |
 | `discord.py` | `from mini_app_polis import discord` | Discord webhook transport: named channels, rate-limit cooldowns, environment labels, never raises |
 | `doppler.py` | `from mini_app_polis.doppler import DopplerClient` | Reads and writes secrets in one Doppler config (API or CLI), and the `check-doppler-keys` console script |
 | `google/` | `from mini_app_polis.google import GoogleAPI` | Drive + Sheets facade |
@@ -263,6 +264,34 @@ except Exception as exc:
 Delivery is fire-and-forget; `await activity.wait_for_deliveries()` lets
 tests (and a shutdown) wait for it. See the module docstring for what the
 listeners cannot see.
+
+### Run deadline
+
+```python
+from mini_app_polis.deadline import RunDeadlineReached, run_deadline
+
+# A Lambda handler: stop 30 s before the hard ceiling.
+budget_s = context.get_remaining_time_in_millis() / 1000 - 30
+try:
+    with run_deadline(budget_s):
+        run()
+except RunDeadlineReached:
+    ...  # stop cleanly; report a partial run
+```
+
+Inside the block, the retry loops this library owns — every Google Drive and
+Sheets call, `DriveFacade.copy_file`'s wait for a new file to appear, and
+Spotify's per-call retries — check the deadline between attempts. An attempt
+is not started once it has passed (`RunDeadlineReached`, a `TimeoutError`,
+chained from the previous error), and a backoff that would end at or past it
+is skipped, re-raising the error that prompted it. An attempt already in
+flight is not interrupted, so leave room for one call's own timeout. Nesting
+keeps the earlier deadline; `remaining_seconds()` returns `None` when none is
+set, and without one nothing changes.
+
+The deadline is a `contextvars` value: `asyncio.to_thread` and new asyncio
+tasks inherit it, a plain `threading.Thread` does not. See the module
+docstring.
 
 ### Logger
 

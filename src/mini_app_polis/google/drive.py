@@ -14,6 +14,7 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload, MediaIoBa
 
 import mini_app_polis.config as config
 from mini_app_polis import logger as logger_mod
+from mini_app_polis.deadline import _wait_crosses_deadline
 
 from ._auth import build_drive_service
 from ._retry import RetryConfig, execute_with_retry
@@ -449,6 +450,13 @@ class DriveFacade:
                 status = getattr(e.resp, "status", None)
                 if status == 404 and "not found" in str(e).lower():
                     wait = delay + random.uniform(0, 0.5)
+                    if _wait_crosses_deadline(wait):
+                        log.error(
+                            f"❌ Run deadline cuts copy retries short for {file_id}: "
+                            f"next wait {wait:.1f}s would pass it "
+                            f"(attempt {attempt + 1}/{max_retries})"
+                        )
+                        raise
                     log.warning(
                         f"⚠️ File {file_id} not yet visible, retrying in {wait:.1f}s (attempt {attempt + 1}/{max_retries})"
                     )

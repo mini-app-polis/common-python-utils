@@ -1350,3 +1350,38 @@ def test_delete_with_fallback_raises_when_every_path_fails(monkeypatch, as_http_
         None,
     ]
     assert files.update.call_args.kwargs["addParents"] == "quarantine"
+
+
+def test_copy_file_stops_waiting_for_visibility_at_the_run_deadline(
+    monkeypatch, as_http_error
+):
+    import types
+
+    from mini_app_polis import deadline
+    from mini_app_polis.deadline import run_deadline
+    from mini_app_polis.google.drive import DriveFacade
+
+    sleeps: list[float] = []
+    monkeypatch.setattr("mini_app_polis.google.drive.time.sleep", sleeps.append)
+    monkeypatch.setattr(
+        "mini_app_polis.google.drive.random.uniform", lambda _a, _b: 0.0
+    )
+    monkeypatch.setattr(
+        deadline, "time", types.SimpleNamespace(monotonic=lambda: 1000.0)
+    )
+
+    svc = FakeDriveService()
+    original_files = svc.files
+    err = as_http_error(status=404, message="File not found")
+
+    def files():
+        f = original_files()
+        f.copy = lambda **_kw: _Exec(lambda: (_ for _ in ()).throw(err))  # type: ignore[attr-defined]
+        return f
+
+    svc.files = files  # type: ignore[assignment]
+
+    # The first wait is 1 s; a deadline 1 s away leaves no room for it.
+    with run_deadline(1), pytest.raises(type(err)):
+        DriveFacade(svc).copy_file("abc", name="new", max_retries=5)
+    assert sleeps == []

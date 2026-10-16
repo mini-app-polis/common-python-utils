@@ -36,6 +36,7 @@ from ._version import __version__ as __version__
 if TYPE_CHECKING:
     from . import activity as activity
     from . import config as config
+    from . import deadline as deadline
     from . import discord as discord
     from . import doppler as doppler
     from . import environment as environment
@@ -47,6 +48,7 @@ __all__ = [
     "RequestMetricsMiddleware",
     "activity",
     "config",
+    "deadline",
     "discord",
     "doppler",
     "environment",
@@ -60,6 +62,7 @@ _LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
     # Requires SQLAlchemy (the ``activity`` extra), hence lazy like the rest.
     "activity": ("mini_app_polis.activity", None),
     "config": ("mini_app_polis.config", None),
+    "deadline": ("mini_app_polis.deadline", None),
     "discord": ("mini_app_polis.discord", None),
     "doppler": ("mini_app_polis.doppler", None),
     "environment": ("mini_app_polis.environment", None),
