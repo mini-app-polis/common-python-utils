@@ -41,14 +41,31 @@ If you genuinely need that transport-level output, opt in explicitly and
 temporarily in your own process::
 
     logging.getLogger("websockets").setLevel(logging.DEBUG)
+
+Output format
+-------------
+On Railway, each line is one JSON object written to **stdout**:
+``{"message", "level", "logger", "source", "function"}``. Railway reads
+``level`` (``debug``/``info``/``warn``/``error``) as the line's severity and
+turns every other key into an ``@name:value`` filter. Before this, the root
+handler wrote plain text to stderr, which Railway files as ``error``, so
+every line from every service in the fleet showed as an error (found on
+db-poller, 2026-10-16).
+
+Everywhere else the format is unchanged: plain text on stderr, which keeps
+stdout clean for scripts that print data. Railway is detected from its own
+environment variables (:data:`_RAILWAY_ENV_VARS`); ``LOG_FORMAT=json`` or
+``LOG_FORMAT=text`` overrides the detection either way.
 """
 
 from __future__ import annotations
 
 import datetime
+import json
 import logging
 import os
 import re
+import sys
 
 # No load_dotenv(). Secrets and settings come from the process environment
 # only: Doppler (`doppler run` locally, SSM or the platform sync deployed).
@@ -67,11 +84,86 @@ LOG_WARNING = "⚠️"
 #: in the process, and DEBUG there prints credentials.
 _level = os.getenv("LOGGING_LEVEL", "INFO").upper()
 
-logging.basicConfig(
-    level=_level,
-    format="%(asctime)s [%(levelname)s] [%(filename)s:%(lineno)d - %(funcName)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+_TEXT_FORMAT = (
+    "%(asctime)s [%(levelname)s] [%(filename)s:%(lineno)d - %(funcName)s] %(message)s"
 )
+_TEXT_DATEFMT = "%Y-%m-%d %H:%M:%S"
+
+#: Variables Railway sets in every deployment. Any one present means the
+#: process is running on Railway and its logs are read by Railway's parser.
+_RAILWAY_ENV_VARS: tuple[str, ...] = (
+    "RAILWAY_ENVIRONMENT_NAME",
+    "RAILWAY_ENVIRONMENT",
+    "RAILWAY_PROJECT_ID",
+)
+
+
+def _use_json() -> bool:
+    """True when log lines should be Railway structured JSON.
+
+    ``LOG_FORMAT`` (``json`` or ``text``) decides when set; otherwise JSON
+    exactly when running on Railway.
+    """
+    override = (os.getenv("LOG_FORMAT") or "").strip().lower()
+    if override in ("json", "text"):
+        return override == "json"
+    return any(os.getenv(name) for name in _RAILWAY_ENV_VARS)
+
+
+def _railway_level(levelno: int) -> str:
+    """Map a logging level to the four severities Railway recognises."""
+    if levelno >= logging.ERROR:
+        return "error"
+    if levelno >= logging.WARNING:
+        return "warn"
+    if levelno >= logging.INFO:
+        return "info"
+    return "debug"
+
+
+class RailwayJsonFormatter(logging.Formatter):
+    """Format a record as one line of JSON in Railway's structured-log shape.
+
+    ``message`` and ``level`` are the two keys Railway interprets; the rest
+    become filterable attributes. A traceback is appended to ``message``
+    rather than split across lines, because Railway treats every physical
+    line as a separate log entry.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Return the record as a single-line JSON object."""
+        message = record.getMessage()
+        if record.exc_info and not record.exc_text:
+            record.exc_text = self.formatException(record.exc_info)
+        if record.exc_text:
+            message = f"{message}\n{record.exc_text}"
+        if record.stack_info:
+            message = f"{message}\n{self.formatStack(record.stack_info)}"
+        payload = {
+            "message": message,
+            "level": _railway_level(record.levelno),
+            "logger": record.name,
+            "source": f"{record.filename}:{record.lineno}",
+            "function": record.funcName,
+        }
+        return json.dumps(payload, ensure_ascii=False, default=str)
+
+
+def _root_handler() -> logging.Handler:
+    """The handler ``basicConfig`` installs on root: JSON to stdout on
+    Railway, the established text format to stderr everywhere else."""
+    if _use_json():
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(RailwayJsonFormatter())
+    else:
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter(_TEXT_FORMAT, datefmt=_TEXT_DATEFMT))
+    return handler
+
+
+# Still a no-op when root already has a handler (AWS Lambda installs one),
+# so hosts that configured logging themselves keep their own format.
+logging.basicConfig(level=_level, handlers=[_root_handler()])
 
 #: Third-party loggers that print credentials or full request headers at
 #: DEBUG. ``websockets`` is the observed leak — Prefect's event client

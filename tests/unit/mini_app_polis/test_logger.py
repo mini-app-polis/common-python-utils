@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import importlib
+import json
 import logging
 import sys
 
@@ -225,3 +226,112 @@ def test_reloading_does_not_stack_redactors() -> None:
         if type(f).__name__ == "_UrlSecretRedactor"
     ]
     assert len(filters) == 1
+
+
+# --- Railway structured logs -------------------------------------------------
+
+
+@pytest.fixture
+def no_railway_env(monkeypatch):
+    logger_mod = _load_real_logger_module()
+    for name in logger_mod._RAILWAY_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("LOG_FORMAT", raising=False)
+    return logger_mod
+
+
+def _record(level: int, msg: str, *args, exc_info=None) -> logging.LogRecord:
+    return logging.LogRecord(
+        "mini_app_polis", level, "/app/src/poller.py", 42, msg, args, exc_info, "run"
+    )
+
+
+def test_json_is_used_on_railway(no_railway_env, monkeypatch) -> None:
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_NAME", "production")
+    assert no_railway_env._use_json() is True
+
+
+def test_text_is_used_off_railway(no_railway_env) -> None:
+    assert no_railway_env._use_json() is False
+
+
+def test_log_format_text_overrides_railway(no_railway_env, monkeypatch) -> None:
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_NAME", "production")
+    monkeypatch.setenv("LOG_FORMAT", "TEXT")
+    assert no_railway_env._use_json() is False
+
+
+def test_log_format_json_applies_off_railway(no_railway_env, monkeypatch) -> None:
+    monkeypatch.setenv("LOG_FORMAT", "json")
+    assert no_railway_env._use_json() is True
+
+
+def test_railway_handler_writes_json_to_stdout(no_railway_env, monkeypatch) -> None:
+    """stderr is what made Railway file every line as an error."""
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_NAME", "production")
+    handler = no_railway_env._root_handler()
+    assert handler.stream is sys.stdout
+    assert isinstance(handler.formatter, no_railway_env.RailwayJsonFormatter)
+
+
+def test_local_handler_keeps_text_on_stderr(no_railway_env) -> None:
+    handler = no_railway_env._root_handler()
+    assert handler.stream is sys.stderr
+    assert not isinstance(handler.formatter, no_railway_env.RailwayJsonFormatter)
+
+
+@pytest.mark.parametrize(
+    ("level", "expected"),
+    [
+        (logging.DEBUG, "debug"),
+        (logging.INFO, "info"),
+        (logging.WARNING, "warn"),
+        (logging.ERROR, "error"),
+        (logging.CRITICAL, "error"),
+    ],
+)
+def test_json_level_uses_railway_severities(level: int, expected: str) -> None:
+    logger_mod = _load_real_logger_module()
+    line = logger_mod.RailwayJsonFormatter().format(_record(level, "hello"))
+    assert json.loads(line)["level"] == expected
+
+
+def test_json_line_carries_message_and_attributes() -> None:
+    logger_mod = _load_real_logger_module()
+    line = logger_mod.RailwayJsonFormatter().format(
+        _record(logging.INFO, "published %d metrics", 10)
+    )
+    payload = json.loads(line)
+    assert payload == {
+        "message": "published 10 metrics",
+        "level": "info",
+        "logger": "mini_app_polis",
+        "source": "poller.py:42",
+        "function": "run",
+    }
+
+
+def test_json_traceback_stays_on_one_line() -> None:
+    """Railway treats each physical line as its own entry."""
+    logger_mod = _load_real_logger_module()
+    try:
+        raise ValueError("boom")
+    except ValueError:
+        exc_info = sys.exc_info()
+    line = logger_mod.RailwayJsonFormatter().format(
+        _record(logging.ERROR, "run failed", exc_info=exc_info)
+    )
+    assert "\n" not in line
+    payload = json.loads(line)
+    assert payload["message"].startswith("run failed\nTraceback")
+    assert "ValueError: boom" in payload["message"]
+
+
+def test_json_keeps_emoji_readable() -> None:
+    logger_mod = _load_real_logger_module()
+    line = logger_mod.RailwayJsonFormatter().format(
+        _record(
+            logging.INFO, logger_mod.with_log_prefix(logger_mod.LOG_SUCCESS, "done")
+        )
+    )
+    assert logger_mod.LOG_SUCCESS in line
