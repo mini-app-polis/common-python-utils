@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 import socket
+import ssl
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -113,6 +114,15 @@ def is_retryable_non_http_error(error: Exception) -> bool:
     # ConnectionAbortedError otherwise. httplib2 leaves the dead connection in
     # its pool, but the next attempt finds it unusable and reconnects.
     if isinstance(error, ConnectionError):
+        return True
+
+    # A TLS session the peer dropped mid-request: SSLEOFError ("EOF occurred
+    # in violation of protocol") when it closes without close_notify,
+    # SSLZeroReturnError when it closes cleanly. Neither is a ConnectionError
+    # and SSLEOFError's errno is 8, so the checks around this would miss them.
+    # The connection is gone, not the request wrong; the next attempt opens a
+    # new one.
+    if isinstance(error, (ssl.SSLEOFError, ssl.SSLZeroReturnError)):
         return True
 
     # Some transient connection resets/aborts surface as generic OSError

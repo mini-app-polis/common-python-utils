@@ -133,3 +133,42 @@ def test_execute_with_retry_retries_broken_pipe(monkeypatch):
     retry = RetryConfig(max_retries=3, base_delay_s=0.01, max_delay_s=0.02)
     assert execute_with_retry(fn, context="finding folder", retry=retry) == "ok"
     assert state["n"] == 2
+
+
+def test_is_retryable_non_http_error_dropped_tls_session():
+    import ssl
+
+    from mini_app_polis.google._retry import is_retryable_non_http_error
+
+    # Google closing the TLS session mid-request.
+    assert (
+        is_retryable_non_http_error(
+            ssl.SSLEOFError(8, "EOF occurred in violation of protocol (_ssl.c:2437)")
+        )
+        is True
+    )
+    assert is_retryable_non_http_error(ssl.SSLZeroReturnError(6, "closed")) is True
+
+    # Certificate and handshake failures are not transient.
+    assert is_retryable_non_http_error(ssl.SSLCertVerificationError(1, "bad")) is False
+    assert is_retryable_non_http_error(ssl.SSLError(1, "handshake failure")) is False
+
+
+def test_execute_with_retry_retries_ssl_eof(monkeypatch):
+    import ssl
+
+    from mini_app_polis.google._retry import RetryConfig, execute_with_retry
+
+    monkeypatch.setattr("mini_app_polis.google._retry.time.sleep", lambda _s: None)
+
+    state = {"n": 0}
+
+    def fn():
+        state["n"] += 1
+        if state["n"] == 1:
+            raise ssl.SSLEOFError(8, "EOF occurred in violation of protocol")
+        return "ok"
+
+    retry = RetryConfig(max_retries=3, base_delay_s=0.01, max_delay_s=0.02)
+    assert execute_with_retry(fn, context="uploading bytes file", retry=retry) == "ok"
+    assert state["n"] == 2
