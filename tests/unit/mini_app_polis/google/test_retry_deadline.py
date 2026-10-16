@@ -125,3 +125,28 @@ def test_run_deadline_reached_from_inside_fn_is_not_retried(clock):
     with pytest.raises(RunDeadlineReached):
         execute_with_retry(fn, context="nested")
     assert len(calls) == 1
+
+
+def test_retries_normally_inside_without_run_deadline(clock, as_http_error):
+    from mini_app_polis.deadline import without_run_deadline
+    from mini_app_polis.google._retry import RetryConfig, execute_with_retry
+
+    err = as_http_error(status=503)
+    results = iter([err, err, "deleted"])
+
+    def fn():
+        r = next(results)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    retry = RetryConfig(max_retries=4, base_delay_s=10, max_delay_s=60)
+    with run_deadline(5):
+        clock.state["now"] += 10  # the deadline has passed
+        with without_run_deadline():
+            assert execute_with_retry(fn, context="rolling back", retry=retry) == (
+                "deleted"
+            )
+        with pytest.raises(RunDeadlineReached):
+            execute_with_retry(lambda: "x", context="after cleanup", retry=retry)
+    assert clock.sleeps == [10, 20]

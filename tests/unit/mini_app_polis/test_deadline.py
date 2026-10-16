@@ -13,6 +13,7 @@ from mini_app_polis.deadline import (
     RunDeadlineReached,
     remaining_seconds,
     run_deadline,
+    without_run_deadline,
 )
 
 
@@ -119,3 +120,45 @@ def test_deadline_does_not_propagate_into_a_plain_thread():
         t.start()
         t.join()
     assert seen == [None]
+
+
+def test_without_run_deadline_is_a_no_op_without_a_deadline():
+    with without_run_deadline():
+        assert remaining_seconds() is None
+    assert remaining_seconds() is None
+
+
+def test_without_run_deadline_clears_and_restores_a_passed_deadline(clock):
+    with run_deadline(5):
+        clock.now += 10
+        with without_run_deadline():
+            assert remaining_seconds() is None
+            deadline._ensure_time_left("rolling back")  # no raise
+            assert deadline._wait_crosses_deadline(10_000) is False
+        assert remaining_seconds() == -5
+        with pytest.raises(RunDeadlineReached):
+            deadline._ensure_time_left("doing a thing")
+    assert remaining_seconds() is None
+
+
+def test_without_run_deadline_restores_when_the_block_raises(clock):
+    with run_deadline(5):
+        with pytest.raises(ValueError), without_run_deadline():
+            raise ValueError("boom")
+        assert remaining_seconds() == 5
+
+
+def test_run_deadline_inside_without_starts_afresh(clock):
+    with run_deadline(5):
+        clock.now += 10
+        with without_run_deadline(), run_deadline(30):
+            assert remaining_seconds() == 30
+        assert remaining_seconds() == -5
+
+
+def test_without_run_deadline_propagates_into_asyncio_to_thread():
+    async def main() -> float | None:
+        with run_deadline(100), without_run_deadline():
+            return await asyncio.to_thread(remaining_seconds)
+
+    assert asyncio.run(main()) is None

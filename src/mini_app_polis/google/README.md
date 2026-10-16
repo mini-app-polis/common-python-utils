@@ -206,7 +206,8 @@ Retry behavior:
 - Detailed logging on retries
 - Inside `mini_app_polis.deadline.run_deadline`, no attempt starts past the
   deadline (`RunDeadlineReached`) and no backoff that would cross it is
-  taken (the last error is re-raised)
+  taken (the last error is re-raised); `without_run_deadline()` lifts the
+  deadline for cleanup that must still run
 
 ---
 

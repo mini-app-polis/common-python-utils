@@ -27,6 +27,13 @@ deadline and the hard ceiling for one call's own timeout.
 Without a deadline, nothing changes: :func:`remaining_seconds` returns
 ``None`` and every loop behaves as it always has.
 
+Cleanup. Work that must happen *because* the run is out of time — rolling
+back a half-finished write, say — would be refused by the very deadline
+that triggered it. :func:`without_run_deadline` clears the deadline for its
+block so that cleanup runs with the library's ordinary retries, then puts
+the deadline back. Keep such blocks short: they spend the headroom left
+between the deadline and the hard ceiling.
+
 Scope. The deadline lives in a :class:`contextvars.ContextVar`, so it
 belongs to the code running inside the ``with`` block and nothing else:
 
@@ -49,6 +56,13 @@ Usage, in a Lambda handler::
             run(...)
     except RunDeadlineReached:
         ...  # stop cleanly; report a partial run
+
+And for a rollback that has to happen after the deadline::
+
+    from mini_app_polis.deadline import without_run_deadline
+
+    with without_run_deadline():
+        drive.delete_file(half_written_id)
 """
 
 from __future__ import annotations
@@ -58,7 +72,12 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-__all__ = ["RunDeadlineReached", "remaining_seconds", "run_deadline"]
+__all__ = [
+    "RunDeadlineReached",
+    "remaining_seconds",
+    "run_deadline",
+    "without_run_deadline",
+]
 
 #: Absolute deadline on the :func:`time.monotonic` clock, or ``None``.
 _deadline: ContextVar[float | None] = ContextVar(
@@ -90,6 +109,27 @@ def run_deadline(seconds: float) -> Iterator[None]:
     new = time.monotonic() + seconds
     current = _deadline.get()
     token = _deadline.set(new if current is None else min(current, new))
+    try:
+        yield
+    finally:
+        _deadline.reset(token)
+
+
+@contextmanager
+def without_run_deadline() -> Iterator[None]:
+    """Clear the run deadline for the ``with`` block.
+
+    For cleanup that must run even though the deadline has passed — a
+    rollback of a partial write, for instance — and that the library's
+    retry loops would otherwise refuse with :class:`RunDeadlineReached`.
+    Inside the block :func:`remaining_seconds` returns ``None`` and the
+    retry loops behave as they do with no deadline set. The previous
+    deadline is restored when the block exits, however it exits.
+
+    A :func:`run_deadline` nested inside starts afresh, since there is no
+    earlier deadline to keep: use one to bound the cleanup itself.
+    """
+    token = _deadline.set(None)
     try:
         yield
     finally:
