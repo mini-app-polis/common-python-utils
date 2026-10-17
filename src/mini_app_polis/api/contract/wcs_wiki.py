@@ -151,3 +151,42 @@ class WcsWikiStateWriteResult(BaseModel):
 
     written: int = Field(..., description="Entries upserted.")
     total: int = Field(..., description="Entries in the store afterwards.")
+
+
+# ── Wiki jobs: the wiki-curator queue (ADR-006, MINI-95) ──
+
+
+class WcsWikiJob(BaseModel):
+    """One unit of wiki work, as the curator's worker runs it.
+
+    ``link`` names a source; ``consolidate`` and ``generate`` name entities
+    (``generate`` also accepts one ``entity``). The worker refuses a job
+    missing what its kind needs.
+    """
+
+    job: Literal["link", "consolidate", "generate"] = Field(
+        ..., description="Which pass runs."
+    )
+    source_id: uuid.UUID | None = Field(None, description="link: the source.")
+    entity: str | None = Field(None, description="generate: one entity slug.")
+    entities: list[str] | None = Field(
+        None, description="consolidate / generate: entity slugs."
+    )
+
+
+class WcsWikiJobsRequest(BaseModel):
+    """``POST /v1/wcs/wiki/jobs`` — jobs to put on the wiki-curator queue.
+
+    The curator's worker sends the follow-on jobs a job named; an operator
+    can send any job by hand.
+    """
+
+    jobs: list[WcsWikiJob] = Field(
+        ..., min_length=1, max_length=100, description="Jobs, in order."
+    )
+
+
+class WcsWikiJobsAccepted(BaseModel):
+    """What was enqueued: one message id per job, in order."""
+
+    message_ids: list[str] = Field(..., description="SQS message ids.")

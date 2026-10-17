@@ -78,6 +78,8 @@ from .contract import (
     WcsTranscriptItem,
     WcsWikiExportItem,
     WcsWikiFacetsState,
+    WcsWikiJobsAccepted,
+    WcsWikiJobsRequest,
     WcsWikiLinksState,
     WcsWikiProseState,
     WcsWikiStateWriteResult,
@@ -410,6 +412,10 @@ class KaianoApiClient:
     ) -> WcsWikiStateWriteResult:
         """``POST /v1/wcs/wiki/state/facets`` — upsert facet decisions."""
         return cast(WcsWikiStateWriteResult, self._call("put_wcs_wiki_facets", payload))
+
+    def enqueue_wcs_wiki_jobs(self, payload: WcsWikiJobsRequest) -> WcsWikiJobsAccepted:
+        """``POST /v1/wcs/wiki/jobs`` — put wiki jobs on the curator's queue."""
+        return cast(WcsWikiJobsAccepted, self._call("enqueue_wcs_wiki_jobs", payload))
 
     def get_wcs_wiki_prose(self) -> WcsWikiProseState:
         """``GET /v1/wcs/wiki/state/prose`` — every entity's prose and history."""
