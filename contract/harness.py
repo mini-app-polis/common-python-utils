@@ -60,6 +60,10 @@ NOT_EXERCISED: dict[str, str] = {
         "development has no queues: transcription-dev-jobs is not "
         "provisioned, so the API cannot enqueue the job"
     ),
+    "enqueue_wcs_wiki_jobs": (
+        "development has no queues: wiki-curator-dev-jobs is not provisioned, "
+        "so the API cannot enqueue the job"
+    ),
     "create_wcs_source": (
         "a source cannot be deleted and every source is in the unfiltered "
         "wiki export, so a fixture would stay in dev's wiki for good"
@@ -73,11 +77,7 @@ NOT_EXERCISED: dict[str, str] = {
 #: 404, not the 401 the access check expects. Listed here, an endpoint is
 #: neither probed nor exercised; take it off once the development API has it,
 #: and exercise it in test_contract.py.
-NOT_DEPLOYED: dict[str, str] = {
-    "enqueue_wcs_wiki_jobs": (
-        "catalogued ahead of the API (MINI-95); not served by dev yet"
-    ),
-}
+NOT_DEPLOYED: dict[str, str] = {}
 
 
 class ContractConfigError(RuntimeError):
