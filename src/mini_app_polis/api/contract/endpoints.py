@@ -46,6 +46,8 @@ from .wcs import (
 )
 from .wcs_wiki import (
     WcsWikiFacetsState,
+    WcsWikiJobsAccepted,
+    WcsWikiJobsRequest,
     WcsWikiLinksState,
     WcsWikiProseState,
     WcsWikiStateWriteResult,
@@ -181,6 +183,17 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         path="/v1/wcs/wiki/state/prose",
         request=WcsWikiProseState,
         response=WcsWikiStateWriteResult,
+        scope="wcs.wiki.write",
+        callers=("wiki-curator-cog",),
+    ),
+    # The follow-on jobs a wiki job names, put on the wiki-curator queue by the
+    # API, which stays the fleet's one producer (ADR-006, MINI-95).
+    Endpoint(
+        name="enqueue_wcs_wiki_jobs",
+        method="POST",
+        path="/v1/wcs/wiki/jobs",
+        request=WcsWikiJobsRequest,
+        response=WcsWikiJobsAccepted,
         scope="wcs.wiki.write",
         callers=("wiki-curator-cog",),
     ),

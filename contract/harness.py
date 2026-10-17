@@ -73,7 +73,11 @@ NOT_EXERCISED: dict[str, str] = {
 #: 404, not the 401 the access check expects. Listed here, an endpoint is
 #: neither probed nor exercised; take it off once the development API has it,
 #: and exercise it in test_contract.py.
-NOT_DEPLOYED: dict[str, str] = {}
+NOT_DEPLOYED: dict[str, str] = {
+    "enqueue_wcs_wiki_jobs": (
+        "catalogued ahead of the API (MINI-95); not served by dev yet"
+    ),
+}
 
 
 class ContractConfigError(RuntimeError):
