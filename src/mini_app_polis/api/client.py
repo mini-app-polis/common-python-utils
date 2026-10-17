@@ -81,6 +81,8 @@ from .contract import (
     WcsWikiJobsAccepted,
     WcsWikiJobsRequest,
     WcsWikiLinksState,
+    WcsWikiPagesWrite,
+    WcsWikiPagesWriteResult,
     WcsWikiProseState,
     WcsWikiStateWriteResult,
 )
@@ -412,6 +414,10 @@ class KaianoApiClient:
     ) -> WcsWikiStateWriteResult:
         """``POST /v1/wcs/wiki/state/facets`` — upsert facet decisions."""
         return cast(WcsWikiStateWriteResult, self._call("put_wcs_wiki_facets", payload))
+
+    def put_wcs_wiki_pages(self, payload: WcsWikiPagesWrite) -> WcsWikiPagesWriteResult:
+        """``POST /v1/wcs/wiki/pages`` — upsert page documents, remove pages gone."""
+        return cast(WcsWikiPagesWriteResult, self._call("put_wcs_wiki_pages", payload))
 
     def enqueue_wcs_wiki_jobs(self, payload: WcsWikiJobsRequest) -> WcsWikiJobsAccepted:
         """``POST /v1/wcs/wiki/jobs`` — put wiki jobs on the curator's queue."""

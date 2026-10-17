@@ -49,6 +49,8 @@ from .wcs_wiki import (
     WcsWikiJobsAccepted,
     WcsWikiJobsRequest,
     WcsWikiLinksState,
+    WcsWikiPagesWrite,
+    WcsWikiPagesWriteResult,
     WcsWikiProseState,
     WcsWikiStateWriteResult,
 )
@@ -183,6 +185,18 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         path="/v1/wcs/wiki/state/prose",
         request=WcsWikiProseState,
         response=WcsWikiStateWriteResult,
+        scope="wcs.wiki.write",
+        callers=("wiki-curator-cog",),
+    ),
+    # The page documents materialise builds; the API stores, filters and
+    # serves them (ADR-006, MINI-96). Reading them is web-facing, so only the
+    # write is here.
+    Endpoint(
+        name="put_wcs_wiki_pages",
+        method="POST",
+        path="/v1/wcs/wiki/pages",
+        request=WcsWikiPagesWrite,
+        response=WcsWikiPagesWriteResult,
         scope="wcs.wiki.write",
         callers=("wiki-curator-cog",),
     ),
