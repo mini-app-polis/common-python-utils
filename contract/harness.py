@@ -51,15 +51,6 @@ DEV_KEY_PREFIX = "dev_"
 
 #: Catalog endpoints this suite deliberately does not call, and why. The
 #: ledger accepts these as accounted for; every other endpoint must be called.
-#: The wiki state endpoints (MINI-89) are in the catalog before the API
-#: serves them: the API takes their models from this library, so this release
-#: has to come first. Once the development API has them, exercise them in
-#: test_contract.py and drop these entries.
-_WIKI_STATE_PENDING = (
-    "catalogued ahead of the API (MINI-89); exercised once the development "
-    "API serves /v1/wcs/wiki/state"
-)
-
 NOT_EXERCISED: dict[str, str] = {
     "request_deejay_run": (
         "development has no queues: deejay-dev-jobs is not provisioned, so "
@@ -73,13 +64,25 @@ NOT_EXERCISED: dict[str, str] = {
         "a source cannot be deleted and every source is in the unfiltered "
         "wiki export, so a fixture would stay in dev's wiki for good"
     ),
-    "get_wcs_wiki_links": _WIKI_STATE_PENDING,
-    "put_wcs_wiki_links": _WIKI_STATE_PENDING,
-    "get_wcs_wiki_facets": _WIKI_STATE_PENDING,
-    "put_wcs_wiki_facets": _WIKI_STATE_PENDING,
-    "get_wcs_wiki_prose": _WIKI_STATE_PENDING,
-    "put_wcs_wiki_prose": _WIKI_STATE_PENDING,
 }
+
+
+#: Endpoints in the catalog that the development API does not serve yet,
+#: because the API takes their models from this library and so has to release
+#: after it. Neither probed nor exercised: an unauthenticated probe would get
+#: a 404, not the 401 the access check expects. Empty this once the
+#: development API has them, and exercise them in test_contract.py.
+NOT_DEPLOYED: dict[str, str] = dict.fromkeys(
+    (
+        "get_wcs_wiki_links",
+        "put_wcs_wiki_links",
+        "get_wcs_wiki_facets",
+        "put_wcs_wiki_facets",
+        "get_wcs_wiki_prose",
+        "put_wcs_wiki_prose",
+    ),
+    "catalogued ahead of the API (MINI-89); not served by dev yet",
+)
 
 
 class ContractConfigError(RuntimeError):

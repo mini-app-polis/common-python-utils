@@ -45,6 +45,7 @@ from mini_app_polis.api.contract import (
 
 from .harness import (
     MACHINE_NAME,
+    NOT_DEPLOYED,
     NOT_EXERCISED,
     ContractConfig,
     ContractConfigError,
@@ -72,7 +73,7 @@ def config() -> ContractConfig:
 @pytest.fixture(scope="module")
 def ledger() -> Ledger:
     ledger = Ledger()
-    for name, reason in NOT_EXERCISED.items():
+    for name, reason in {**NOT_EXERCISED, **NOT_DEPLOYED}.items():
         ledger.skip(name, reason)
     return ledger
 
@@ -92,7 +93,7 @@ def api(config: ContractConfig, ledger: Ledger) -> Iterator[LedgerClient]:
 
 @pytest.mark.parametrize(
     "endpoint",
-    [e for e in ENDPOINTS if e.scope is not None],
+    [e for e in ENDPOINTS if e.scope is not None and e.name not in NOT_DEPLOYED],
     ids=lambda e: e.name,
 )
 def test_refuses_an_unauthenticated_caller_in_the_error_envelope(
