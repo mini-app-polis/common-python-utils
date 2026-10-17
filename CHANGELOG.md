@@ -1,3 +1,10 @@
+# [6.4.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.3.0...v6.4.0) (2026-10-17)
+
+
+### Features
+
+* **api:** wiki jobs endpoint contract (MINI-95) ([d56923c](https://github.com/mini-app-polis/common-python-utils/commit/d56923c52e25d71b7a6b150621dc45995ea7e6cb))
+
 # [6.3.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.2.0...v6.3.0) (2026-10-17)
 
 
