@@ -1,3 +1,10 @@
+# [6.5.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.4.0...v6.5.0) (2026-10-17)
+
+
+### Features
+
+* **api:** wiki page documents contract and materialise job (MINI-96) ([56c5dc8](https://github.com/mini-app-polis/common-python-utils/commit/56c5dc8fea147ce0ef60fd332f95ff2dcfc0ef97))
+
 # [6.4.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.3.0...v6.4.0) (2026-10-17)
 
 
