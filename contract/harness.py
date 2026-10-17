@@ -67,22 +67,13 @@ NOT_EXERCISED: dict[str, str] = {
 }
 
 
-#: Endpoints in the catalog that the development API does not serve yet,
-#: because the API takes their models from this library and so has to release
-#: after it. Neither probed nor exercised: an unauthenticated probe would get
-#: a 404, not the 401 the access check expects. Empty this once the
-#: development API has them, and exercise them in test_contract.py.
-NOT_DEPLOYED: dict[str, str] = dict.fromkeys(
-    (
-        "get_wcs_wiki_links",
-        "put_wcs_wiki_links",
-        "get_wcs_wiki_facets",
-        "put_wcs_wiki_facets",
-        "get_wcs_wiki_prose",
-        "put_wcs_wiki_prose",
-    ),
-    "catalogued ahead of the API (MINI-89); not served by dev yet",
-)
+#: Endpoints in the catalog that the development API does not serve yet. An
+#: endpoint whose models the API takes from this library has to be released
+#: here first, and until the API is deployed an unauthenticated probe gets a
+#: 404, not the 401 the access check expects. Listed here, an endpoint is
+#: neither probed nor exercised; take it off once the development API has it,
+#: and exercise it in test_contract.py.
+NOT_DEPLOYED: dict[str, str] = {}
 
 
 class ContractConfigError(RuntimeError):

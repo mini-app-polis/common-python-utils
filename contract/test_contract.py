@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import uuid
 from collections.abc import Iterator
 
 import httpx
@@ -41,6 +42,14 @@ from mini_app_polis.api.contract import (
     SpotifyPlaylistIngest,
     SpotifyPlaylistsIngest,
     WcsTranscriptCreate,
+    WcsWikiFacetDecision,
+    WcsWikiFacetsState,
+    WcsWikiLinkedStatement,
+    WcsWikiLinksState,
+    WcsWikiProseEntry,
+    WcsWikiProseRevision,
+    WcsWikiProseState,
+    WcsWikiReference,
 )
 
 from .harness import (
@@ -216,6 +225,107 @@ def test_transcripts_upsert_on_drive_file_id(api: LedgerClient) -> None:
 
 def test_exports_the_wiki(api: LedgerClient) -> None:
     api.export_wcs_wiki()
+
+
+# The curator's state. Each write upserts one fixture entry under its fixed
+# key, and re-sends the document's own header as it read it, so the suite
+# leaves dev's versions and model as it found them. The fixture keys match no
+# statement or entity, which the curator ignores.
+
+#: The fixture entity's id: fixed, so every run writes the same row.
+FIXTURE_ID = uuid.UUID("00000000-0000-4000-8000-00000000c0de")
+
+
+def test_wiki_links_upsert_and_read_back(api: LedgerClient) -> None:
+    before = api.get_wcs_wiki_links()
+    entry = WcsWikiLinkedStatement(
+        linker_version=before.linker_version or "contract",
+        model=MACHINE_NAME,
+        subject_slug=FIXTURE,
+        source_id=None,
+        session_date=FIXTURE_DATE,
+        text="Contract suite fixture statement.",
+        references=[
+            WcsWikiReference(
+                name=FIXTURE,
+                target_slug=FIXTURE,
+                target_entity_id=None,
+                polarity="assert",
+            )
+        ],
+    )
+    key = f"contract:{FIXTURE}"
+    payload = WcsWikiLinksState(
+        linker_version=before.linker_version,
+        model=before.model,
+        statements={key: entry},
+    )
+
+    api.put_wcs_wiki_links(payload)
+    again = api.put_wcs_wiki_links(payload)
+    after = api.get_wcs_wiki_links()
+
+    assert again.written == 1
+    assert after.statements[key] == entry
+    assert (after.linker_version, after.model) == (before.linker_version, before.model)
+
+
+def test_wiki_facets_upsert_and_read_back(api: LedgerClient) -> None:
+    before = api.get_wcs_wiki_facets()
+    entry = WcsWikiFacetDecision(
+        parent=None,
+        same=False,
+        reason="Contract suite fixture decision.",
+        version="contract",
+        model=MACHINE_NAME,
+        decided_at=FIXTURE_DATE,
+    )
+    payload = WcsWikiFacetsState(
+        consolidator_versions=before.consolidator_versions,
+        model=before.model,
+        entities={FIXTURE: entry},
+    )
+
+    api.put_wcs_wiki_facets(payload)
+    after = api.get_wcs_wiki_facets()
+
+    assert after.entities[FIXTURE] == entry
+    assert after.consolidator_versions == before.consolidator_versions
+
+
+def test_wiki_prose_upsert_and_read_back(api: LedgerClient) -> None:
+    before = api.get_wcs_wiki_prose()
+    entry = WcsWikiProseEntry(
+        entity_id=FIXTURE_ID,
+        generator_version="contract",
+        model=MACHINE_NAME,
+        generated_at=FIXTURE_DATE,
+        definition="Contract suite fixture definition.",
+        context="",
+        integrated=[f"contract:{FIXTURE}"],
+        revisions=[
+            WcsWikiProseRevision(
+                by="llm",
+                at=FIXTURE_DATE,
+                model=MACHINE_NAME,
+                statements=1,
+                definition="Contract suite fixture definition.",
+                context="",
+                prose=None,
+            )
+        ],
+    )
+    payload = WcsWikiProseState(
+        generator_version=before.generator_version,
+        model=before.model,
+        entities={FIXTURE: entry},
+    )
+
+    api.put_wcs_wiki_prose(payload)
+    after = api.get_wcs_wiki_prose()
+
+    assert after.entities[FIXTURE] == entry
+    assert after.generator_version == before.generator_version
 
 
 # ── evaluator-cog, wiki-curator-cog, pipeline_status ──────────────────────
