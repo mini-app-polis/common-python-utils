@@ -75,6 +75,17 @@ from .wcs import (
     WcsTranscriptItem,
     WcsWikiExportItem,
 )
+from .wcs_wiki import (
+    WcsWikiFacetDecision,
+    WcsWikiFacetsState,
+    WcsWikiLinkedStatement,
+    WcsWikiLinksState,
+    WcsWikiProseEntry,
+    WcsWikiProseRevision,
+    WcsWikiProseState,
+    WcsWikiReference,
+    WcsWikiStateWriteResult,
+)
 
 __all__ = [
     "DeejayRunAccepted",
@@ -127,4 +138,13 @@ __all__ = [
     "WcsTranscriptCreate",
     "WcsTranscriptItem",
     "WcsWikiExportItem",
+    "WcsWikiFacetDecision",
+    "WcsWikiFacetsState",
+    "WcsWikiLinkedStatement",
+    "WcsWikiLinksState",
+    "WcsWikiProseEntry",
+    "WcsWikiProseRevision",
+    "WcsWikiProseState",
+    "WcsWikiReference",
+    "WcsWikiStateWriteResult",
 ]

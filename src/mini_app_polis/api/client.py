@@ -77,6 +77,10 @@ from .contract import (
     WcsTranscriptCreate,
     WcsTranscriptItem,
     WcsWikiExportItem,
+    WcsWikiFacetsState,
+    WcsWikiLinksState,
+    WcsWikiProseState,
+    WcsWikiStateWriteResult,
 )
 from .errors import ApiUnavailable, KaianoApiError, error_for
 
@@ -384,6 +388,36 @@ class KaianoApiClient:
     def export_wcs_wiki(self) -> WcsWikiExportItem:
         """``GET /v1/wcs/wiki/export`` — the whole corpus in one response."""
         return cast(WcsWikiExportItem, self._call("export_wcs_wiki"))
+
+    # The wiki curator's state. A GET is the whole document; a POST upserts
+    # the entries it carries and leaves the rest alone, so a long import is
+    # sent in chunks and can be re-sent.
+
+    def get_wcs_wiki_links(self) -> WcsWikiLinksState:
+        """``GET /v1/wcs/wiki/state/links`` — every linked statement."""
+        return cast(WcsWikiLinksState, self._call("get_wcs_wiki_links"))
+
+    def put_wcs_wiki_links(self, payload: WcsWikiLinksState) -> WcsWikiStateWriteResult:
+        """``POST /v1/wcs/wiki/state/links`` — upsert linked statements."""
+        return cast(WcsWikiStateWriteResult, self._call("put_wcs_wiki_links", payload))
+
+    def get_wcs_wiki_facets(self) -> WcsWikiFacetsState:
+        """``GET /v1/wcs/wiki/state/facets`` — every facet decision."""
+        return cast(WcsWikiFacetsState, self._call("get_wcs_wiki_facets"))
+
+    def put_wcs_wiki_facets(
+        self, payload: WcsWikiFacetsState
+    ) -> WcsWikiStateWriteResult:
+        """``POST /v1/wcs/wiki/state/facets`` — upsert facet decisions."""
+        return cast(WcsWikiStateWriteResult, self._call("put_wcs_wiki_facets", payload))
+
+    def get_wcs_wiki_prose(self) -> WcsWikiProseState:
+        """``GET /v1/wcs/wiki/state/prose`` — every entity's prose and history."""
+        return cast(WcsWikiProseState, self._call("get_wcs_wiki_prose"))
+
+    def put_wcs_wiki_prose(self, payload: WcsWikiProseState) -> WcsWikiStateWriteResult:
+        """``POST /v1/wcs/wiki/state/prose`` — upsert entities' prose."""
+        return cast(WcsWikiStateWriteResult, self._call("put_wcs_wiki_prose", payload))
 
     def request_deejay_run(self, payload: DeejayRunRequest) -> DeejayRunAccepted:
         """``POST /v1/deejay/runs`` — enqueue a deejay-cog run.

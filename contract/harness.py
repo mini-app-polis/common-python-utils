@@ -51,6 +51,15 @@ DEV_KEY_PREFIX = "dev_"
 
 #: Catalog endpoints this suite deliberately does not call, and why. The
 #: ledger accepts these as accounted for; every other endpoint must be called.
+#: The wiki state endpoints (MINI-89) are in the catalog before the API
+#: serves them: the API takes their models from this library, so this release
+#: has to come first. Once the development API has them, exercise them in
+#: test_contract.py and drop these entries.
+_WIKI_STATE_PENDING = (
+    "catalogued ahead of the API (MINI-89); exercised once the development "
+    "API serves /v1/wcs/wiki/state"
+)
+
 NOT_EXERCISED: dict[str, str] = {
     "request_deejay_run": (
         "development has no queues: deejay-dev-jobs is not provisioned, so "
@@ -64,6 +73,12 @@ NOT_EXERCISED: dict[str, str] = {
         "a source cannot be deleted and every source is in the unfiltered "
         "wiki export, so a fixture would stay in dev's wiki for good"
     ),
+    "get_wcs_wiki_links": _WIKI_STATE_PENDING,
+    "put_wcs_wiki_links": _WIKI_STATE_PENDING,
+    "get_wcs_wiki_facets": _WIKI_STATE_PENDING,
+    "put_wcs_wiki_facets": _WIKI_STATE_PENDING,
+    "get_wcs_wiki_prose": _WIKI_STATE_PENDING,
+    "put_wcs_wiki_prose": _WIKI_STATE_PENDING,
 }
 
 
