@@ -1,3 +1,10 @@
+# [6.3.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.2.0...v6.3.0) (2026-10-17)
+
+
+### Features
+
+* **api:** wiki curator state contract — links, facets, prose (MINI-89) ([48ec870](https://github.com/mini-app-polis/common-python-utils/commit/48ec870216d5d99fa1291a12acabb50b51dba5fb))
+
 # [6.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.1.1...v6.2.0) (2026-10-16)
 
 
