@@ -44,6 +44,12 @@ from .wcs import (
     WcsTranscriptItem,
     WcsWikiExportItem,
 )
+from .wcs_wiki import (
+    WcsWikiFacetsState,
+    WcsWikiLinksState,
+    WcsWikiProseState,
+    WcsWikiStateWriteResult,
+)
 
 
 @dataclass(frozen=True)
@@ -118,6 +124,64 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=None,
         response=WcsWikiExportItem,
         scope="wcs.corpus.read",
+        callers=("wiki-curator-cog",),
+    ),
+    # The curator's state (wiki-curator-cog ADR-006, MINI-89). Read with the
+    # corpus scope — the statements quote private sources — and written with
+    # a scope of its own, so reading the corpus does not imply rewriting the
+    # wiki.
+    Endpoint(
+        name="get_wcs_wiki_links",
+        method="GET",
+        path="/v1/wcs/wiki/state/links",
+        request=None,
+        response=WcsWikiLinksState,
+        scope="wcs.corpus.read",
+        callers=("wiki-curator-cog",),
+    ),
+    Endpoint(
+        name="put_wcs_wiki_links",
+        method="POST",
+        path="/v1/wcs/wiki/state/links",
+        request=WcsWikiLinksState,
+        response=WcsWikiStateWriteResult,
+        scope="wcs.wiki.write",
+        callers=("wiki-curator-cog",),
+    ),
+    Endpoint(
+        name="get_wcs_wiki_facets",
+        method="GET",
+        path="/v1/wcs/wiki/state/facets",
+        request=None,
+        response=WcsWikiFacetsState,
+        scope="wcs.corpus.read",
+        callers=("wiki-curator-cog",),
+    ),
+    Endpoint(
+        name="put_wcs_wiki_facets",
+        method="POST",
+        path="/v1/wcs/wiki/state/facets",
+        request=WcsWikiFacetsState,
+        response=WcsWikiStateWriteResult,
+        scope="wcs.wiki.write",
+        callers=("wiki-curator-cog",),
+    ),
+    Endpoint(
+        name="get_wcs_wiki_prose",
+        method="GET",
+        path="/v1/wcs/wiki/state/prose",
+        request=None,
+        response=WcsWikiProseState,
+        scope="wcs.corpus.read",
+        callers=("wiki-curator-cog",),
+    ),
+    Endpoint(
+        name="put_wcs_wiki_prose",
+        method="POST",
+        path="/v1/wcs/wiki/state/prose",
+        request=WcsWikiProseState,
+        response=WcsWikiStateWriteResult,
+        scope="wcs.wiki.write",
         callers=("wiki-curator-cog",),
     ),
     Endpoint(
