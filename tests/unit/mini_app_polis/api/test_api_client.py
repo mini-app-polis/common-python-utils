@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -508,3 +510,246 @@ def test_exhausted_connection_retries_are_unavailable() -> None:
         client = KaianoApiClient(base_url="https://example.com", api_key="k_test")
         with pytest.raises(ApiUnavailable):
             client.post("/v1/x", payload={})
+
+
+# ── retrying without piling on ──────────────────────────────────────────
+
+
+@pytest.fixture
+def sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """Every wait the client asks for, instead of waiting."""
+    waited: list[float] = []
+    monkeypatch.setattr("mini_app_polis.api.client._sleep", waited.append)
+    return waited
+
+
+@pytest.fixture(autouse=True)
+def _no_real_waits_and_no_cached_bodies(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("mini_app_polis.api.client._sleep", lambda _s: None)
+    monkeypatch.setattr("mini_app_polis.api.client._ETAG_CACHE", {})
+
+
+def _response(
+    status: int,
+    body: str = "",
+    headers: dict[str, str] | None = None,
+    content: bytes | None = None,
+) -> MagicMock:
+    response = MagicMock()
+    response.status_code = status
+    response.text = body
+    response.content = content if content is not None else body.encode()
+    response.headers = httpx.Headers(headers or {})
+    response.json.return_value = {"ok": True}
+    return response
+
+
+def _get_with(responses: list[Any], **client_kwargs: Any) -> tuple[Any, MagicMock]:
+    mock_http_client = MagicMock()
+    mock_http_client.get.side_effect = responses
+    with patch("mini_app_polis.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+        client = KaianoApiClient(
+            base_url="https://example.com", api_key="k_test", **client_kwargs
+        )
+        try:
+            out: Any = client.get("/v1/sets")
+        except KaianoApiError as exc:
+            out = exc
+    return out, mock_http_client
+
+
+@pytest.mark.parametrize("status", [429, 502, 503, 504])
+def test_a_get_is_retried_after_a_gateway_error_or_429(
+    status: int, sleeps: list[float]
+) -> None:
+    out, http = _get_with([_response(status, "busy"), _response(200)])
+
+    assert out == {"ok": True}
+    assert http.get.call_count == 2
+    assert len(sleeps) == 1
+
+
+def test_a_get_waits_as_long_as_retry_after_asks(sleeps: list[float]) -> None:
+    out, _ = _get_with([_response(503, "busy", {"Retry-After": "7"}), _response(200)])
+
+    assert out == {"ok": True}
+    assert sleeps == [7.0]
+
+
+def test_no_wait_is_longer_than_the_cap(sleeps: list[float]) -> None:
+    _get_with([_response(503, "busy", {"Retry-After": "3600"}), _response(200)])
+
+    assert sleeps == [30.0]
+
+
+def test_waits_grow_between_attempts(sleeps: list[float]) -> None:
+    out, http = _get_with([_response(502, "bad gateway")] * 4, max_retries=4)
+
+    assert isinstance(out, ApiUnavailable)
+    assert http.get.call_count == 4
+    # Jittered between half and all of 2s, 4s, 8s.
+    assert len(sleeps) == 3
+    assert 1.0 <= sleeps[0] <= 2.0
+    assert 2.0 <= sleeps[1] <= 4.0
+    assert 4.0 <= sleeps[2] <= 8.0
+
+
+def test_the_apis_own_refusal_is_not_retried(sleeps: list[float]) -> None:
+    out, http = _get_with([_response(500, _API_404), _response(200)])
+
+    assert isinstance(out, KaianoApiError)
+    assert out.status_code == 500
+    assert http.get.call_count == 1
+    assert sleeps == []
+
+
+def test_a_lost_connection_is_retried_after_a_wait(sleeps: list[float]) -> None:
+    out, http = _get_with([httpx.ReadTimeout("slow"), _response(200)])
+
+    assert out == {"ok": True}
+    assert http.get.call_count == 2
+    assert len(sleeps) == 1
+
+
+# ── conditional reads ───────────────────────────────────────────────────
+
+
+def _export_body(n_entities: int = 0) -> bytes:
+    entity = {
+        "id": "00000000-0000-0000-0000-000000000001",
+        "slug": "sugar-push",
+        "canonical_name": "Sugar push",
+        "kind": "pattern",
+        "overview_md": "",
+        "status": "canonical",
+        "external_origin": {},
+        "aliases": [],
+    }
+    data = {
+        "entities": [entity] * n_entities,
+        "instructors": [],
+        "sources": [],
+        "attributions": [],
+        "definitions": [],
+        "relations": [],
+        "drill_purposes": [],
+        "technique_requirements": [],
+        "references": [],
+        "exported_at": "2026-10-18T12:00:00Z",
+    }
+    meta = {"count": 1, "total": 1, "version": "test"}
+    return json.dumps({"data": data, "meta": meta}).encode()
+
+
+def _export_with(responses: list[Any]) -> tuple[list[Any], MagicMock]:
+    mock_http_client = MagicMock()
+    mock_http_client.get.side_effect = responses
+    outs: list[Any] = []
+    with patch("mini_app_polis.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+        client = KaianoApiClient(base_url="https://example.com", api_key="k_test")
+        for _ in responses:
+            outs.append(client.export_wcs_wiki())
+    return outs, mock_http_client
+
+
+def _if_none_match(call: Any) -> str | None:
+    return call.kwargs["headers"].get("If-None-Match")
+
+
+def test_an_unchanged_export_is_read_from_the_last_copy() -> None:
+    body = _export_body(1)
+    outs, http = _export_with(
+        [
+            _response(200, headers={"ETag": '"rev-1"'}, content=body),
+            _response(304, headers={"ETag": '"rev-1"'}, content=b""),
+        ]
+    )
+
+    first, second = http.get.call_args_list
+    assert _if_none_match(first) is None
+    assert _if_none_match(second) == '"rev-1"'
+    assert [len(o.entities) for o in outs] == [1, 1]
+    # Each call validates its own model, so one caller's changes never
+    # reach the copy the next call reads.
+    assert outs[0] is not outs[1]
+    assert outs[0].entities[0] is not outs[1].entities[0]
+
+
+def test_a_changed_export_replaces_the_last_copy() -> None:
+    outs, http = _export_with(
+        [
+            _response(200, headers={"ETag": '"rev-1"'}, content=_export_body(1)),
+            _response(200, headers={"ETag": '"rev-2"'}, content=_export_body(2)),
+            _response(304, content=b""),
+        ]
+    )
+
+    assert [_if_none_match(c) for c in http.get.call_args_list] == [
+        None,
+        '"rev-1"',
+        '"rev-2"',
+    ]
+    assert [len(o.entities) for o in outs] == [1, 2, 2]
+
+
+def test_an_export_without_an_etag_is_not_kept() -> None:
+    _, http = _export_with(
+        [
+            _response(200, headers={"ETag": '"rev-1"'}, content=_export_body()),
+            _response(200, content=_export_body()),
+            _response(200, content=_export_body()),
+        ]
+    )
+
+    assert [_if_none_match(c) for c in http.get.call_args_list] == [
+        None,
+        '"rev-1"',
+        None,
+    ]
+
+
+def test_the_export_gets_a_longer_timeout_than_other_reads() -> None:
+    mock_http_client = MagicMock()
+    mock_http_client.get.return_value = _response(200, content=_export_body())
+    with patch("mini_app_polis.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+        KaianoApiClient(base_url="https://example.com", api_key="k").export_wcs_wiki()
+
+    mock_client_cls.assert_called_once_with(timeout=120.0)
+
+
+def test_a_304_with_no_copy_is_an_error() -> None:
+    with pytest.raises(KaianoApiError) as excinfo:
+        _export_with([_response(304, content=b"")])
+    assert excinfo.value.status_code == 304
+
+
+def test_a_wait_that_would_cross_the_run_deadline_is_skipped(
+    sleeps: list[float],
+) -> None:
+    from mini_app_polis.deadline import run_deadline
+
+    with run_deadline(5):
+        out, http = _get_with(
+            [_response(503, "busy", {"Retry-After": "10"}), _response(200)]
+        )
+
+    assert isinstance(out, ApiUnavailable)
+    assert out.status_code == 503
+    assert http.get.call_count == 1
+    assert sleeps == []
+
+
+def test_no_read_starts_past_the_run_deadline() -> None:
+    from mini_app_polis.deadline import RunDeadlineReached, run_deadline
+
+    mock_http_client = MagicMock()
+    with patch("mini_app_polis.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+        client = KaianoApiClient(base_url="https://example.com", api_key="k")
+        with run_deadline(0), pytest.raises(RunDeadlineReached):
+            client.get("/v1/sets")
+
+    mock_http_client.get.assert_not_called()
