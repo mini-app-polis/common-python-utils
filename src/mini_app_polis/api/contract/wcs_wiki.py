@@ -330,11 +330,28 @@ class WcsWikiPagesWrite(BaseModel):
 
 
 class WcsWikiPagesWriteResult(BaseModel):
-    """What a pages ``POST`` stored."""
+    """What a pages ``POST`` stored, and which of it was a change.
+
+    ``written`` counts every page sent, a rebuild of an identical page
+    included. ``created``, ``changed`` and ``removed_slugs`` name what is
+    different afterwards, so a run report can say what changed rather than
+    only what was processed. An API older than these fields leaves them
+    empty.
+    """
 
     written: int = Field(..., description="Pages upserted.")
     removed: int = Field(..., description="Pages deleted.")
     total: int = Field(..., description="Pages in the store afterwards.")
+    created: list[str] = Field(
+        default_factory=list, description="Slugs stored for the first time."
+    )
+    changed: list[str] = Field(
+        default_factory=list,
+        description="Slugs whose stored page differs from what it replaced.",
+    )
+    removed_slugs: list[str] = Field(
+        default_factory=list, description="Slugs deleted (``removed`` of them)."
+    )
 
 
 # ── Wiki jobs: the wiki-curator queue (ADR-006, MINI-95) ──
