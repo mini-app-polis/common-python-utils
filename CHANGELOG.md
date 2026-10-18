@@ -1,3 +1,10 @@
+## [6.7.1](https://github.com/mini-app-polis/common-python-utils/compare/v6.7.0...v6.7.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* **discord:** no rate-limit hold is longer than a minute, and a 429 logs what Discord said ([5b598ee](https://github.com/mini-app-polis/common-python-utils/commit/5b598eeaeddf7b8430109f4d08610b03186a3afa))
+
 # [6.7.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.6.0...v6.7.0) (2026-10-18)
 
 
