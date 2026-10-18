@@ -1,3 +1,10 @@
+# [6.6.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.5.0...v6.6.0) (2026-10-18)
+
+
+### Features
+
+* **api:** wiki pages name the slugs folded into them (MINI-100) ([69f94c9](https://github.com/mini-app-polis/common-python-utils/commit/69f94c933e076ff75b380fb53c94354b25f80121))
+
 # [6.5.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.4.0...v6.5.0) (2026-10-17)
 
 
