@@ -52,6 +52,7 @@ dependencies = [
 | `llm/` | `from mini_app_polis.llm import build_llm, LLMMessage` | OpenAI + Anthropic clients (optional extra) |
 | `mp3/` | `from mini_app_polis.mp3 import ...` | AcoustID identification, tagging, renaming |
 | `music/` | `from mini_app_polis.music import normalize_for_matching` | Music data normalization utilities |
+| `sentry.py` | `from mini_app_polis.sentry import init_sentry` | Starts Sentry for a service with the fleet defaults; an empty DSN in production logs an ERROR instead of skipping silently (CD-038) |
 | `spotify/` | `from mini_app_polis.spotify import SpotifyAPI` | Spotipy wrapper; raises `SpotifyTokenExpired` when Spotify refuses the refresh token (`invalid_grant`, not retried); every request, token refresh included, is bounded by `SPOTIFY_REQUEST_TIMEOUT_SECONDS` |
 | `timing.py` | `from mini_app_polis import timing` | Per-invocation working vs waiting time, by service, as one CloudWatch line |
 | `vdj/` | `from mini_app_polis.vdj.m3u import ParseFacade` | VirtualDJ M3U parsing |
@@ -174,6 +175,35 @@ result = llm.generate_json(
 )
 print(result.output_json)  # {"artist": "...", "title": "..."}
 ```
+
+`generate_json` reads the first JSON object in the response: stray text
+before or after it (a "Here is the JSON:" line, a trailing remark, a
+markdown fence) is ignored. A response with no object fails with
+`LLMValidationError` quoting its start. Schema validation is unchanged.
+
+### Sentry
+
+```python
+from mini_app_polis.sentry import init_sentry
+
+# A Lambda handler, at import (once per cold start). Reads SENTRY_DSN_COGS.
+init_sentry("watcher-cog")
+
+# A FastAPI app, in its lifespan, from its Settings.
+sentry_on = init_sentry(
+    "api-kaianolevine-com",
+    dsn_var="SENTRY_DSN_APIS",
+    dsn=settings.SENTRY_DSN_APIS,
+    integrations=[FastApiIntegration()],
+    traces_sample_rate=1.0,
+)
+```
+
+The environment label comes from `mini_app_polis.environment`, and the
+`service` tag tells events apart in a shared project. With no DSN in
+production it logs an ERROR naming the variable and the service starts
+anyway; outside production, no DSN is normal and it stays quiet. It never
+raises, and returns whether Sentry is on.
 
 ### Discord
 

@@ -74,12 +74,23 @@ def _page() -> dict:
         "referenced_by": [],
         "sources": [CITATION],
         "evidence_sources": [SOURCE],
+        "folded": ["anchor-step-variation", "stationary-anchor"],
+        "requested_slug": None,
     }
 
 
 def test_a_page_round_trips() -> None:
     raw = _page()
     assert WcsWikiPage.model_validate(raw).model_dump(mode="json") == raw
+
+
+def test_a_page_stored_before_folded_existed_still_reads() -> None:
+    # Documents written before MINI-100 have neither field.
+    raw = _page()
+    del raw["folded"], raw["requested_slug"]
+    page = WcsWikiPage.model_validate(raw)
+    assert page.folded == []
+    assert page.requested_slug is None
 
 
 def test_a_write_carries_pages_and_removals() -> None:

@@ -46,14 +46,41 @@ class TestParseJson:
         result = parse_json('{"key": "value"}')
         assert result == {"key": "value"}
 
-    def test_invalid_json_raises(self) -> None:
-        with pytest.raises(LLMValidationError, match="Failed to parse JSON"):
+    def test_invalid_json_raises_quoting_the_response(self) -> None:
+        with pytest.raises(
+            LLMValidationError,
+            match="Failed to parse JSON: no JSON object in model response: "
+            "'not json at all'",
+        ):
             parse_json("not json at all")
 
-    def test_json_with_markdown_fence_not_stripped(self) -> None:
-        # parse_json itself does NOT strip fences — that's the client's job
-        with pytest.raises(LLMValidationError):
-            parse_json("```json\n{}\n```")
+    def test_error_preview_is_bounded(self) -> None:
+        with pytest.raises(LLMValidationError) as excinfo:
+            parse_json("x" * 1000)
+        assert len(str(excinfo.value)) < 300
+
+    def test_stray_line_after_object_is_ignored(self) -> None:
+        # "Extra data": a complete object, then a stray line.
+        text = '{"definition": "A stop.", "context": ""}\nHope this helps!'
+        assert parse_json(text) == {"definition": "A stop.", "context": ""}
+
+    def test_text_before_object_is_ignored(self) -> None:
+        text = 'Here is the JSON:\n{"definition": "A tick."}'
+        assert parse_json(text) == {"definition": "A tick."}
+
+    def test_markdown_fence_is_read_through(self) -> None:
+        assert parse_json('```json\n{"ok": true}\n```') == {"ok": True}
+
+    def test_brace_in_leading_prose_is_skipped(self) -> None:
+        text = 'Use {braces} carefully: {"ok": true}'
+        assert parse_json(text) == {"ok": True}
+
+    def test_first_object_wins(self) -> None:
+        assert parse_json('{"a": 1} {"b": 2}') == {"a": 1}
+
+    def test_whole_text_parses_as_before(self) -> None:
+        # Lenient-only: anything json.loads accepted is returned unchanged.
+        assert parse_json('[{"a": 1}]') == [{"a": 1}]
 
 
 class TestValidateJson:
