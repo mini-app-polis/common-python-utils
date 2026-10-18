@@ -46,12 +46,15 @@ from __future__ import annotations
 import datetime as dt
 import logging as _logging
 import os
+import random
+import time
 from functools import cache
 from typing import Any, cast
 
 import httpx
 from pydantic import BaseModel, TypeAdapter
 
+from ..deadline import _ensure_time_left, _wait_crosses_deadline
 from ..environment import api_base_url
 from .contract import (
     ENDPOINTS_BY_NAME,
@@ -123,6 +126,63 @@ def _key_for(machine_name: str | None) -> str | None:
         if own:
             return own
     return (os.environ.get("KAIANO_API_KEY") or "").strip() or None
+
+
+# ── Retrying without piling on ───────────────────────────────────────────
+#
+# A retry sent the moment the last attempt failed lands on a service that is
+# still busy with the request it gave up on. During the wiki-export incident
+# (2026-10-18) each curator job's 30-second timeout fired while the API was
+# still building the export, and the immediate retry started a second build
+# beside the first, then a third. A GET is idempotent, so it is retried on a
+# gateway error and on 429 as well as on a lost connection, but only after a
+# wait that grows each attempt, jittered so callers that failed together do
+# not come back together. A ``Retry-After`` from the server is used instead.
+
+#: The first wait between attempts, in seconds; it doubles each attempt.
+_BACKOFF_BASE_S = 2.0
+#: No one wait is longer than this, whatever ``Retry-After`` asks for.
+_BACKOFF_MAX_S = 30.0
+
+#: Patched in tests.
+_sleep = time.sleep
+
+
+def _retry_after_s(response: httpx.Response) -> float | None:
+    """The wait a response asks for, in seconds, or None if it names none."""
+    headers = getattr(response, "headers", None)
+    raw = headers.get("Retry-After") if headers is not None else None
+    if not isinstance(raw, str):
+        return None
+    try:
+        return max(0.0, float(raw.strip()))
+    except ValueError:
+        return None  # an HTTP date: rare, and the backoff serves as well
+
+
+def _backoff_s(attempt: int, retry_after: float | None) -> float:
+    """How long to wait after failed attempt ``attempt`` (1-based)."""
+    if retry_after is not None:
+        return min(_BACKOFF_MAX_S, retry_after)
+    wait = _BACKOFF_BASE_S * 2 ** (attempt - 1) * random.uniform(0.5, 1.0)
+    return min(_BACKOFF_MAX_S, wait)
+
+
+# ── Conditional reads ────────────────────────────────────────────────────
+#
+# An endpoint whose response is large and changes rarely is read with its
+# ETag: this process keeps the last body, sends the ETag back, and an
+# unchanged response comes back as an empty 304. A warm Lambda keeps module
+# state between invocations, so that holds across jobs. The server checks
+# every read, so a stale body is never used.
+
+#: Endpoint name -> its request timeout in seconds. The export is the whole
+#: corpus; built cold it takes long enough that the default timeout gave up
+#: on it while the API kept building, and the retry asked for another.
+_CONDITIONAL_READS: dict[str, float] = {"export_wcs_wiki": 120.0}
+
+#: URL -> (ETag, body) of the last 200 for each conditional read.
+_ETAG_CACHE: dict[str, tuple[str, bytes]] = {}
 
 
 class KaianoApiClient:
@@ -257,17 +317,41 @@ class KaianoApiClient:
         """
         Make a synchronous GET request to the API.
 
-        Retries up to max_retries times on connection errors.
+        Makes up to max_retries attempts, waiting longer before each one,
+        when the connection fails, a gateway answers 502, 503 or 504, or the
+        API answers 429.
         Raises KaianoApiError on non-2xx responses, ApiUnavailable when the
         API cannot be reached.
         """
+        return self._get_response(path, params).json()
+
+    def _get_response(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+        *,
+        headers: dict[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> httpx.Response:
+        """A GET's response: any 2xx or 3xx, after retries; raises otherwise.
+
+        Inside :func:`mini_app_polis.deadline.run_deadline`, no attempt starts
+        past the deadline, and a wait that would end at or past it is skipped
+        and the error that prompted it raised instead.
+        """
         url = f"{self.base_url}{path}"
         last_exc: Exception | None = None
+        last_error: Exception | None = None
         query = params or {}
+        request_headers = {**self._headers(), **(headers or {})}
+        attempts = 0
 
         for attempt in range(1, self.max_retries + 1):
+            _ensure_time_left(f"reading {path}", last_error)
+            attempts = attempt
+            final = attempt == self.max_retries
             try:
-                with httpx.Client(timeout=self.timeout) as client:
+                with httpx.Client(timeout=timeout or self.timeout) as client:
                     # `params` is passed only when there is something to
                     # pass. httpx *replaces* a URL's query string whenever
                     # the kwarg is supplied at all, so the previous
@@ -281,27 +365,43 @@ class KaianoApiClient:
                     # plausible data, so nothing looked wrong anywhere.
                     if query:
                         response = client.get(
-                            url, params=query, headers=self._headers()
+                            url, params=query, headers=request_headers
                         )
                     else:
-                        response = client.get(url, headers=self._headers())
-
-                if response.status_code >= 400:
-                    raise error_for(response.status_code, response.text, path)
-
-                return response.json()
-
+                        response = client.get(url, headers=request_headers)
             except httpx.TransportError as exc:
-                last_exc = exc
-                if attempt == self.max_retries:
+                last_exc = last_error = exc
+                wait = _backoff_s(attempt, None)
+                if final or _wait_crosses_deadline(wait):
                     break
+                _sleep(wait)
                 continue
+
+            if response.status_code < 400:
+                return response
+            err = last_error = error_for(response.status_code, response.text, path)
+            wait = _backoff_s(attempt, _retry_after_s(response))
+            if (
+                final
+                or not (isinstance(err, ApiUnavailable) or response.status_code == 429)
+                or _wait_crosses_deadline(wait)
+            ):
+                raise err
+            _log.warning(
+                "GET %s answered %d; attempt %d of %d, retrying in %.1fs",
+                path,
+                response.status_code,
+                attempt,
+                self.max_retries,
+                wait,
+            )
+            _sleep(wait)
 
         raise ApiUnavailable(
             status_code=0,
-            message=f"Connection failed after {self.max_retries} attempts: {last_exc}",
+            message=f"Connection failed after {attempts} attempts: {last_exc}",
             path=path,
-        )
+        ) from last_exc
 
     # ── Typed methods ─────────────────────────────────────────────────────
     #
@@ -334,9 +434,47 @@ class KaianoApiClient:
                 endpoint.path,
                 body.model_dump(mode="json", exclude_unset=True, by_alias=True),
             )
+        elif endpoint_name in _CONDITIONAL_READS:
+            body_bytes = self._conditional_get(
+                endpoint.path, params, _CONDITIONAL_READS[endpoint_name]
+            )
+            return _envelope_adapter(endpoint_name).validate_json(body_bytes).data
         else:
             raw = self.get(endpoint.path, params)
         return _envelope_adapter(endpoint_name).validate_python(raw).data
+
+    def _conditional_get(
+        self, path: str, params: dict[str, Any] | None, timeout: float
+    ) -> bytes:
+        """A GET's body, revalidated by ETag against this process's last copy.
+
+        A 304 returns the copy kept from the last 200. The caller validates
+        the bytes afresh each time, so it gets its own model and can never
+        alter the copy the next call reads.
+        """
+        key = f"{self.base_url}{path}"
+        cached = _ETAG_CACHE.get(key)
+        response = self._get_response(
+            path,
+            params,
+            headers={"If-None-Match": cached[0]} if cached else None,
+            timeout=max(self.timeout, timeout),
+        )
+        if response.status_code == 304:
+            if cached is None:
+                raise KaianoApiError(
+                    status_code=304,
+                    message="304 Not Modified, but no ETag was sent",
+                    path=path,
+                )
+            return cached[1]
+        body = response.content
+        etag = response.headers.get("ETag")
+        if etag:
+            _ETAG_CACHE[key] = (etag, body)
+        else:
+            _ETAG_CACHE.pop(key, None)
+        return body
 
     def ingest(self, payload: IngestSet) -> IngestResponseData:
         """``POST /v1/ingest`` — one set and its tracks."""
@@ -390,7 +528,15 @@ class KaianoApiClient:
         return cast(WcsSourceItem, self._call("create_wcs_source", payload))
 
     def export_wcs_wiki(self) -> WcsWikiExportItem:
-        """``GET /v1/wcs/wiki/export`` — the whole corpus in one response."""
+        """``GET /v1/wcs/wiki/export`` — the whole corpus in one response.
+
+        The API labels each export with an ETag that changes whenever the
+        corpus does. This process keeps the last body it read and sends that
+        ETag back, so an unchanged corpus costs the API one small query and
+        comes back as an empty 304. The body is validated afresh on every
+        call, so callers get their own model and can never alter the copy
+        the next call reads.
+        """
         return cast(WcsWikiExportItem, self._call("export_wcs_wiki"))
 
     # The wiki curator's state. A GET is the whole document; a POST upserts

@@ -97,6 +97,20 @@ single definition. A response that doesn't match raises pydantic's
 fields, so a field the API adds doesn't break a cog pinned to an older
 release. A test enforces this.
 
+**Retries.** A GET is retried on a lost connection, on a gateway's 502, 503
+or 504, and on 429. Each wait is longer than the last (about 2 s, then 4 s,
+jittered), or as long as the response's `Retry-After`, and never more than
+30 s. Retrying immediately is what turned one slow wiki export into three
+concurrent builds of it. A POST is retried only on a lost connection. Inside
+`run_deadline`, the client follows the same rules as the library's other
+retry loops.
+
+**Conditional reads.** `export_wcs_wiki()` keeps the last body it read and
+sends its ETag back. An unchanged corpus comes back as an empty 304, and the
+kept body is validated again, so each call gets a model of its own. A warm
+Lambda keeps that copy between invocations. The export also gets a 120 s
+timeout, since a cold build takes longer than the default 30 s.
+
 **Contract suite.** `contract/` checks the catalog against the deployed
 development API (TEST-016). It calls every endpoint through the typed methods
 and fails if an endpoint is neither exercised nor listed in
