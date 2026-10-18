@@ -1,3 +1,15 @@
+# [6.7.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.6.0...v6.7.0) (2026-10-18)
+
+
+### Bug Fixes
+
+* **api:** an HTML error page in an API error is summarised, not quoted whole ([b22fa10](https://github.com/mini-app-polis/common-python-utils/commit/b22fa106dfc77a2a55dc013db562114a531fd1ac))
+
+
+### Features
+
+* **api:** GETs back off before retrying, and the wiki export is read by ETag (MINI-106) ([7e37512](https://github.com/mini-app-polis/common-python-utils/commit/7e37512c19f716caf74674d90db094221094d24f))
+
 # [6.6.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.5.0...v6.6.0) (2026-10-18)
 
 
