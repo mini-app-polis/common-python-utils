@@ -1,3 +1,10 @@
+# [6.8.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.7.1...v6.8.0) (2026-10-18)
+
+
+### Features
+
+* **contract:** a wiki pages write names the pages created, changed and removed ([356d600](https://github.com/mini-app-polis/common-python-utils/commit/356d6002fac661fb715971376d9fc703dc7e61d6))
+
 ## [6.7.1](https://github.com/mini-app-polis/common-python-utils/compare/v6.7.0...v6.7.1) (2026-10-18)
 
 
