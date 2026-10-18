@@ -41,7 +41,8 @@ when it is global or when Cloudflare refused the request before Discord saw
 it (error 1015, an HTML page rather than JSON, applied to the caller's IP)
 — and the refused message is sent again when it ends. Nothing is posted to
 a scope while it is cooling down: posting through a 1015 is what extends
-it.
+it. No cooldown is longer than a minute, whatever the 429 asks for: the
+next message after it finds out whether the limit is still there.
 
 Waiting is bounded. A send spends at most ``max_wait`` seconds (default
 ``MAX_WAIT_SECS``) queued behind others and waiting out limits; a message
@@ -169,9 +170,14 @@ _MAX_ATTEMPTS = 3
 _ALL_WEBHOOKS = "*"
 #: When a 429 names no wait. Cloudflare's 1015 page usually does not.
 _DEFAULT_COOLDOWN_SECS = 60.0
-#: Upper bound on a cooldown, so a malformed Retry-After cannot mute Discord
-#: for the rest of the process's life.
-_MAX_COOLDOWN_SECS = 3600.0
+#: Upper bound on a cooldown. A longer wait asked for is not taken on
+#: trust: after this long the next message is posted, and if Discord still
+#: refuses, its 429 starts another cooldown. A limit that really lasts an
+#: hour costs one refused post a minute; one that has already lifted costs
+#: nothing. The cap was an hour until 2026-10-18, when one 429 to the dev API
+#: muted every webhook in the process for that hour while Discord was
+#: answering normally.
+_MAX_COOLDOWN_SECS = 60.0
 #: A rejection body is logged for its reason; a 1015 is several kilobytes of
 #: HTML, and the reason is in the first few hundred characters.
 _BODY_LOG_LIMIT = 500
@@ -426,12 +432,16 @@ async def _post_in_turn(
             secs, scope = _start_cooldown(url, resp)
             held = "every webhook" if scope == _ALL_WEBHOOKS else "this webhook"
             # A warning, not a fault: waiting it out is the plan. A message
-            # that cannot be is reported by _drop.
+            # that cannot be is reported by _drop. What Discord said is
+            # logged, so a long or global limit can be traced to its cause.
             logger.warning(
                 with_log_prefix(
                     LOG_WARNING,
                     f"discord rate-limited ({context}) channel={channel}; "
-                    f"holding {held} for {secs:.1f}s",
+                    f"holding {held} for {secs:.1f}s "
+                    f"retry_after={resp.headers.get('Retry-After')} "
+                    f"scope={resp.headers.get('X-RateLimit-Scope')} "
+                    f"body={resp.text[:_BODY_LOG_LIMIT]}",
                 )
             )
             continue

@@ -243,7 +243,9 @@ are logged and, if the process has initialised `sentry_sdk`, reported there.
 Sends to one webhook go out one at a time, in order, paced by the
 bucket Discord reports on every answer; a 429 holds that webhook (or all of
 them, for a global or Cloudflare limit) and the message is sent again when
-the hold ends, rather than posting through it. A send waits at most
+the hold ends, rather than posting through it. No hold is longer than a
+minute, whatever the 429 asks for: the next message after it finds out
+whether the limit is still there, and a 429 logs what Discord said. A send waits at most
 `MAX_WAIT_SECS` (10 s; `max_wait=` to change it) — a burst larger than that
 loses its tail, a Cloudflare 1015 drops what is sent during it — and the
 first drop of an episode is reported to Sentry. `webhook_url(..., source=...)` and the `source=` argument on the send

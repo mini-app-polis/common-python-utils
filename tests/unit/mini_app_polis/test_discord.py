@@ -387,16 +387,54 @@ def test_cloudflare_1015_drops_rather_than_posting_through_it(
 def test_retry_after_header_sets_the_cooldown(channels, fake, clock) -> None:
     fake.answer(
         RUNS_URL,
-        httpx.Response(429, text="slow down", headers={"Retry-After": "120"}),
+        httpx.Response(429, text="slow down", headers={"Retry-After": "45"}),
     )
     assert run(lambda: _send(discord.CHANNEL_RUNS)) is False
-    assert 110 < discord._cooldown_remaining(RUNS_URL) <= 120
+    assert 40 < discord._cooldown_remaining(RUNS_URL) <= 45
 
 
 def test_absurd_retry_after_is_capped(channels, fake, clock) -> None:
     fake.answer(RUNS_URL, _limited(10**9, scope_global=True))
     run(lambda: _send(discord.CHANNEL_RUNS))
     assert discord._cooldown_remaining(RUNS_URL) <= discord._MAX_COOLDOWN_SECS
+
+
+def test_an_hour_long_limit_is_checked_again_after_a_minute(
+    channels, fake, clock
+) -> None:
+    """One 429 asking for an hour used to mute every webhook for that hour,
+    while Discord was answering normally (2026-10-18). After a minute the
+    next message is posted; a limit still in force answers 429 again."""
+    fake.answer(
+        RUNS_URL,
+        _limited(3600, scope_global=True),
+        httpx.Response(204),
+    )
+    assert run(lambda: _send(discord.CHANNEL_RUNS)) is False
+    assert discord._cooldown_remaining(ACTIVITY_URL) <= 60
+
+    clock["now"] += 61
+    assert run(lambda: _send(discord.CHANNEL_RUNS)) is True
+    assert len(fake.calls(RUNS_URL)) == 2
+
+
+def test_a_429_logs_what_discord_said(
+    channels, fake, clock, caplog: pytest.LogCaptureFixture
+) -> None:
+    fake.answer(
+        RUNS_URL,
+        httpx.Response(
+            429,
+            json={"retry_after": 3600, "global": True, "message": "too fast"},
+            headers={"X-RateLimit-Scope": "global"},
+        ),
+    )
+    with caplog.at_level("WARNING"):
+        run(lambda: _send(discord.CHANNEL_RUNS))
+
+    logged = " ".join(r.getMessage() for r in caplog.records)
+    assert "scope=global" in logged
+    assert "too fast" in logged
 
 
 def test_sends_resume_after_a_long_cooldown(channels, fake, clock) -> None:
