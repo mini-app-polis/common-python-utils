@@ -299,6 +299,18 @@ class WcsWikiPage(BaseModel):
         "and the statements elsewhere that refer to it. A reader who can see "
         "none of them does not see the page.",
     )
+    folded: list[str] = Field(
+        default_factory=list,
+        description="Every slug folded into this page: its facets (also in "
+        "details) and other names for the same idea. They have no page of "
+        "their own; a lookup of one is served this page (MINI-100).",
+    )
+    requested_slug: str | None = Field(
+        default=None,
+        description="Set by the API on a read, never stored: the slug asked "
+        "for, when it is one folded into this page. None when the page was "
+        "asked for by its own slug.",
+    )
 
 
 class WcsWikiPagesWrite(BaseModel):
