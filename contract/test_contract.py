@@ -46,6 +46,8 @@ from mini_app_polis.api.contract import (
     WcsWikiFacetsState,
     WcsWikiLinkedStatement,
     WcsWikiLinksState,
+    WcsWikiPage,
+    WcsWikiPagesWrite,
     WcsWikiProseEntry,
     WcsWikiProseRevision,
     WcsWikiProseState,
@@ -326,6 +328,27 @@ def test_wiki_prose_upsert_and_read_back(api: LedgerClient) -> None:
 
     assert after.entities[FIXTURE] == entry
     assert after.generator_version == before.generator_version
+
+
+def test_wiki_pages_upsert_then_remove(api: LedgerClient) -> None:
+    # Stored, then removed in the same run, so dev's wiki does not keep a
+    # fixture page; a run that stops in between is tidied by the next one.
+    # Reading pages back is web-facing (Clerk), so not in the catalog.
+    page = WcsWikiPage(
+        slug=FIXTURE,
+        name="Contract suite fixture",
+        kind="concept",
+        definition="Contract suite fixture page.",
+    )
+
+    written = api.put_wcs_wiki_pages(WcsWikiPagesWrite(pages=[page]))
+    again = api.put_wcs_wiki_pages(WcsWikiPagesWrite(pages=[page]))
+    removed = api.put_wcs_wiki_pages(WcsWikiPagesWrite(remove=[FIXTURE]))
+
+    assert (written.written, again.written) == (1, 1)
+    assert again.total == written.total
+    assert removed.removed == 1
+    assert removed.total == written.total - 1
 
 
 # ── evaluator-cog, wiki-curator-cog, pipeline_status ──────────────────────
