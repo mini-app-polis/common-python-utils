@@ -1,3 +1,15 @@
+# [6.9.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.8.0...v6.9.0) (2026-10-19)
+
+
+### Bug Fixes
+
+* **contract:** hold the thin endpoints out of the suite until the dev API serves them (MINI-101) ([72c0c46](https://github.com/mini-app-polis/common-python-utils/commit/72c0c464cc36c5031dfbc740a6067a675ef9e547))
+
+
+### Features
+
+* **contract:** thin entities and page-write origin for the wiki review (MINI-101) ([9b55f2b](https://github.com/mini-app-polis/common-python-utils/commit/9b55f2bb91ba02a3b7ac1c9ef2c78201572e8c28))
+
 # [6.8.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.7.1...v6.8.0) (2026-10-18)
 
 
