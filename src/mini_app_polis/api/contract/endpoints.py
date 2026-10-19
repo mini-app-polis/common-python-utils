@@ -53,6 +53,9 @@ from .wcs_wiki import (
     WcsWikiPagesWriteResult,
     WcsWikiProseState,
     WcsWikiStateWriteResult,
+    WcsWikiThinState,
+    WcsWikiThinWrite,
+    WcsWikiThinWriteResult,
 )
 
 
@@ -185,6 +188,27 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         path="/v1/wcs/wiki/state/prose",
         request=WcsWikiProseState,
         response=WcsWikiStateWriteResult,
+        scope="wcs.wiki.write",
+        callers=("wiki-curator-cog",),
+    ),
+    # The thin entities consolidation finds, for the admin's review in
+    # /admin/wiki (MINI-101). The curator reads the list to know what to
+    # remove, then writes what is thin now.
+    Endpoint(
+        name="get_wcs_wiki_thin",
+        method="GET",
+        path="/v1/wcs/wiki/state/thin",
+        request=None,
+        response=WcsWikiThinState,
+        scope="wcs.corpus.read",
+        callers=("wiki-curator-cog",),
+    ),
+    Endpoint(
+        name="put_wcs_wiki_thin",
+        method="POST",
+        path="/v1/wcs/wiki/state/thin",
+        request=WcsWikiThinWrite,
+        response=WcsWikiThinWriteResult,
         scope="wcs.wiki.write",
         callers=("wiki-curator-cog",),
     ),

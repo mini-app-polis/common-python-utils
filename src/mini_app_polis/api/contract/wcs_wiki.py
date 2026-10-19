@@ -327,6 +327,17 @@ class WcsWikiPagesWrite(BaseModel):
     remove: list[str] = Field(
         default_factory=list, max_length=500, description="Slugs to delete."
     )
+    origin_source_id: uuid.UUID | None = Field(
+        None,
+        description="The source whose link pass started the work that built "
+        "these pages, so each revision can say what changed it (MINI-101). "
+        "None for work an admin or an operator started.",
+    )
+    origin_job_id: str | None = Field(
+        None,
+        description="The run that wrote them: the queue message id on the "
+        "worker, or a label for a local run.",
+    )
 
 
 class WcsWikiPagesWriteResult(BaseModel):
@@ -354,6 +365,75 @@ class WcsWikiPagesWriteResult(BaseModel):
     )
 
 
+# ── Thin entities: the admin's review list (MINI-101) ──
+#
+# An entity is thin when it has at most one source and at most one page
+# referring to it. The curator decides that, from the export, its links and
+# its fold decisions, and stores the list; /admin/wiki shows it, so the admin
+# can give a thin entity context in a note. It is the private thin-review.md,
+# moved into the API. Nothing here is page logic: the API stores and serves.
+
+
+class WcsWikiThinQuote(BaseModel):
+    """One thing said about a thin entity, and where."""
+
+    text: str = Field(..., description="What was said (markdown).")
+    source_id: uuid.UUID | None = Field(None, description="The source it is from.")
+    session_date: dt.date | None = Field(None, description="The source's date.")
+    source_title: str = Field("", description="The source's title.")
+
+
+class WcsWikiThinEntity(BaseModel):
+    """A thin entity: little evidence, and where it ended up."""
+
+    slug: str = Field(..., description="The entity's slug.")
+    name: str = Field(..., description="Its name.")
+    kind: str = Field(..., description="concept or technique.")
+    sources: int = Field(..., description="Distinct sources with evidence for it.")
+    references: int = Field(..., description="References to it from other pages.")
+    page: str = Field(
+        ..., description="Slug of the page it is on: its own, or the one it folds into."
+    )
+    same: bool = Field(False, description="Folded in as another name, not a facet.")
+    definition: str = Field("", description="Its definition, if it has one.")
+    quotes: list[WcsWikiThinQuote] = Field(
+        default_factory=list, description="What was said about it, by source."
+    )
+
+
+class WcsWikiThinState(BaseModel):
+    """``GET /v1/wcs/wiki/state/thin``: every thin entity, by slug."""
+
+    entities: list[WcsWikiThinEntity] = Field(
+        default_factory=list,
+        description="Thin entities, ordered by the page each is on, then slug.",
+    )
+
+
+class WcsWikiThinWrite(BaseModel):
+    """``POST /v1/wcs/wiki/state/thin`` — upsert thin entities, remove the rest.
+
+    Each entity given replaces the stored one with its slug. A slug in
+    ``remove`` is no longer thin, or no longer exists, and is deleted. The
+    curator reads the list, sends what is thin now, and removes what is not.
+    """
+
+    entities: list[WcsWikiThinEntity] = Field(
+        default_factory=list, max_length=500, description="Entities to store."
+    )
+    remove: list[str] = Field(
+        default_factory=list, max_length=2000, description="Slugs to delete."
+    )
+
+
+class WcsWikiThinWriteResult(BaseModel):
+    """What a thin ``POST`` stored."""
+
+    written: int = Field(..., description="Entities upserted.")
+    removed: int = Field(..., description="Entities deleted.")
+    total: int = Field(..., description="Thin entities in the store afterwards.")
+
+
 # ── Wiki jobs: the wiki-curator queue (ADR-006, MINI-95) ──
 
 
@@ -372,6 +452,13 @@ class WcsWikiJob(BaseModel):
     entity: str | None = Field(None, description="generate: one entity slug.")
     entities: list[str] | None = Field(
         None, description="consolidate / generate / materialise: entity slugs."
+    )
+    origin_source_id: uuid.UUID | None = Field(
+        None,
+        description="The source whose link pass started this chain of jobs, "
+        "carried to every follow-on so the pages it changes can say so "
+        "(MINI-101). A link job's origin is its own source. None for work an "
+        "admin or an operator started.",
     )
 
 

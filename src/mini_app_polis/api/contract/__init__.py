@@ -99,6 +99,11 @@ from .wcs_wiki import (
     WcsWikiProseState,
     WcsWikiReference,
     WcsWikiStateWriteResult,
+    WcsWikiThinEntity,
+    WcsWikiThinQuote,
+    WcsWikiThinState,
+    WcsWikiThinWrite,
+    WcsWikiThinWriteResult,
 )
 
 __all__ = [
@@ -175,4 +180,9 @@ __all__ = [
     "WcsWikiProseState",
     "WcsWikiReference",
     "WcsWikiStateWriteResult",
+    "WcsWikiThinEntity",
+    "WcsWikiThinQuote",
+    "WcsWikiThinState",
+    "WcsWikiThinWrite",
+    "WcsWikiThinWriteResult",
 ]
