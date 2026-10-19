@@ -356,6 +356,9 @@ def test_wiki_pages_upsert_then_remove(api: LedgerClient) -> None:
 
 def test_wiki_thin_upsert_read_then_remove(api: LedgerClient) -> None:
     # Like the pages test: stored, read back, then removed in the same run.
+    # Runs once the thin endpoints come off NOT_DEPLOYED.
+    if {"get_wcs_wiki_thin", "put_wcs_wiki_thin"} & set(NOT_DEPLOYED):
+        pytest.skip("the development API does not serve the thin endpoints yet")
     entry = WcsWikiThinEntity(
         slug=FIXTURE,
         name="Contract suite fixture",
