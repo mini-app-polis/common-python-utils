@@ -88,6 +88,9 @@ from .contract import (
     WcsWikiPagesWriteResult,
     WcsWikiProseState,
     WcsWikiStateWriteResult,
+    WcsWikiThinState,
+    WcsWikiThinWrite,
+    WcsWikiThinWriteResult,
 )
 from .errors import ApiUnavailable, KaianoApiError, error_for
 
@@ -560,6 +563,14 @@ class KaianoApiClient:
     ) -> WcsWikiStateWriteResult:
         """``POST /v1/wcs/wiki/state/facets`` — upsert facet decisions."""
         return cast(WcsWikiStateWriteResult, self._call("put_wcs_wiki_facets", payload))
+
+    def get_wcs_wiki_thin(self) -> WcsWikiThinState:
+        """``GET /v1/wcs/wiki/state/thin`` — every thin entity (MINI-101)."""
+        return cast(WcsWikiThinState, self._call("get_wcs_wiki_thin"))
+
+    def put_wcs_wiki_thin(self, payload: WcsWikiThinWrite) -> WcsWikiThinWriteResult:
+        """``POST /v1/wcs/wiki/state/thin`` — upsert thin entities, remove the rest."""
+        return cast(WcsWikiThinWriteResult, self._call("put_wcs_wiki_thin", payload))
 
     def put_wcs_wiki_pages(self, payload: WcsWikiPagesWrite) -> WcsWikiPagesWriteResult:
         """``POST /v1/wcs/wiki/pages`` — upsert page documents, remove pages gone."""

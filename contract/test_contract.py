@@ -52,6 +52,9 @@ from mini_app_polis.api.contract import (
     WcsWikiProseRevision,
     WcsWikiProseState,
     WcsWikiReference,
+    WcsWikiThinEntity,
+    WcsWikiThinQuote,
+    WcsWikiThinWrite,
 )
 
 from .harness import (
@@ -347,6 +350,31 @@ def test_wiki_pages_upsert_then_remove(api: LedgerClient) -> None:
 
     assert (written.written, again.written) == (1, 1)
     assert again.total == written.total
+    assert removed.removed == 1
+    assert removed.total == written.total - 1
+
+
+def test_wiki_thin_upsert_read_then_remove(api: LedgerClient) -> None:
+    # Like the pages test: stored, read back, then removed in the same run.
+    # Runs once the thin endpoints come off NOT_DEPLOYED.
+    if {"get_wcs_wiki_thin", "put_wcs_wiki_thin"} & set(NOT_DEPLOYED):
+        pytest.skip("the development API does not serve the thin endpoints yet")
+    entry = WcsWikiThinEntity(
+        slug=FIXTURE,
+        name="Contract suite fixture",
+        kind="concept",
+        sources=1,
+        references=0,
+        page=FIXTURE,
+        quotes=[WcsWikiThinQuote(text="Contract suite fixture quote.")],
+    )
+
+    written = api.put_wcs_wiki_thin(WcsWikiThinWrite(entities=[entry]))
+    after = api.get_wcs_wiki_thin()
+    removed = api.put_wcs_wiki_thin(WcsWikiThinWrite(remove=[FIXTURE]))
+
+    assert written.written == 1
+    assert next(e for e in after.entities if e.slug == FIXTURE) == entry
     assert removed.removed == 1
     assert removed.total == written.total - 1
 
