@@ -37,6 +37,7 @@ from .runs import (
     TranscriptionRunAccepted,
     TranscriptionRunRequest,
 )
+from .tasks import TaskCreateAccepted, TaskCreateRequest
 from .wcs import (
     WcsSourceCreate,
     WcsSourceItem,
@@ -252,6 +253,15 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         response=TranscriptionRunAccepted,
         scope="transcription.runs.create",
         callers=("watcher-cog",),
+    ),
+    Endpoint(
+        name="request_task",
+        method="POST",
+        path="/v1/tasks",
+        request=TaskCreateRequest,
+        response=TaskCreateAccepted,
+        scope="tasks.requests.create",
+        callers=("transcription-cog",),
     ),
     Endpoint(
         name="create_evaluation",

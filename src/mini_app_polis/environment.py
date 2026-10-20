@@ -64,6 +64,10 @@ class Effect(StrEnum):
     #: reads development's latency. Gated rather than labeled for that
     #: reason alone.
     CLOUDWATCH_METRICS = "cloudwatch_metrics"
+    #: Writing to the Asana board. There is one board and no development
+    #: copy of it, so a non-production process logs the task it would have
+    #: created instead of creating it.
+    ASANA = "asana"
 
 
 #: Spellings seen across Railway environment names, Doppler configs and

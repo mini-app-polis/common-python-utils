@@ -50,6 +50,15 @@ from .runs import (
     TranscriptionRunAccepted,
     TranscriptionRunRequest,
 )
+from .tasks import (
+    GIVEN_ID_SOURCES,
+    TaskCreateAccepted,
+    TaskCreateRequest,
+    TaskDraft,
+    TaskLink,
+    TaskSection,
+    TaskSource,
+)
 from .wcs import (
     WcsDrillPurposeItem,
     WcsEntityDefinitionItem,
@@ -116,6 +125,7 @@ __all__ = [
     "Envelope",
     "ErrorDetail",
     "ErrorEnvelope",
+    "GIVEN_ID_SOURCES",
     "IngestResponseData",
     "IngestSet",
     "IngestTrack",
@@ -132,6 +142,12 @@ __all__ = [
     "SpotifyPlaylistIngest",
     "SpotifyPlaylistsIngest",
     "SpotifyPlaylistsIngestResponse",
+    "TaskCreateAccepted",
+    "TaskCreateRequest",
+    "TaskDraft",
+    "TaskLink",
+    "TaskSection",
+    "TaskSource",
     "TranscriptionRunAccepted",
     "TranscriptionRunRequest",
     "WcsDrillPurposeItem",

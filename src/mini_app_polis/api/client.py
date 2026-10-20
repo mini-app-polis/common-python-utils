@@ -73,6 +73,8 @@ from .contract import (
     SetListItem,
     SpotifyPlaylistsIngest,
     SpotifyPlaylistsIngestResponse,
+    TaskCreateAccepted,
+    TaskCreateRequest,
     TranscriptionRunAccepted,
     TranscriptionRunRequest,
     WcsSourceCreate,
@@ -608,6 +610,14 @@ class KaianoApiClient:
             TranscriptionRunAccepted,
             self._call("request_transcription_run", payload),
         )
+
+    def request_task(self, payload: TaskCreateRequest) -> TaskCreateAccepted:
+        """``POST /v1/tasks`` — ask the task manager for one task on the board.
+
+        Answered 202 once the job is queued; the task is created afterwards.
+        Asking twice for one ``external_id`` makes one task.
+        """
+        return cast(TaskCreateAccepted, self._call("request_task", payload))
 
     def create_evaluation(
         self, payload: PipelineEvaluationCreate
