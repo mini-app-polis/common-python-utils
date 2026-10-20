@@ -308,6 +308,54 @@ def test_find_or_create_tag_without_workspace_raises() -> None:
 
 
 # ---------------------------------------------------------------------------
+# list_task_names
+# ---------------------------------------------------------------------------
+
+
+def test_list_task_names_pages_through_the_project() -> None:
+    pages = [
+        {
+            "data": [{"gid": "t1", "name": "VN-1 · one"}, {"gid": "t2", "name": "two"}],
+            "next_page": {"offset": "page2"},
+        },
+        {"data": [{"gid": "t3", "name": "VN-2 · three"}], "next_page": None},
+    ]
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=pages[len(seen) - 1])
+
+    names = _client(handler).list_task_names("proj-1")
+
+    assert names == ["VN-1 · one", "two", "VN-2 · three"]
+    assert seen[0].url.path == "/api/1.0/projects/proj-1/tasks"
+    assert seen[0].url.params.get("opt_fields") == "name"
+    assert seen[0].url.params.get("offset") is None
+    assert seen[1].url.params.get("offset") == "page2"
+
+
+def test_list_task_names_includes_completed_tasks() -> None:
+    """No completed_since filter, so a completed task's id stays taken."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "completed_since" not in request.url.params
+        return httpx.Response(200, json={"data": [], "next_page": None})
+
+    assert _client(handler).list_task_names("proj-1") == []
+
+
+def test_list_task_names_skips_records_without_a_name() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"data": [{"gid": "t1"}, "junk", {"gid": "t2", "name": "kept"}]},
+        )
+
+    assert _client(handler).list_task_names("proj-1") == ["kept"]
+
+
+# ---------------------------------------------------------------------------
 # Auth and error mapping
 # ---------------------------------------------------------------------------
 

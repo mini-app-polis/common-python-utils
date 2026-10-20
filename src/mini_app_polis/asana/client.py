@@ -6,11 +6,12 @@ valid until it is revoked in the Asana UI (My Settings → Apps →
 Manage Developer Apps → Personal Access Tokens).
 
 **Scope:** this client covers only what the ecosystem creates tasks
-with today. Three methods, no more:
+with today. Four methods, no more:
 
   - ``create_task`` — POST /tasks
   - ``find_task_by_external_id`` — GET /tasks/external:<id>
   - ``find_or_create_tag`` — GET /tags + POST /tags
+  - ``list_task_names`` — GET /projects/<gid>/tasks, names only
 
 Reading, updating and commenting on tasks are deliberately absent.
 The Discord-sourced task-update path that would need them is not
@@ -247,6 +248,33 @@ class AsanaClient:
             )
         self._tag_cache[key] = gid
         return gid
+
+    def list_task_names(self, project_gid: str) -> list[str]:
+        """Return the name of every task in a project, completed ones included.
+
+        For a caller that mints ids from what is already on the board: an
+        id is the highest one in use plus one, so a completed task still
+        holds its id. The project tasks endpoint returns completed tasks
+        unless ``completed_since`` is passed, which is why it is not.
+
+        Workspace task search would answer "highest id with this prefix"
+        directly, but it is a premium feature, so the board is paged.
+        """
+        path = f"/projects/{quote(project_gid, safe='')}/tasks"
+        names: list[str] = []
+        offset: str | None = None
+        while True:
+            params: dict[str, Any] = {"opt_fields": "name", "limit": _PAGE_LIMIT}
+            if offset:
+                params["offset"] = offset
+            page = self._request_envelope("GET", path, params=params)
+            for task in page.get("data") or []:
+                if isinstance(task, dict) and isinstance(task.get("name"), str):
+                    names.append(task["name"])
+            next_page = page.get("next_page")
+            offset = next_page.get("offset") if isinstance(next_page, dict) else None
+            if not offset:
+                return names
 
     # ------------------------------------------------------------------
     # HTTP
