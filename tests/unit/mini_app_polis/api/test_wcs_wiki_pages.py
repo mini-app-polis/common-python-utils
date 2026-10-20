@@ -1,4 +1,4 @@
-"""Page documents and the materialise job (wiki-curator-cog ADR-006, MINI-96)."""
+"""Page documents and the materialise job (wiki-curator-cog ADR-006)."""
 
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ def test_a_page_round_trips() -> None:
 
 
 def test_a_page_stored_before_folded_existed_still_reads() -> None:
-    # Documents written before MINI-100 have neither field.
+    # Documents written before folds were recorded have neither field.
     raw = _page()
     del raw["folded"], raw["requested_slug"]
     page = WcsWikiPage.model_validate(raw)

@@ -1,4 +1,4 @@
-"""Thin entities and page provenance travel whole (MINI-101)."""
+"""Thin entities and page provenance travel whole."""
 
 from __future__ import annotations
 

@@ -134,7 +134,7 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         scope="wcs.corpus.read",
         callers=("wiki-curator-cog",),
     ),
-    # The curator's state (wiki-curator-cog ADR-006, MINI-89). Read with the
+    # The curator's state (wiki-curator-cog ADR-006). Read with the
     # corpus scope — the statements quote private sources — and written with
     # a scope of its own, so reading the corpus does not imply rewriting the
     # wiki.
@@ -193,7 +193,7 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         callers=("wiki-curator-cog",),
     ),
     # The thin entities consolidation finds, for the admin's review in
-    # /admin/wiki (MINI-101). The curator reads the list to know what to
+    # /admin/wiki. The curator reads the list to know what to
     # remove, then writes what is thin now.
     Endpoint(
         name="get_wcs_wiki_thin",
@@ -214,7 +214,7 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         callers=("wiki-curator-cog",),
     ),
     # The page documents materialise builds; the API stores, filters and
-    # serves them (ADR-006, MINI-96). Reading them is web-facing, so only the
+    # serves them (ADR-006). Reading them is web-facing, so only the
     # write is here.
     Endpoint(
         name="put_wcs_wiki_pages",
@@ -226,7 +226,7 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         callers=("wiki-curator-cog",),
     ),
     # The follow-on jobs a wiki job names, put on the wiki-curator queue by the
-    # API, which stays the fleet's one producer (ADR-006, MINI-95).
+    # API, which stays the fleet's one producer (ADR-006).
     Endpoint(
         name="enqueue_wcs_wiki_jobs",
         method="POST",

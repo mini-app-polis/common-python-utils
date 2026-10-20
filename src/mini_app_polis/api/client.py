@@ -567,7 +567,7 @@ class KaianoApiClient:
         return cast(WcsWikiStateWriteResult, self._call("put_wcs_wiki_facets", payload))
 
     def get_wcs_wiki_thin(self) -> WcsWikiThinState:
-        """``GET /v1/wcs/wiki/state/thin`` — every thin entity (MINI-101)."""
+        """``GET /v1/wcs/wiki/state/thin`` — every thin entity."""
         return cast(WcsWikiThinState, self._call("get_wcs_wiki_thin"))
 
     def put_wcs_wiki_thin(self, payload: WcsWikiThinWrite) -> WcsWikiThinWriteResult:

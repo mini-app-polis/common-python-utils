@@ -130,6 +130,7 @@ CONTRACT_API_URL=https://dev-api.kaianolevine.com CONTRACT_SUITE_API_KEY=dev_…
 ### AsanaClient
 
 ```python
+import os
 from datetime import date
 
 from mini_app_polis.asana import AsanaClient, AsanaTaskInput, link, rich_text_body
@@ -152,8 +153,8 @@ if client.find_task_by_external_id(external_id) is None:
                 "Because it is due Friday.",
                 link("https://example.com/source", "Source"),
             ),
-            project_gid="1218223550488548",
-            section_gid="1218337761864701",
+            project_gid=os.environ["ASANA_PROJECT_GID"],
+            section_gid=os.environ["ASANA_SECTION_GID"],
             assignee="me",
             due_on=date.today(),
             tag_gids=(client.find_or_create_tag("review"),),
