@@ -153,7 +153,7 @@ class WcsWikiStateWriteResult(BaseModel):
     total: int = Field(..., description="Entries in the store afterwards.")
 
 
-# ── Page documents: what materialise writes (ADR-006, MINI-96) ──
+# ── Page documents: what materialise writes (ADR-006) ──
 #
 # One document per entity page, built by the curator, which owns the page
 # logic (folds, the reference overlay, By teacher). The API stores, filters
@@ -303,7 +303,7 @@ class WcsWikiPage(BaseModel):
         default_factory=list,
         description="Every slug folded into this page: its facets (also in "
         "details) and other names for the same idea. They have no page of "
-        "their own; a lookup of one is served this page (MINI-100).",
+        "their own; a lookup of one is served this page.",
     )
     requested_slug: str | None = Field(
         default=None,
@@ -330,7 +330,7 @@ class WcsWikiPagesWrite(BaseModel):
     origin_source_id: uuid.UUID | None = Field(
         None,
         description="The source whose link pass started the work that built "
-        "these pages, so each revision can say what changed it (MINI-101). "
+        "these pages, so each revision can say what changed it. "
         "None for work an admin or an operator started.",
     )
     origin_job_id: str | None = Field(
@@ -365,7 +365,7 @@ class WcsWikiPagesWriteResult(BaseModel):
     )
 
 
-# ── Thin entities: the admin's review list (MINI-101) ──
+# ── Thin entities: the admin's review list ──
 #
 # An entity is thin when it has at most one source and at most one page
 # referring to it. The curator decides that, from the export, its links and
@@ -434,7 +434,7 @@ class WcsWikiThinWriteResult(BaseModel):
     total: int = Field(..., description="Thin entities in the store afterwards.")
 
 
-# ── Wiki jobs: the wiki-curator queue (ADR-006, MINI-95) ──
+# ── Wiki jobs: the wiki-curator queue (ADR-006) ──
 
 
 class WcsWikiJob(BaseModel):
@@ -456,8 +456,8 @@ class WcsWikiJob(BaseModel):
     origin_source_id: uuid.UUID | None = Field(
         None,
         description="The source whose link pass started this chain of jobs, "
-        "carried to every follow-on so the pages it changes can say so "
-        "(MINI-101). A link job's origin is its own source. None for work an "
+        "carried to every follow-on so the pages it changes can say so. "
+        "A link job's origin is its own source. None for work an "
         "admin or an operator started.",
     )
 
