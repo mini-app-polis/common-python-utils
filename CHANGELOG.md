@@ -1,3 +1,16 @@
+# [6.10.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.9.0...v6.10.0) (2026-10-20)
+
+
+### Bug Fixes
+
+* **deps:** bump certifi to 2026.10.19 (GHSA-6q48-6c7w-9gw2) ([2bc14e5](https://github.com/mini-app-polis/common-python-utils/commit/2bc14e5bda6e469e5ebb42903078acbbe5661126))
+
+
+### Features
+
+* **api:** task request contract and an Asana write gate ([2aa284e](https://github.com/mini-app-polis/common-python-utils/commit/2aa284e893d6fa9ab8d2f7ee4bf690f73c191214))
+* **asana:** list a project's task names ([2a311c0](https://github.com/mini-app-polis/common-python-utils/commit/2a311c00fdc60b17946267885a1f7e7a42d9fc70))
+
 # [6.9.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.8.0...v6.9.0) (2026-10-19)
 
 
