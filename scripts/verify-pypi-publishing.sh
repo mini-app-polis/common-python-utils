@@ -29,11 +29,32 @@ oidc_token="$(
     | python3 -c 'import json, sys; print(json.load(sys.stdin)["value"])'
 )"
 
-mint_response="$(
-  curl --silent --show-error \
-    --request POST https://pypi.org/_/oidc/mint-token \
-    --data "{\"token\": \"${oidc_token}\"}"
-)"
+# PyPI answers a declined exchange with JSON naming the mismatch. It can
+# also answer with no JSON at all — an empty body or an HTML error page
+# from its CDN during a blip — and that is not a publisher problem. Retry
+# those a few times, and if they persist, say what PyPI actually sent
+# instead of blaming the publisher configuration.
+attempt=1
+while :; do
+  response="$(
+    curl --silent --show-error \
+      --write-out '\n%{http_code}' \
+      --request POST https://pypi.org/_/oidc/mint-token \
+      --data "{\"token\": \"${oidc_token}\"}"
+  )" || response=$'\n000'
+  status="${response##*$'\n'}"
+  mint_response="${response%$'\n'*}"
+
+  if printf '%s' "${mint_response}" | python3 -c 'import json, sys; json.load(sys.stdin)' 2>/dev/null; then
+    break
+  fi
+  if (( attempt >= 4 )); then
+    echo "::error::PyPI did not answer the token exchange (HTTP ${status}, not JSON) after ${attempt} attempts. This is PyPI being unavailable, not the publisher configuration; nothing was bumped, so re-run the job. First bytes of the reply: $(printf '%s' "${mint_response}" | head -c 200 | tr '\n' ' ')" >&2
+    exit 1
+  fi
+  sleep $(( attempt * 10 ))
+  attempt=$(( attempt + 1 ))
+done
 
 # The JSON arrives on stdin and the program comes from -c. Do not be
 # tempted to feed the program in on a heredoc as well: two redirections
@@ -60,5 +81,5 @@ then
   exit 0
 fi
 
-echo "::error::PyPI refused to mint a publishing token, so this release was stopped before the version was bumped. Check the pending publisher: PyPI project name, owner, repository name, workflow filename (ci.yml) and environment must all match exactly. See docs/pypi-package-publishing.md §3." >&2
+echo "::error::PyPI refused to mint a publishing token (HTTP ${status}), so this release was stopped before the version was bumped. Check the pending publisher: PyPI project name, owner, repository name, workflow filename (ci.yml) and environment must all match exactly. See docs/pypi-package-publishing.md §3." >&2
 exit 1
