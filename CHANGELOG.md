@@ -1,3 +1,10 @@
+# [6.11.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.10.0...v6.11.0) (2026-10-21)
+
+
+### Features
+
+* **contract:** task sources for detected problems ([269edee](https://github.com/mini-app-polis/common-python-utils/commit/269edee960f4e3eaed1a557853075a812595cba6))
+
 # [6.10.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.9.0...v6.10.0) (2026-10-20)
 
 
