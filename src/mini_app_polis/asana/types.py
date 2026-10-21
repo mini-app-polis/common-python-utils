@@ -7,6 +7,10 @@ shared library is that each of those callers composes the same shape.
 The only hook a source gets is ``external_id``, an opaque string the
 caller namespaces however it likes (``voicenote.<drive_file_id>``,
 ``discord.<message_id>``).
+
+``AsanaSection`` and ``AsanaTaskRecord`` are what the read methods return:
+a board's columns, and its tasks as a caller that grooms them needs to see
+them.
 """
 
 from __future__ import annotations
@@ -68,3 +72,30 @@ class AsanaTaskInput:
     search: the caller no longer has to embed a marker in the body and
     scan for it, and so no longer misses tasks that have been
     completed and dropped out of the active list."""
+
+
+@dataclass(frozen=True)
+class AsanaSection:
+    """One column of a board."""
+
+    gid: str
+    name: str
+
+
+@dataclass(frozen=True)
+class AsanaTaskRecord:
+    """One task as a project listing returns it."""
+
+    gid: str
+    name: str
+    notes: str
+    """The body as plain text. Asana derives it from ``html_notes``; it is
+    what a reader of the task's fields wants, without the markup."""
+
+    completed: bool
+    section_gid: str | None
+    """The task's column in the project it was listed from, or None when
+    Asana reports no section for that project."""
+
+    section_name: str | None
+    tag_names: tuple[str, ...] = ()
