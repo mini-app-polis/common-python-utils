@@ -19,7 +19,18 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 #: Where a task comes from. Each source owns one id prefix on the board, or
 #: brings its own id; the task manager holds which is which.
-TaskSource = Literal["voicenote", "github-issue"]
+#:
+#: ``ci``, ``cog-run``, ``conformance`` and ``api-fault`` are problems the
+#: fleet detected: a signal that did not heal on its own and was escalated to
+#: a task. Their requests come from the API's signal engine.
+TaskSource = Literal[
+    "voicenote",
+    "github-issue",
+    "ci",
+    "cog-run",
+    "conformance",
+    "api-fault",
+]
 
 #: Sources whose tasks carry an id the source already has (an issue's
 #: ``repo#n``), rather than one the task manager mints.
