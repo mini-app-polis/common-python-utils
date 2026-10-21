@@ -5,17 +5,20 @@
 valid until it is revoked in the Asana UI (My Settings → Apps →
 Manage Developer Apps → Personal Access Tokens).
 
-**Scope:** this client covers only what the ecosystem creates tasks
-with today. Four methods, no more:
+**Scope:** this client covers what the ecosystem creates and grooms
+tasks with today, no more:
 
   - ``create_task`` — POST /tasks
   - ``find_task_by_external_id`` — GET /tasks/external:<id>
   - ``find_or_create_tag`` — GET /tags + POST /tags
   - ``list_task_names`` — GET /projects/<gid>/tasks, names only
+  - ``list_sections`` — GET /projects/<gid>/sections
+  - ``list_project_tasks`` — GET /projects/<gid>/tasks, with body,
+    column and tags
+  - ``move_task_to_section`` — POST /sections/<gid>/addTask
 
-Reading, updating and commenting on tasks are deliberately absent.
-The Discord-sourced task-update path that would need them is not
-built, and a method with no caller is a method nothing keeps honest.
+Updating a task's body and commenting are absent until a caller needs
+them: a method with no caller is a method nothing keeps honest.
 
 **Idempotency:** Asana stores an app-scoped ``external`` object on
 every task, and a task can be addressed by it directly. That is the
@@ -42,7 +45,7 @@ from urllib.parse import quote
 import httpx
 
 from .errors import AsanaAPIError, AsanaAuthError
-from .types import AsanaTaskInput
+from .types import AsanaSection, AsanaTaskInput, AsanaTaskRecord
 
 _log = _logging.getLogger(__name__)
 
@@ -276,6 +279,83 @@ class AsanaClient:
             if not offset:
                 return names
 
+    def list_sections(self, project_gid: str) -> list[AsanaSection]:
+        """Return a project's sections (board columns), in board order."""
+        path = f"/projects/{quote(project_gid, safe='')}/sections"
+        sections: list[AsanaSection] = []
+        for record in self._paged(path, "name"):
+            gid, name = record.get("gid"), record.get("name")
+            if isinstance(gid, str) and isinstance(name, str):
+                sections.append(AsanaSection(gid=gid, name=name))
+        return sections
+
+    def list_project_tasks(self, project_gid: str) -> list[AsanaTaskRecord]:
+        """Return every task in a project, completed ones included.
+
+        Each carries its plain-text body, its column in this project and its
+        tag names: what a caller reading the board's template needs, in one
+        paged listing rather than a request per task.
+        """
+        path = f"/projects/{quote(project_gid, safe='')}/tasks"
+        fields = ",".join(
+            (
+                "name",
+                "notes",
+                "completed",
+                "tags.name",
+                "memberships.project.gid",
+                "memberships.section.gid",
+                "memberships.section.name",
+            )
+        )
+        tasks: list[AsanaTaskRecord] = []
+        for record in self._paged(path, fields):
+            gid, name = record.get("gid"), record.get("name")
+            if not isinstance(gid, str) or not isinstance(name, str):
+                continue
+            section_gid, section_name = _section_in(record, project_gid)
+            tags = tuple(
+                tag["name"]
+                for tag in record.get("tags") or []
+                if isinstance(tag, dict) and isinstance(tag.get("name"), str)
+            )
+            notes = record.get("notes")
+            tasks.append(
+                AsanaTaskRecord(
+                    gid=gid,
+                    name=name,
+                    notes=notes if isinstance(notes, str) else "",
+                    completed=bool(record.get("completed")),
+                    section_gid=section_gid,
+                    section_name=section_name,
+                    tag_names=tags,
+                )
+            )
+        return tasks
+
+    def move_task_to_section(self, task_gid: str, section_gid: str) -> None:
+        """Move a task to a section (column) of the project the section is in."""
+        self._request(
+            "POST",
+            f"/sections/{quote(section_gid, safe='')}/addTask",
+            json_payload={"data": {"task": task_gid}},
+        )
+
+    def _paged(self, path: str, opt_fields: str) -> list[dict[str, Any]]:
+        """Every record of a paged list endpoint, as dicts."""
+        records: list[dict[str, Any]] = []
+        offset: str | None = None
+        while True:
+            params: dict[str, Any] = {"opt_fields": opt_fields, "limit": _PAGE_LIMIT}
+            if offset:
+                params["offset"] = offset
+            page = self._request_envelope("GET", path, params=params)
+            records.extend(r for r in page.get("data") or [] if isinstance(r, dict))
+            next_page = page.get("next_page")
+            offset = next_page.get("offset") if isinstance(next_page, dict) else None
+            if not offset:
+                return records
+
     # ------------------------------------------------------------------
     # HTTP
     # ------------------------------------------------------------------
@@ -390,3 +470,23 @@ def _error_detail(response: httpx.Response) -> str:
             if messages:
                 return "; ".join(messages)
     return response.text[:200]
+
+
+def _section_in(
+    record: dict[str, Any], project_gid: str
+) -> tuple[str | None, str | None]:
+    """The task's section in ``project_gid``, from its memberships."""
+    for membership in record.get("memberships") or []:
+        if not isinstance(membership, dict):
+            continue
+        project = membership.get("project")
+        if not isinstance(project, dict) or project.get("gid") != project_gid:
+            continue
+        section = membership.get("section")
+        if isinstance(section, dict):
+            gid, name = section.get("gid"), section.get("name")
+            return (
+                gid if isinstance(gid, str) else None,
+                name if isinstance(name, str) else None,
+            )
+    return None, None

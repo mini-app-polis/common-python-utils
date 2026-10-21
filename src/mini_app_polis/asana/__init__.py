@@ -12,7 +12,7 @@ for all of them without this package knowing any of them exist.
 from .client import ASANA_API_BASE, AsanaClient
 from .errors import AsanaAPIError, AsanaAuthError, AsanaError
 from .rich_text import escape_rich_text, link, rich_text_body
-from .types import AsanaTaskInput
+from .types import AsanaSection, AsanaTaskInput, AsanaTaskRecord
 
 __all__ = [
     "ASANA_API_BASE",
@@ -20,7 +20,9 @@ __all__ = [
     "AsanaAuthError",
     "AsanaClient",
     "AsanaError",
+    "AsanaSection",
     "AsanaTaskInput",
+    "AsanaTaskRecord",
     "escape_rich_text",
     "link",
     "rich_text_body",

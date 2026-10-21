@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date
 
 import httpx
@@ -11,7 +12,9 @@ from mini_app_polis.asana import (
     AsanaAPIError,
     AsanaAuthError,
     AsanaClient,
+    AsanaSection,
     AsanaTaskInput,
+    AsanaTaskRecord,
 )
 
 _TOKEN = "pat-test"
@@ -353,6 +356,109 @@ def test_list_task_names_skips_records_without_a_name() -> None:
         )
 
     assert _client(handler).list_task_names("proj-1") == ["kept"]
+
+
+# ---------------------------------------------------------------------------
+# list_sections, list_project_tasks, move_task_to_section
+# ---------------------------------------------------------------------------
+
+
+def test_list_sections_returns_columns_in_order() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/1.0/projects/proj-1/sections"
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"gid": "s1", "name": "Ideas"},
+                    {"gid": "s2", "name": "Ready"},
+                    {"gid": "s3"},
+                ]
+            },
+        )
+
+    assert _client(handler).list_sections("proj-1") == [
+        AsanaSection(gid="s1", name="Ideas"),
+        AsanaSection(gid="s2", name="Ready"),
+    ]
+
+
+def test_list_project_tasks_reads_body_column_and_tags_across_pages() -> None:
+    pages = [
+        {
+            "data": [
+                {
+                    "gid": "t1",
+                    "name": "MINI-1 · one",
+                    "notes": "Done when: it works",
+                    "completed": False,
+                    "tags": [{"gid": "g1", "name": "review"}],
+                    "memberships": [
+                        {
+                            "project": {"gid": "other"},
+                            "section": {"gid": "x", "name": "Elsewhere"},
+                        },
+                        {
+                            "project": {"gid": "proj-1"},
+                            "section": {"gid": "s1", "name": "Ideas"},
+                        },
+                    ],
+                }
+            ],
+            "next_page": {"offset": "page2"},
+        },
+        {
+            "data": [
+                {"gid": "t2", "name": "two", "completed": True, "memberships": []},
+                {"gid": "t3"},
+            ],
+            "next_page": None,
+        },
+    ]
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=pages[len(seen) - 1])
+
+    tasks = _client(handler).list_project_tasks("proj-1")
+
+    assert tasks == [
+        AsanaTaskRecord(
+            gid="t1",
+            name="MINI-1 · one",
+            notes="Done when: it works",
+            completed=False,
+            section_gid="s1",
+            section_name="Ideas",
+            tag_names=("review",),
+        ),
+        AsanaTaskRecord(
+            gid="t2",
+            name="two",
+            notes="",
+            completed=True,
+            section_gid=None,
+            section_name=None,
+        ),
+    ]
+    assert "notes" in seen[0].url.params["opt_fields"]
+    assert "completed_since" not in seen[0].url.params
+    assert seen[1].url.params.get("offset") == "page2"
+
+
+def test_move_task_to_section_posts_the_task() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"data": {}})
+
+    _client(handler).move_task_to_section("t1", "s2")
+
+    assert seen[0].method == "POST"
+    assert seen[0].url.path == "/api/1.0/sections/s2/addTask"
+    assert json.loads(seen[0].content) == {"data": {"task": "t1"}}
 
 
 # ---------------------------------------------------------------------------
