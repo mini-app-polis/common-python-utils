@@ -1,3 +1,10 @@
+# [6.14.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.13.0...v6.14.0) (2026-10-21)
+
+
+### Features
+
+* **contract:** grooming jobs and proposals between the task manager and the groomer ([16d8283](https://github.com/mini-app-polis/common-python-utils/commit/16d82831251705dedf6a94bae7bceb1a19bf4b56))
+
 # [6.13.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.12.0...v6.13.0) (2026-10-21)
 
 
