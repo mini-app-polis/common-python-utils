@@ -31,6 +31,10 @@ from .evaluations import (
     PipelineEvaluationWriteResult,
 )
 from .groomings import (
+    GroomingJobAccepted,
+    GroomingJobRequest,
+    GroomingProposal,
+    GroomingProposalAccepted,
     GroomingRecord,
     GroomingRecordWrite,
     GroomingRunCreate,
@@ -295,7 +299,7 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=GroomingRunCreate,
         response=GroomingRunRecorded,
         scope="tasks.groomings.write",
-        callers=(),
+        callers=("task-groomer-cog",),
     ),
     Endpoint(
         name="grooming_spend",
@@ -304,7 +308,25 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=None,
         response=GroomingSpend,
         scope="tasks.groomings.read",
-        callers=(),
+        callers=("task-groomer-cog",),
+    ),
+    Endpoint(
+        name="request_grooming",
+        method="POST",
+        path="/v1/tasks/groomings/jobs",
+        request=GroomingJobRequest,
+        response=GroomingJobAccepted,
+        scope="tasks.groomings.write",
+        callers=("task-manager-cog",),
+    ),
+    Endpoint(
+        name="submit_grooming_proposal",
+        method="POST",
+        path="/v1/tasks/groomings/proposals",
+        request=GroomingProposal,
+        response=GroomingProposalAccepted,
+        scope="tasks.groomings.write",
+        callers=("task-groomer-cog",),
     ),
     Endpoint(
         name="create_evaluation",

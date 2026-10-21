@@ -68,6 +68,14 @@ NOT_EXERCISED: dict[str, str] = {
         "development has no queues: wiki-curator-dev-jobs is not provisioned, "
         "so the API cannot enqueue the job"
     ),
+    "request_grooming": (
+        "development has no queues: task-groomer-dev-jobs is not provisioned, "
+        "so the API cannot enqueue the job"
+    ),
+    "submit_grooming_proposal": (
+        "development has no queues: task-manager-dev-jobs.fifo is not "
+        "provisioned, so the API cannot enqueue the proposal"
+    ),
     "create_wcs_source": (
         "a source cannot be deleted and every source is in the unfiltered "
         "wiki export, so a fixture would stay in dev's wiki for good"
@@ -90,6 +98,12 @@ NOT_DEPLOYED: dict[str, str] = {
     ),
     "grooming_spend": (
         "GET /v1/tasks/groomings/spend is not on the development API yet"
+    ),
+    "request_grooming": (
+        "POST /v1/tasks/groomings/jobs is not on the development API yet"
+    ),
+    "submit_grooming_proposal": (
+        "POST /v1/tasks/groomings/proposals is not on the development API yet"
     ),
 }
 
