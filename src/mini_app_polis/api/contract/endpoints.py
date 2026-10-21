@@ -30,6 +30,13 @@ from .evaluations import (
     PipelineEvaluationItem,
     PipelineEvaluationWriteResult,
 )
+from .groomings import (
+    GroomingRecord,
+    GroomingRecordWrite,
+    GroomingRunCreate,
+    GroomingRunRecorded,
+    GroomingSpend,
+)
 from .notify import NotificationResult, NotifyRequest
 from .runs import (
     DeejayRunAccepted,
@@ -262,6 +269,42 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         response=TaskCreateAccepted,
         scope="tasks.requests.create",
         callers=("transcription-cog",),
+    ),
+    Endpoint(
+        name="list_groomings",
+        method="GET",
+        path="/v1/tasks/groomings",
+        request=None,
+        response=list[GroomingRecord],
+        scope="tasks.groomings.read",
+        callers=("task-manager-cog",),
+    ),
+    Endpoint(
+        name="record_grooming",
+        method="POST",
+        path="/v1/tasks/groomings",
+        request=GroomingRecordWrite,
+        response=GroomingRecord,
+        scope="tasks.groomings.write",
+        callers=("task-manager-cog",),
+    ),
+    Endpoint(
+        name="record_grooming_run",
+        method="POST",
+        path="/v1/tasks/groomings/runs",
+        request=GroomingRunCreate,
+        response=GroomingRunRecorded,
+        scope="tasks.groomings.write",
+        callers=(),
+    ),
+    Endpoint(
+        name="grooming_spend",
+        method="GET",
+        path="/v1/tasks/groomings/spend",
+        request=None,
+        response=GroomingSpend,
+        scope="tasks.groomings.read",
+        callers=(),
     ),
     Endpoint(
         name="create_evaluation",
