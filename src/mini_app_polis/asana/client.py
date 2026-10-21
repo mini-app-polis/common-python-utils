@@ -16,9 +16,13 @@ tasks with today, no more:
   - ``list_project_tasks`` — GET /projects/<gid>/tasks, with body,
     column and tags
   - ``move_task_to_section`` — POST /sections/<gid>/addTask
+  - ``get_task`` — GET /tasks/<gid>, as ``list_project_tasks`` reads one
+  - ``update_task`` — PUT /tasks/<gid>, name and body
+  - ``remove_tag`` — POST /tasks/<gid>/removeTag
+  - ``add_comment`` / ``list_comments`` — POST and GET /tasks/<gid>/stories
 
-Updating a task's body and commenting are absent until a caller needs
-them: a method with no caller is a method nothing keeps honest.
+Anything else is absent until a caller needs it: a method with no caller
+is a method nothing keeps honest.
 
 **Idempotency:** Asana stores an app-scoped ``external`` object on
 every task, and a task can be addressed by it directly. That is the
@@ -297,40 +301,11 @@ class AsanaClient:
         paged listing rather than a request per task.
         """
         path = f"/projects/{quote(project_gid, safe='')}/tasks"
-        fields = ",".join(
-            (
-                "name",
-                "notes",
-                "completed",
-                "tags.name",
-                "memberships.project.gid",
-                "memberships.section.gid",
-                "memberships.section.name",
-            )
-        )
         tasks: list[AsanaTaskRecord] = []
-        for record in self._paged(path, fields):
-            gid, name = record.get("gid"), record.get("name")
-            if not isinstance(gid, str) or not isinstance(name, str):
-                continue
-            section_gid, section_name = _section_in(record, project_gid)
-            tags = tuple(
-                tag["name"]
-                for tag in record.get("tags") or []
-                if isinstance(tag, dict) and isinstance(tag.get("name"), str)
-            )
-            notes = record.get("notes")
-            tasks.append(
-                AsanaTaskRecord(
-                    gid=gid,
-                    name=name,
-                    notes=notes if isinstance(notes, str) else "",
-                    completed=bool(record.get("completed")),
-                    section_gid=section_gid,
-                    section_name=section_name,
-                    tag_names=tags,
-                )
-            )
+        for record in self._paged(path, _TASK_FIELDS):
+            task = _task_record(record, project_gid)
+            if task is not None:
+                tasks.append(task)
         return tasks
 
     def move_task_to_section(self, task_gid: str, section_gid: str) -> None:
@@ -340,6 +315,75 @@ class AsanaClient:
             f"/sections/{quote(section_gid, safe='')}/addTask",
             json_payload={"data": {"task": task_gid}},
         )
+
+    def get_task(self, task_gid: str, project_gid: str) -> AsanaTaskRecord | None:
+        """One task as ``list_project_tasks`` reads it, or None if it is gone.
+
+        ``project_gid`` picks which of its columns to report.
+        """
+        record = self._request(
+            "GET",
+            f"/tasks/{quote(task_gid, safe='')}",
+            params={"opt_fields": _TASK_FIELDS},
+            allow_404=True,
+        )
+        if not isinstance(record, dict):
+            return None
+        return _task_record(record, project_gid)
+
+    def update_task(
+        self,
+        task_gid: str,
+        *,
+        name: str | None = None,
+        html_notes: str | None = None,
+    ) -> None:
+        """Change a task's name, body or both. Unset arguments are left alone.
+
+        ``html_notes`` replaces the whole body; build it with
+        :func:`~mini_app_polis.asana.rich_text.rich_text_body`.
+        """
+        data: dict[str, Any] = {}
+        if name is not None:
+            data["name"] = name
+        if html_notes is not None:
+            data["html_notes"] = html_notes
+        if not data:
+            return
+        self._request(
+            "PUT", f"/tasks/{quote(task_gid, safe='')}", json_payload={"data": data}
+        )
+
+    def remove_tag(self, task_gid: str, tag_name: str) -> None:
+        """Take a tag off a task, by the tag's name."""
+        tag_gid = self.find_or_create_tag(tag_name)
+        self._request(
+            "POST",
+            f"/tasks/{quote(task_gid, safe='')}/removeTag",
+            json_payload={"data": {"tag": tag_gid}},
+        )
+
+    def add_comment(self, task_gid: str, text: str) -> None:
+        """Post a plain-text comment on a task."""
+        self._request(
+            "POST",
+            f"/tasks/{quote(task_gid, safe='')}/stories",
+            json_payload={"data": {"text": text}},
+        )
+
+    def list_comments(self, task_gid: str) -> list[str]:
+        """The text of every comment on a task, oldest first.
+
+        Only comments: the task's history (moves, edits, assignments) is
+        left out.
+        """
+        path = f"/tasks/{quote(task_gid, safe='')}/stories"
+        return [
+            record["text"]
+            for record in self._paged(path, "resource_subtype,text")
+            if record.get("resource_subtype") == "comment_added"
+            and isinstance(record.get("text"), str)
+        ]
 
     def _paged(self, path: str, opt_fields: str) -> list[dict[str, Any]]:
         """Every record of a paged list endpoint, as dicts."""
@@ -470,6 +514,43 @@ def _error_detail(response: httpx.Response) -> str:
             if messages:
                 return "; ".join(messages)
     return response.text[:200]
+
+
+#: What a task listing reads of each task.
+_TASK_FIELDS = ",".join(
+    (
+        "name",
+        "notes",
+        "completed",
+        "tags.name",
+        "memberships.project.gid",
+        "memberships.section.gid",
+        "memberships.section.name",
+    )
+)
+
+
+def _task_record(record: dict[str, Any], project_gid: str) -> AsanaTaskRecord | None:
+    """A task from the API's record, or None when it has no gid or name."""
+    gid, name = record.get("gid"), record.get("name")
+    if not isinstance(gid, str) or not isinstance(name, str):
+        return None
+    section_gid, section_name = _section_in(record, project_gid)
+    tags = tuple(
+        tag["name"]
+        for tag in record.get("tags") or []
+        if isinstance(tag, dict) and isinstance(tag.get("name"), str)
+    )
+    notes = record.get("notes")
+    return AsanaTaskRecord(
+        gid=gid,
+        name=name,
+        notes=notes if isinstance(notes, str) else "",
+        completed=bool(record.get("completed")),
+        section_gid=section_gid,
+        section_name=section_name,
+        tag_names=tags,
+    )
 
 
 def _section_in(

@@ -60,6 +60,10 @@ class _GroomingFields(BaseModel):
     #: How often a task the task manager moved to Ready was moved back out:
     #: the measure of whether ready meant ready.
     returned_count: int = Field(default=0, ge=0)
+    #: The fingerprint of the content last sent for grooming, or that a
+    #: grooming wrote. A task is sent again only once its content differs
+    #: from this, so it is groomed once per change and never loops.
+    groomed_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 class GroomingRecordWrite(_GroomingFields):
@@ -120,6 +124,9 @@ class GroomingTask(BaseModel):
     fingerprint: str = Field(..., pattern=r"^[0-9a-f]{64}$")
     #: What the linter found missing.
     problems: list[str] = Field(default_factory=list, max_length=50)
+    #: The comments on the task since its last grooming questions, oldest
+    #: first: the owner's answers.
+    comments: list[str] = Field(default_factory=list, max_length=50)
 
 
 class GroomingJobRequest(BaseModel):
