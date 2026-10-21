@@ -1,3 +1,10 @@
+# [6.12.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.11.2...v6.12.0) (2026-10-21)
+
+
+### Features
+
+* **asana:** read a board's columns and tasks, and move a task between columns ([387023d](https://github.com/mini-app-polis/common-python-utils/commit/387023d562d8fc4a95c6c94923d7b51a3f0c0afd))
+
 ## [6.11.2](https://github.com/mini-app-polis/common-python-utils/compare/v6.11.1...v6.11.2) (2026-10-21)
 
 
