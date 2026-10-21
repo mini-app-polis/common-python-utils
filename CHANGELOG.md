@@ -1,3 +1,10 @@
+# [6.13.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.12.0...v6.13.0) (2026-10-21)
+
+
+### Features
+
+* **contract:** grooming records and paid grooming runs for the task board ([0829f80](https://github.com/mini-app-polis/common-python-utils/commit/0829f8075f4b22f15ed18abb1be96c45d66edfdb))
+
 # [6.12.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.11.2...v6.12.0) (2026-10-21)
 
 
