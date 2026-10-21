@@ -1,3 +1,10 @@
+## [6.11.2](https://github.com/mini-app-polis/common-python-utils/compare/v6.11.1...v6.11.2) (2026-10-21)
+
+
+### Bug Fixes
+
+* **release:** retry PyPI's token exchange when it does not answer, and stop blaming the publisher for it ([d6026f5](https://github.com/mini-app-polis/common-python-utils/commit/d6026f513c98bab14a1ad6fc2bb6f0435377eac8))
+
 ## [6.11.1](https://github.com/mini-app-polis/common-python-utils/compare/v6.11.0...v6.11.1) (2026-10-21)
 
 
