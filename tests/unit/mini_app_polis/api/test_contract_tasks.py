@@ -71,3 +71,11 @@ def test_labels_are_tag_names(label: str) -> None:
 def test_unknown_fields_are_refused() -> None:
     with pytest.raises(ValidationError):
         TaskDraft.model_validate({"title": "t", "priority": "high"})
+
+
+@pytest.mark.parametrize("source", ["ci", "cog-run", "conformance", "api-fault"])
+def test_detected_problems_are_minted_sources(source: str) -> None:
+    request = TaskCreateRequest.model_validate(
+        _request(source=source, external_id=f"{source}.some/key#1")
+    )
+    assert request.id is None
