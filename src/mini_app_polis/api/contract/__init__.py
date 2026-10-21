@@ -39,6 +39,14 @@ from .evaluations import (
     PipelineEvaluationItem,
     PipelineEvaluationWriteResult,
 )
+from .groomings import (
+    GroomingOutcome,
+    GroomingRecord,
+    GroomingRecordWrite,
+    GroomingRunCreate,
+    GroomingRunRecorded,
+    GroomingSpend,
+)
 from .notify import (
     NotificationResult,
     NotifyRequest,
@@ -126,6 +134,12 @@ __all__ = [
     "ErrorDetail",
     "ErrorEnvelope",
     "GIVEN_ID_SOURCES",
+    "GroomingOutcome",
+    "GroomingRecord",
+    "GroomingRecordWrite",
+    "GroomingRunCreate",
+    "GroomingRunRecorded",
+    "GroomingSpend",
     "IngestResponseData",
     "IngestSet",
     "IngestTrack",

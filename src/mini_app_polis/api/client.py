@@ -61,6 +61,11 @@ from .contract import (
     DeejayRunAccepted,
     DeejayRunRequest,
     Envelope,
+    GroomingRecord,
+    GroomingRecordWrite,
+    GroomingRunCreate,
+    GroomingRunRecorded,
+    GroomingSpend,
     IngestResponseData,
     IngestSet,
     LivePlaysIngest,
@@ -618,6 +623,25 @@ class KaianoApiClient:
         Asking twice for one ``external_id`` makes one task.
         """
         return cast(TaskCreateAccepted, self._call("request_task", payload))
+
+    def list_groomings(self) -> list[GroomingRecord]:
+        """``GET /v1/tasks/groomings`` — every task's grooming record."""
+        return cast(list[GroomingRecord], self._call("list_groomings"))
+
+    def record_grooming(self, payload: GroomingRecordWrite) -> GroomingRecord:
+        """``POST /v1/tasks/groomings`` — write one task's grooming record.
+
+        Keyed by ``task_gid``: writing a task's record again replaces it.
+        """
+        return cast(GroomingRecord, self._call("record_grooming", payload))
+
+    def record_grooming_run(self, payload: GroomingRunCreate) -> GroomingRunRecorded:
+        """``POST /v1/tasks/groomings/runs`` — record one paid grooming run."""
+        return cast(GroomingRunRecorded, self._call("record_grooming_run", payload))
+
+    def grooming_spend(self) -> GroomingSpend:
+        """``GET /v1/tasks/groomings/spend`` — this month's paid grooming."""
+        return cast(GroomingSpend, self._call("grooming_spend"))
 
     def create_evaluation(
         self, payload: PipelineEvaluationCreate

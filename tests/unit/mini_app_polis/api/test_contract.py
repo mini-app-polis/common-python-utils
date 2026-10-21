@@ -339,3 +339,27 @@ def test_notify_request_accepts_values_at_discords_limits() -> None:
     req = NotifyRequest(content="x" * 2000, embeds=[{}] * 10, username="u" * 80)
 
     assert len(req.to_discord()["content"]) == 2000
+
+
+# ── Grooming records ──────────────────────────────────────────────────────
+
+
+def test_a_grooming_record_round_trips_and_its_write_refuses_extras() -> None:
+    from mini_app_polis.api.contract import GroomingRecord, GroomingRecordWrite
+
+    write = GroomingRecordWrite(
+        task_gid="1219755103049631",
+        task_id="MINI-151",
+        fingerprint="a" * 64,
+        outcome="not_ready",
+        problems=["Effort is blank, not S, M or L"],
+    )
+    stored = GroomingRecord.model_validate(
+        {**write.model_dump(mode="json"), "updated_at": "2026-10-21T19:38:16Z", "x": 1}
+    )
+    assert stored.returned_count == 0
+    assert stored.moved_to_ready_at is None
+    with pytest.raises(ValidationError):
+        GroomingRecordWrite.model_validate({**write.model_dump(), "x": 1})
+    with pytest.raises(ValidationError):
+        GroomingRecordWrite.model_validate({**write.model_dump(), "fingerprint": "abc"})

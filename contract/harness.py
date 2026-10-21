@@ -83,6 +83,14 @@ NOT_EXERCISED: dict[str, str] = {
 #: and exercise it in test_contract.py.
 NOT_DEPLOYED: dict[str, str] = {
     "request_task": "POST /v1/tasks is not on the development API yet",
+    "list_groomings": "GET /v1/tasks/groomings is not on the development API yet",
+    "record_grooming": "POST /v1/tasks/groomings is not on the development API yet",
+    "record_grooming_run": (
+        "POST /v1/tasks/groomings/runs is not on the development API yet"
+    ),
+    "grooming_spend": (
+        "GET /v1/tasks/groomings/spend is not on the development API yet"
+    ),
 }
 
 
