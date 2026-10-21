@@ -61,6 +61,10 @@ from .contract import (
     DeejayRunAccepted,
     DeejayRunRequest,
     Envelope,
+    GroomingJobAccepted,
+    GroomingJobRequest,
+    GroomingProposal,
+    GroomingProposalAccepted,
     GroomingRecord,
     GroomingRecordWrite,
     GroomingRunCreate,
@@ -642,6 +646,21 @@ class KaianoApiClient:
     def grooming_spend(self) -> GroomingSpend:
         """``GET /v1/tasks/groomings/spend`` — this month's paid grooming."""
         return cast(GroomingSpend, self._call("grooming_spend"))
+
+    def request_grooming(self, payload: GroomingJobRequest) -> GroomingJobAccepted:
+        """``POST /v1/tasks/groomings/jobs`` — queue one task for the groomer."""
+        return cast(GroomingJobAccepted, self._call("request_grooming", payload))
+
+    def submit_grooming_proposal(
+        self, payload: GroomingProposal
+    ) -> GroomingProposalAccepted:
+        """``POST /v1/tasks/groomings/proposals`` — hand a proposal back.
+
+        The API queues it for the task manager, which applies it.
+        """
+        return cast(
+            GroomingProposalAccepted, self._call("submit_grooming_proposal", payload)
+        )
 
     def create_evaluation(
         self, payload: PipelineEvaluationCreate

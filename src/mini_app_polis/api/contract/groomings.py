@@ -10,10 +10,18 @@ only a changed task is worth grooming again.
 A paid grooming run (a model reading a task and proposing its fields) is
 recorded on its own, with its cost, so the month's spend can be capped.
 
-    GET  /v1/tasks/groomings        every record
-    POST /v1/tasks/groomings        write one record (keyed by task_gid)
-    POST /v1/tasks/groomings/runs   record one paid run
-    GET  /v1/tasks/groomings/spend  this month's paid runs, in total
+A task that is not ready and has changed is sent for grooming: the task
+manager asks for a job, the API queues it for task-groomer-cog, and the
+groomer's proposal comes back through the API to the task manager's queue.
+The groomer never writes to the board; the task manager applies the
+proposal.
+
+    GET  /v1/tasks/groomings            every record
+    POST /v1/tasks/groomings            write one record (keyed by task_gid)
+    POST /v1/tasks/groomings/runs       record one paid run
+    GET  /v1/tasks/groomings/spend      this month's paid runs, in total
+    POST /v1/tasks/groomings/jobs       ask for one task to be groomed
+    POST /v1/tasks/groomings/proposals  hand a groomer's proposal back
 """
 
 from __future__ import annotations
@@ -22,6 +30,9 @@ from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+#: A task's size. An L task's implementation is to create its subtasks.
+GroomingEffort = Literal["S", "M", "L"]
 
 #: What the last sweep made of a task.
 #:
@@ -90,3 +101,78 @@ class GroomingSpend(BaseModel):
     month: str = Field(..., pattern=r"^\d{4}-\d{2}$")
     runs: int = Field(..., ge=0)
     cost_usd: float = Field(..., ge=0)
+
+
+class GroomingTask(BaseModel):
+    """One task as the groomer reads it: everything it is given about it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    task_gid: str = Field(..., min_length=1, max_length=64, pattern=r"^\d+$")
+    task_id: str | None = Field(default=None, max_length=64)
+    name: str = Field(..., min_length=1, max_length=1024)
+    #: The body as plain text, template block included.
+    notes: str = Field(default="", max_length=65_536)
+    tags: list[str] = Field(default_factory=list, max_length=50)
+    section: str | None = Field(default=None, max_length=200)
+    #: The content's fingerprint when it was sent. A proposal carries it
+    #: back, so one made for content that has since changed is not applied.
+    fingerprint: str = Field(..., pattern=r"^[0-9a-f]{64}$")
+    #: What the linter found missing.
+    problems: list[str] = Field(default_factory=list, max_length=50)
+
+
+class GroomingJobRequest(BaseModel):
+    """Ask for one task to be groomed."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    task: GroomingTask
+    #: The names of the other open tasks on the board, to recognise one
+    #: that duplicates or depends on another.
+    board: list[str] = Field(default_factory=list, max_length=500)
+
+
+class GroomingJobAccepted(BaseModel):
+    """The job is on the groomer's queue."""
+
+    accepted: bool = True
+    message_id: str
+    task_gid: str
+
+
+class GroomingProposal(BaseModel):
+    """What a groomer proposes a task should say.
+
+    Every field is the groomer's best reading of the task and the code it
+    names. A field it could not settle is left out and asked about in
+    ``questions`` instead: a guess in ``done_when`` costs more than a
+    question.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    task_gid: str = Field(..., min_length=1, max_length=64, pattern=r"^\d+$")
+    #: The fingerprint of the content this was made for.
+    fingerprint: str = Field(..., pattern=r"^[0-9a-f]{64}$")
+    #: The title without its id.
+    title: str = Field(..., min_length=1, max_length=300)
+    done_when: str | None = Field(default=None, max_length=5000)
+    where: str | None = Field(default=None, max_length=1000)
+    constraints: str | None = Field(default=None, max_length=5000)
+    effort: GroomingEffort | None = None
+    blocked_by: str | None = Field(default=None, max_length=500)
+    #: Why the task exists, and links to what is needed.
+    body: str | None = Field(default=None, max_length=20_000)
+    questions: list[str] = Field(default_factory=list, max_length=10)
+    #: Who made it and what it cost, for the record.
+    model: str = Field(..., min_length=1, max_length=100)
+    cost_usd: float = Field(..., ge=0)
+
+
+class GroomingProposalAccepted(BaseModel):
+    """The proposal is on the task manager's queue."""
+
+    accepted: bool = True
+    message_id: str
+    task_gid: str
