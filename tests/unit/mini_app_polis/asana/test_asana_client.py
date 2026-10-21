@@ -462,6 +462,110 @@ def test_move_task_to_section_posts_the_task() -> None:
 
 
 # ---------------------------------------------------------------------------
+# get_task, update_task, remove_tag, add_comment, list_comments
+# ---------------------------------------------------------------------------
+
+
+def test_get_task_reads_one_task_as_the_listing_does() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/1.0/tasks/t1"
+        assert "memberships.section.name" in request.url.params["opt_fields"]
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "gid": "t1",
+                    "name": "MINI-1 · one",
+                    "notes": "body",
+                    "completed": False,
+                    "tags": [{"name": "review"}],
+                    "memberships": [
+                        {
+                            "project": {"gid": "proj-1"},
+                            "section": {"gid": "s2", "name": "Refining"},
+                        }
+                    ],
+                }
+            },
+        )
+
+    task = _client(handler).get_task("t1", "proj-1")
+    assert task == AsanaTaskRecord(
+        gid="t1",
+        name="MINI-1 · one",
+        notes="body",
+        completed=False,
+        section_gid="s2",
+        section_name="Refining",
+        tag_names=("review",),
+    )
+
+
+def test_get_task_of_a_deleted_task_is_none() -> None:
+    assert _client(lambda _request: httpx.Response(404)).get_task("t1", "p") is None
+
+
+def test_update_task_sends_only_what_changes() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"data": {}})
+
+    client = _client(handler)
+    client.update_task("t1", html_notes="<body>x</body>")
+    client.update_task("t1")
+    client.update_task("t1", name="MINI-2 · two", html_notes="<body>y</body>")
+
+    assert len(seen) == 2
+    assert seen[0].method == "PUT"
+    assert seen[0].url.path == "/api/1.0/tasks/t1"
+    assert json.loads(seen[0].content) == {"data": {"html_notes": "<body>x</body>"}}
+    assert json.loads(seen[1].content) == {
+        "data": {"name": "MINI-2 · two", "html_notes": "<body>y</body>"}
+    }
+
+
+def test_remove_tag_resolves_the_name_then_removes_it() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.path == "/api/1.0/tags":
+            return httpx.Response(200, json={"data": [{"gid": "g9", "name": "Review"}]})
+        return httpx.Response(200, json={"data": {}})
+
+    _client(handler).remove_tag("t1", "review")
+    assert seen[-1].url.path == "/api/1.0/tasks/t1/removeTag"
+    assert json.loads(seen[-1].content) == {"data": {"tag": "g9"}}
+
+
+def test_comments_are_posted_and_read_back_without_the_history() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.method == "POST":
+            return httpx.Response(201, json={"data": {}})
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"resource_subtype": "section_changed", "text": "moved"},
+                    {"resource_subtype": "comment_added", "text": "first"},
+                    {"resource_subtype": "comment_added", "text": "second"},
+                ]
+            },
+        )
+
+    client = _client(handler)
+    client.add_comment("t1", "Grooming questions: why?")
+    assert json.loads(seen[0].content) == {"data": {"text": "Grooming questions: why?"}}
+    assert seen[0].url.path == "/api/1.0/tasks/t1/stories"
+    assert client.list_comments("t1") == ["first", "second"]
+
+
+# ---------------------------------------------------------------------------
 # Auth and error mapping
 # ---------------------------------------------------------------------------
 
