@@ -1,3 +1,10 @@
+## [6.11.1](https://github.com/mini-app-polis/common-python-utils/compare/v6.11.0...v6.11.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **deps:** patch vulnerable dependencies (virtualenv) ([da3dad1](https://github.com/mini-app-polis/common-python-utils/commit/da3dad1fcef9f3781aeb4daa89af2c1d39ad252a))
+
 # [6.11.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.10.0...v6.11.0) (2026-10-21)
 
 
