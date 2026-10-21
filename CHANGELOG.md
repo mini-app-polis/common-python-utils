@@ -1,3 +1,10 @@
+# [6.15.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.14.0...v6.15.0) (2026-10-21)
+
+
+### Features
+
+* **asana): read, rewrite, untag and comment on a task; feat(contract:** groomed fingerprint and the owner's answers ([aac78a0](https://github.com/mini-app-polis/common-python-utils/commit/aac78a0d983cf53398029534424e658dfc68c1f3))
+
 # [6.14.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.13.0...v6.14.0) (2026-10-21)
 
 
