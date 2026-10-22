@@ -85,6 +85,15 @@ def test_empty_run_says_so():
     )
 
 
+def test_a_run_with_only_outcomes_is_not_called_empty():
+    r = ps.RunReport(flow_name="f", repo="c", duration_sec=0.4)
+    r.updated("grooming proposal", "MINI-129")
+    assert r.text().splitlines() == [
+        "Run complete in 0.40s.",
+        "~ grooming proposal: MINI-129",
+    ]
+
+
 def test_tally_is_ordered_issues_before_notes():
     r = ps.RunReport(flow_name="f", repo="c")
     r.ok(12)

@@ -1155,7 +1155,14 @@ class RunReport:
         """
         tally = self.tally()
         took = f"Run complete in {format_duration(self.duration)}"
-        body = f"{took} — {tally}." if tally else f"{took} — nothing to do."
+        if tally:
+            body = f"{took} — {tally}."
+        elif self.outcomes:
+            # Work recorded only as outcomes is still work: the lines below
+            # say what it was, so the headline must not call it nothing.
+            body = f"{took}."
+        else:
+            body = f"{took} — nothing to do."
 
         lines = [body]
         lines.extend(self.outcome_lines())
