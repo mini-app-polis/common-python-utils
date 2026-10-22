@@ -79,3 +79,25 @@ def test_detected_problems_are_minted_sources(source: str) -> None:
         _request(source=source, external_id=f"{source}.some/key#1")
     )
     assert request.id is None
+
+
+def test_template_fields_are_optional_and_blank_by_default() -> None:
+    draft = TaskDraft(title="t")
+    assert (draft.done_when, draft.constraints, draft.effort) == (None, None, None)
+
+
+def test_a_source_that_knows_the_template_fields_can_set_them() -> None:
+    draft = TaskDraft(
+        title="t", done_when="CI passes on dev", constraints="None", effort="S"
+    )
+    assert (draft.done_when, draft.constraints, draft.effort) == (
+        "CI passes on dev",
+        "None",
+        "S",
+    )
+
+
+@pytest.mark.parametrize("effort", ["XS", "s", "XL", ""])
+def test_effort_is_one_of_the_board_sizes(effort: str) -> None:
+    with pytest.raises(ValidationError):
+        TaskDraft(title="t", effort=effort)
