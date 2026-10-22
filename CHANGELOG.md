@@ -1,3 +1,10 @@
+# [6.16.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.15.1...v6.16.0) (2026-10-22)
+
+
+### Features
+
+* **contract:** let a task draft carry Done when, Constraints and Effort ([8e70d08](https://github.com/mini-app-polis/common-python-utils/commit/8e70d089ffe6aae75708ac0268c550c4d4a892ce))
+
 ## [6.15.1](https://github.com/mini-app-polis/common-python-utils/compare/v6.15.0...v6.15.1) (2026-10-21)
 
 
