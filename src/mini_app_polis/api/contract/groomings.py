@@ -136,7 +136,8 @@ class GroomingJobRequest(BaseModel):
 
     task: GroomingTask
     #: The names of the other open tasks on the board, to recognise one
-    #: that duplicates or depends on another.
+    #: that duplicates or depends on another, and any finished task this
+    #: one mentions, its name ending " (done)".
     board: list[str] = Field(default_factory=list, max_length=500)
 
 
