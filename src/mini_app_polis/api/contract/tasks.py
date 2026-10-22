@@ -32,6 +32,9 @@ TaskSource = Literal[
     "api-fault",
 ]
 
+#: A task's size, as the board's template writes it.
+TaskEffort = Literal["S", "M", "L"]
+
 #: Sources whose tasks carry an id the source already has (an issue's
 #: ``repo#n``), rather than one the task manager mints.
 GIVEN_ID_SOURCES: frozenset[str] = frozenset({"github-issue"})
@@ -62,6 +65,11 @@ class TaskDraft(BaseModel):
     then names the task for review instead of refusing it, so the work is
     not lost to a validation error. ``labels`` are tag names; they are
     ignored when ``needs_review`` is set, which applies the review tag alone.
+
+    ``done_when``, ``constraints`` and ``effort`` fill the template's fields
+    of the same names. Most sources leave them out, and the fields are left
+    blank for grooming. A source that knows them, because it detected the
+    problem itself, sets them, so its task needs no grooming to be ready.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -77,6 +85,17 @@ class TaskDraft(BaseModel):
         max_length=20_000,
         description="Prose describing the work, rendered below the template.",
     )
+    done_when: str | None = Field(
+        None,
+        max_length=1000,
+        description="The observable outcome that finishes the work.",
+    )
+    constraints: str | None = Field(
+        None,
+        max_length=1000,
+        description="What the work must not do, or None when there is nothing.",
+    )
+    effort: TaskEffort | None = None
     sections: list[TaskSection] = Field(default_factory=list, max_length=20)
     links: list[TaskLink] = Field(default_factory=list, max_length=20)
     labels: list[str] = Field(default_factory=list, max_length=20)
