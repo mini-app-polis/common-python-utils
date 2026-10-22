@@ -74,24 +74,24 @@ class TaskDraft(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    title: str = Field("", max_length=500)
+    title: str = Field(default="", max_length=500)
     where: str | None = Field(
-        None,
+        default=None,
         max_length=200,
         description="The system, repo or place the work happens in.",
     )
     body: str | None = Field(
-        None,
+        default=None,
         max_length=20_000,
         description="Prose describing the work, rendered below the template.",
     )
     done_when: str | None = Field(
-        None,
+        default=None,
         max_length=1000,
         description="The observable outcome that finishes the work.",
     )
     constraints: str | None = Field(
-        None,
+        default=None,
         max_length=1000,
         description="What the work must not do, or None when there is nothing.",
     )
@@ -123,7 +123,7 @@ class TaskCreateRequest(BaseModel):
     source: TaskSource
     external_id: str = Field(..., min_length=1, max_length=256)
     id: str | None = Field(
-        None,
+        default=None,
         min_length=1,
         max_length=120,
         description=(
@@ -148,9 +148,9 @@ class TaskCreateRequest(BaseModel):
 class TaskCreateAccepted(BaseModel):
     """The acknowledgement. Not a result — no task exists yet."""
 
-    accepted: bool = Field(True, description="The job is on the queue.")
+    accepted: bool = Field(default=True, description="The job is on the queue.")
     message_id: str = Field(
-        "", description="The queue message this request became, for tracing."
+        default="", description="The queue message this request became, for tracing."
     )
     source: str = Field(..., description="The source the task came from.")
     external_id: str = Field(..., description="The source's key for the work.")

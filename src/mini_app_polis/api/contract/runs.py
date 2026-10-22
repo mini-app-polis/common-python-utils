@@ -23,7 +23,7 @@ class DriveFileRef(BaseModel):
 
     id: str = Field(..., min_length=1, max_length=256, description="Drive file id.")
     revision: str | None = Field(
-        None,
+        default=None,
         min_length=1,
         max_length=64,
         description=(
@@ -51,7 +51,7 @@ class DeejayRunRequest(BaseModel):
         ),
     )
     drive_files: list[DriveFileRef] | None = Field(
-        None,
+        default=None,
         min_length=1,
         max_length=500,
         description=(
@@ -67,14 +67,14 @@ class DeejayRunAccepted(BaseModel):
     """The acknowledgement. Not a result — nothing has run yet."""
 
     accepted: bool = Field(
-        True,
+        default=True,
         description=(
             "The work is on the queue — this request's message, or, when "
             "deduplicated, an earlier one's."
         ),
     )
     message_id: str = Field(
-        "",
+        default="",
         description=(
             "The queue message this request became. What the API can "
             "honestly say it did, and the handle for tracing the job."
@@ -82,7 +82,7 @@ class DeejayRunAccepted(BaseModel):
     )
     mode: str = Field(..., description="Flow that will run.")
     deduplicated: bool = Field(
-        False,
+        default=False,
         description=(
             "Nothing was enqueued because every file named is already "
             "claimed by an earlier request. ``message_id`` is that "
@@ -113,7 +113,7 @@ class TranscriptionRunRequest(BaseModel):
         ),
     )
     drive_file_id: str | None = Field(
-        None,
+        default=None,
         min_length=1,
         max_length=256,
         description=(
@@ -139,14 +139,14 @@ class TranscriptionRunAccepted(BaseModel):
     """The acknowledgement. Not a result — nothing has run yet."""
 
     accepted: bool = Field(
-        True,
+        default=True,
         description=(
             "The work is on the queue — this request's message, or, when "
             "deduplicated, an earlier one's."
         ),
     )
     message_id: str = Field(
-        "",
+        default="",
         description=(
             "The queue message this request became. What the API can "
             "honestly say it did, and the handle for tracing the job."
@@ -154,10 +154,10 @@ class TranscriptionRunAccepted(BaseModel):
     )
     mode: str = Field(..., description="Pipeline that will run.")
     drive_file_id: str | None = Field(
-        None, description="The file; absent for the retention sweep."
+        default=None, description="The file; absent for the retention sweep."
     )
     deduplicated: bool = Field(
-        False,
+        default=False,
         description=(
             "Nothing was enqueued because every file named is already "
             "claimed by an earlier request. ``message_id`` is that "
