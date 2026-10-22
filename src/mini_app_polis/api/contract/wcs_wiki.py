@@ -37,7 +37,7 @@ class WcsWikiReference(BaseModel):
     name: str = Field(..., description="The concept as the model named it.")
     target_slug: str = Field(..., description="The concept's slug.")
     target_entity_id: uuid.UUID | None = Field(
-        None,
+        default=None,
         description=(
             "The entity, when the concept has one; null for a concept the "
             "linker proposed, which lives in the wiki state only."
@@ -52,10 +52,12 @@ class WcsWikiLinkedStatement(BaseModel):
     """One statement the linker has read, and what it refers to."""
 
     linker_version: str = Field(..., description="Prompt version it was linked under.")
-    model: str = Field("", description="Model that linked it.")
+    model: str = Field(default="", description="Model that linked it.")
     subject_slug: str = Field(..., description="The entity the statement is about.")
-    source_id: uuid.UUID | None = Field(None, description="Source it came from.")
-    session_date: dt.date | None = Field(None, description="The source's date.")
+    source_id: uuid.UUID | None = Field(
+        default=None, description="Source it came from."
+    )
+    session_date: dt.date | None = Field(default=None, description="The source's date.")
     text: str = Field(..., description="The statement as the linker read it.")
     references: list[WcsWikiReference] = Field(
         default_factory=list, description="References, in the order found."
@@ -66,7 +68,7 @@ class WcsWikiLinksState(BaseModel):
     """``links.json``: every linked statement, by statement key."""
 
     linker_version: str = Field(..., description="Linker version of the last run.")
-    model: str = Field("", description="Model of the last run.")
+    model: str = Field(default="", description="Model of the last run.")
     statements: dict[str, WcsWikiLinkedStatement] = Field(
         default_factory=dict, description="Statement key → its references."
     )
@@ -78,12 +80,16 @@ class WcsWikiLinksState(BaseModel):
 class WcsWikiFacetDecision(BaseModel):
     """Whether one entity folds into a broader one, and why."""
 
-    parent: str | None = Field(None, description="Parent slug; null for standalone.")
-    same: bool = Field(False, description="Folded as another name, not a facet.")
-    reason: str = Field("", description="The model's stated reason.")
+    parent: str | None = Field(
+        default=None, description="Parent slug; null for standalone."
+    )
+    same: bool = Field(
+        default=False, description="Folded as another name, not a facet."
+    )
+    reason: str = Field(default="", description="The model's stated reason.")
     version: str = Field(..., description="Its group's consolidator version.")
-    model: str = Field("", description="Model that decided it.")
-    decided_at: dt.date | None = Field(None, description="When it was decided.")
+    model: str = Field(default="", description="Model that decided it.")
+    decided_at: dt.date | None = Field(default=None, description="When it was decided.")
 
 
 class WcsWikiFacetsState(BaseModel):
@@ -92,7 +98,7 @@ class WcsWikiFacetsState(BaseModel):
     consolidator_versions: dict[str, str] = Field(
         default_factory=dict, description="Kind group → version, as of the last run."
     )
-    model: str = Field("", description="Model of the last run.")
+    model: str = Field(default="", description="Model of the last run.")
     entities: dict[str, WcsWikiFacetDecision] = Field(
         default_factory=dict, description="Entity slug → its decision."
     )
@@ -106,14 +112,16 @@ class WcsWikiProseRevision(BaseModel):
 
     by: Literal["llm", "page"] = Field(..., description="Who wrote it.")
     at: dt.date = Field(..., description="When.")
-    model: str | None = Field(None, description="Model, for generated revisions.")
-    statements: int | None = Field(
-        None, description="Statements integrated, for generated revisions."
+    model: str | None = Field(
+        default=None, description="Model, for generated revisions."
     )
-    definition: str | None = Field(None, description="The definition.")
-    context: str | None = Field(None, description="The In practice paragraph.")
+    statements: int | None = Field(
+        default=None, description="Statements integrated, for generated revisions."
+    )
+    definition: str | None = Field(default=None, description="The definition.")
+    context: str | None = Field(default=None, description="The In practice paragraph.")
     prose: str | None = Field(
-        None, description="Single-field prose of the earliest revisions."
+        default=None, description="Single-field prose of the earliest revisions."
     )
 
 
@@ -122,10 +130,12 @@ class WcsWikiProseEntry(BaseModel):
 
     entity_id: uuid.UUID = Field(..., description="The entity (or proposed concept).")
     generator_version: str = Field(..., description="Generator version.")
-    model: str = Field("", description="Model of the current prose.")
-    generated_at: dt.date | None = Field(None, description="When it was generated.")
-    definition: str = Field("", description="Current definition.")
-    context: str = Field("", description="Current In practice paragraph.")
+    model: str = Field(default="", description="Model of the current prose.")
+    generated_at: dt.date | None = Field(
+        default=None, description="When it was generated."
+    )
+    definition: str = Field(default="", description="Current definition.")
+    context: str = Field(default="", description="Current In practice paragraph.")
     integrated: list[str] = Field(
         default_factory=list, description="Statement keys integrated, sorted."
     )
@@ -140,7 +150,7 @@ class WcsWikiProseState(BaseModel):
     generator_version: str = Field(
         ..., description="Generator version of the last run."
     )
-    model: str = Field("", description="Model of the last run.")
+    model: str = Field(default="", description="Model of the last run.")
     entities: dict[str, WcsWikiProseEntry] = Field(
         default_factory=dict, description="Entity slug → its prose."
     )
@@ -174,7 +184,7 @@ class WcsWikiPageCitation(BaseModel):
 
     source_id: uuid.UUID = Field(..., description="The source.")
     source_slug: str = Field(..., description="The source's page slug in the export.")
-    session_date: dt.date | None = Field(None, description="The source's date.")
+    session_date: dt.date | None = Field(default=None, description="The source's date.")
     public: bool = Field(..., description="Default-visible when materialised.")
 
 
@@ -184,9 +194,9 @@ class WcsWikiPageStatement(BaseModel):
     kind: Literal["attribution", "definition"] = Field(
         ..., description="An attribution (taught, drilled…) or a definition."
     )
-    term: str = Field("", description="The entity as named in the lesson.")
-    text: str = Field("", description="What was said.")
-    goal: str = Field("", description="A drill's goal, when it has one.")
+    term: str = Field(default="", description="The entity as named in the lesson.")
+    text: str = Field(default="", description="What was said.")
+    goal: str = Field(default="", description="A drill's goal, when it has one.")
     steps: list[str] = Field(default_factory=list, description="A drill's steps.")
     citation: WcsWikiPageCitation = Field(..., description="Where it was said.")
 
@@ -204,7 +214,7 @@ class WcsWikiPageMistake(BaseModel):
     """A common mistake, with its correction when there is one."""
 
     text: str = Field(..., description="Mistake → correction, as one line.")
-    teacher: str = Field("", description="Who pointed it out.")
+    teacher: str = Field(default="", description="Who pointed it out.")
     citation: WcsWikiPageCitation = Field(..., description="Where.")
 
 
@@ -212,10 +222,10 @@ class WcsWikiPageSkill(BaseModel):
     """A skill a drill develops, or one a technique requires."""
 
     skill: str = Field(..., description="The skill, as extracted (a sentence).")
-    text: str = Field("", description="What was said about it.")
-    focus: str = Field("", description="When to focus on it (drills only).")
+    text: str = Field(default="", description="What was said about it.")
+    focus: str = Field(default="", description="When to focus on it (drills only).")
     citation: WcsWikiPageCitation | None = Field(
-        None, description="Where, when the row names its source."
+        default=None, description="Where, when the row names its source."
     )
 
 
@@ -225,7 +235,7 @@ class WcsWikiPageLink(BaseModel):
     slug: str = Field(..., description="The page's slug.")
     kind: str = Field(..., description="The page's kind.")
     name: str = Field(..., description="The page's display name.")
-    count: int = Field(1, description="Statements behind the link.")
+    count: int = Field(default=1, description="Statements behind the link.")
 
 
 class WcsWikiPageRelated(BaseModel):
@@ -235,9 +245,9 @@ class WcsWikiPageRelated(BaseModel):
     kind: str = Field(..., description="The other entity's kind.")
     name: str = Field(..., description="The other entity's display name.")
     relation: str = Field(..., description="The relation kind, e.g. variation-of.")
-    text: str = Field("", description="The relation described.")
+    text: str = Field(default="", description="The relation described.")
     citation: WcsWikiPageCitation | None = Field(
-        None, description="Where, when the relation came from a source."
+        default=None, description="Where, when the relation came from a source."
     )
 
 
@@ -246,8 +256,8 @@ class WcsWikiPageDetail(BaseModel):
 
     slug: str = Field(..., description="The facet's own slug.")
     name: str = Field(..., description="The facet's name.")
-    gist: str = Field("", description="First sentence of its definition.")
-    depth: int = Field(0, description="Nesting under another facet; 0 is top.")
+    gist: str = Field(default="", description="First sentence of its definition.")
+    depth: int = Field(default=0, description="Nesting under another facet; 0 is top.")
 
 
 class WcsWikiPage(BaseModel):
@@ -256,13 +266,13 @@ class WcsWikiPage(BaseModel):
     slug: str = Field(..., description="The page's slug; its identity.")
     name: str = Field(..., description="Display name.")
     kind: str = Field(..., description="concept, technique, pattern or drill.")
-    status: str = Field("", description="The entity's status.")
+    status: str = Field(default="", description="The entity's status.")
     aliases: list[str] = Field(default_factory=list, description="Other names.")
     teachers: list[str] = Field(
         default_factory=list, description="Slugs of instructors with evidence here."
     )
-    definition: str = Field("", description="The page's first section.")
-    in_practice: str = Field("", description="What a dancer needs beyond it.")
+    definition: str = Field(default="", description="The page's first section.")
+    in_practice: str = Field(default="", description="What a dancer needs beyond it.")
     details: list[WcsWikiPageDetail] = Field(
         default_factory=list, description="Facets folded in, in reading order."
     )
@@ -328,13 +338,13 @@ class WcsWikiPagesWrite(BaseModel):
         default_factory=list, max_length=500, description="Slugs to delete."
     )
     origin_source_id: uuid.UUID | None = Field(
-        None,
+        default=None,
         description="The source whose link pass started the work that built "
         "these pages, so each revision can say what changed it. "
         "None for work an admin or an operator started.",
     )
     origin_job_id: str | None = Field(
-        None,
+        default=None,
         description="The run that wrote them: the queue message id on the "
         "worker, or a label for a local run.",
     )
@@ -378,9 +388,11 @@ class WcsWikiThinQuote(BaseModel):
     """One thing said about a thin entity, and where."""
 
     text: str = Field(..., description="What was said (markdown).")
-    source_id: uuid.UUID | None = Field(None, description="The source it is from.")
-    session_date: dt.date | None = Field(None, description="The source's date.")
-    source_title: str = Field("", description="The source's title.")
+    source_id: uuid.UUID | None = Field(
+        default=None, description="The source it is from."
+    )
+    session_date: dt.date | None = Field(default=None, description="The source's date.")
+    source_title: str = Field(default="", description="The source's title.")
 
 
 class WcsWikiThinEntity(BaseModel):
@@ -394,8 +406,10 @@ class WcsWikiThinEntity(BaseModel):
     page: str = Field(
         ..., description="Slug of the page it is on: its own, or the one it folds into."
     )
-    same: bool = Field(False, description="Folded in as another name, not a facet.")
-    definition: str = Field("", description="Its definition, if it has one.")
+    same: bool = Field(
+        default=False, description="Folded in as another name, not a facet."
+    )
+    definition: str = Field(default="", description="Its definition, if it has one.")
     quotes: list[WcsWikiThinQuote] = Field(
         default_factory=list, description="What was said about it, by source."
     )
@@ -448,13 +462,13 @@ class WcsWikiJob(BaseModel):
     job: Literal["link", "consolidate", "generate", "materialise"] = Field(
         ..., description="Which pass runs."
     )
-    source_id: uuid.UUID | None = Field(None, description="link: the source.")
-    entity: str | None = Field(None, description="generate: one entity slug.")
+    source_id: uuid.UUID | None = Field(default=None, description="link: the source.")
+    entity: str | None = Field(default=None, description="generate: one entity slug.")
     entities: list[str] | None = Field(
-        None, description="consolidate / generate / materialise: entity slugs."
+        default=None, description="consolidate / generate / materialise: entity slugs."
     )
     origin_source_id: uuid.UUID | None = Field(
-        None,
+        default=None,
         description="The source whose link pass started this chain of jobs, "
         "carried to every follow-on so the pages it changes can say so. "
         "A link job's origin is its own source. None for work an "

@@ -58,9 +58,9 @@ class WcsExtractionEntity(BaseModel):
         description="Discriminator for the entity kind (concept, technique, pattern, drill).",
     )
     name: str = Field(min_length=1, description="Human-readable name.")
-    prose: str = Field("", description="Free-text content for this row.")
+    prose: str = Field(default="", description="Free-text content for this row.")
     external_origin: dict | None = Field(
-        None, description="Optional external attribution (book, video, etc.)."
+        default=None, description="Optional external attribution (book, video, etc.)."
     )
 
 
@@ -89,7 +89,7 @@ class WcsExtractionEntityRelation(BaseModel):
         min_length=1,
         description="Discriminator for the entity-to-entity relation type.",
     )
-    prose: str = Field("", description="Free-text content for this row.")
+    prose: str = Field(default="", description="Free-text content for this row.")
 
 
 class WcsExtractionDrillPurpose(BaseModel):
@@ -102,7 +102,8 @@ class WcsExtractionDrillPurpose(BaseModel):
         min_length=1, description="Free-text description of the skill."
     )
     focus_context: str = Field(
-        "", description="Focus or context hint that scopes how this row applies."
+        default="",
+        description="Focus or context hint that scopes how this row applies.",
     )
 
 
@@ -122,7 +123,9 @@ class WcsExtractionCommonMistake(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    entity_name: str | None = Field(None, description="Display name of the WCS entity.")
+    entity_name: str | None = Field(
+        default=None, description="Display name of the WCS entity."
+    )
     mistake: str = Field(min_length=1, description="Mistake.")
     correction: str = Field(min_length=1, description="Correction.")
 
@@ -133,8 +136,10 @@ class WcsExtractionCompetitionNote(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     note: str = Field(min_length=1, description="Note.")
-    entity_name: str | None = Field(None, description="Display name of the WCS entity.")
-    context: str = Field("", description="Free-text context for the reference.")
+    entity_name: str | None = Field(
+        default=None, description="Display name of the WCS entity."
+    )
+    context: str = Field(default="", description="Free-text context for the reference.")
 
 
 class WcsExtractionReference(BaseModel):
@@ -154,8 +159,8 @@ class WcsExtractionReference(BaseModel):
             "pro",
         ]
         | None
-    ) = Field(None, description="Type.")
-    context: str = Field("", description="Free-text context for the reference.")
+    ) = Field(default=None, description="Type.")
+    context: str = Field(default="", description="Free-text context for the reference.")
 
 
 class WcsExtractionRawOutput(BaseModel):
@@ -166,8 +171,8 @@ class WcsExtractionRawOutput(BaseModel):
 
     model_config = ConfigDict(extra="allow")  # forward-compatible
 
-    title: str = Field("", description="Topic or display title.")
-    summary: str = Field("", description="Summary.")
+    title: str = Field(default="", description="Topic or display title.")
+    summary: str = Field(default="", description="Summary.")
     entities: list[WcsExtractionEntity] = Field(
         default_factory=list, description="WCS entity rows attached to this response."
     )
@@ -215,12 +220,13 @@ class WcsSourceCreate(BaseModel):
     transcript_id: uuid.UUID = Field(
         ..., description="Identifier of the upstream transcript."
     )
-    title: str | None = Field(None, description="Topic or display title.")
+    title: str | None = Field(default=None, description="Topic or display title.")
     session_date: dt.date | None = Field(
-        None, description="Calendar date of the lesson session."
+        default=None, description="Calendar date of the lesson session."
     )
     session_type: str = Field(
-        "other", description="Session type — e.g. private_lesson, group_class, other."
+        default="other",
+        description="Session type — e.g. private_lesson, group_class, other.",
     )
     instructors_raw: list[str] = Field(
         default_factory=list,
@@ -231,13 +237,15 @@ class WcsSourceCreate(BaseModel):
         description="Verbatim upstream student names before alias resolution.",
     )
     organization: str = Field(
-        "", description="Organization, studio, or event context for the session."
+        default="",
+        description="Organization, studio, or event context for the session.",
     )
     visibility: str = Field(
-        "private", description="Coarse access-control flag (private vs. public)."
+        default="private",
+        description="Coarse access-control flag (private vs. public).",
     )
     is_default_visible: bool = Field(
-        False, description="Whether the source is shown in the default catalog."
+        default=False, description="Whether the source is shown in the default catalog."
     )
     extractor_version: str = Field(..., description="Extractor version.")
     extractor_model: str = Field(..., description="Extractor model.")
@@ -302,26 +310,29 @@ class WcsSourceAttributionItem(BaseModel):
     position: int = Field(
         ..., description="Ordinal position of the row within its source."
     )
-    drill_goal: str | None = Field(None, description="Drill goal.")
-    drill_steps: list[str] | None = Field(None, description="Drill steps.")
-    mistake_text: str | None = Field(None, description="Mistake text.")
-    correction_text: str | None = Field(None, description="Correction text.")
+    drill_goal: str | None = Field(default=None, description="Drill goal.")
+    drill_steps: list[str] | None = Field(default=None, description="Drill steps.")
+    mistake_text: str | None = Field(default=None, description="Mistake text.")
+    correction_text: str | None = Field(default=None, description="Correction text.")
     origin: str = Field(
         ..., description="Originating source or upstream attribution metadata."
     )
-    entity_slug: str = Field("", description="Canonical slug of the attributed entity.")
+    entity_slug: str = Field(
+        default="", description="Canonical slug of the attributed entity."
+    )
     entity_name: str = Field(
-        "", description="Canonical display name of the attributed entity."
+        default="", description="Canonical display name of the attributed entity."
     )
     entity_kind: str = Field(
-        "",
+        default="",
         description="Kind of the attributed entity (concept|technique|pattern|drill).",
     )
     instructor_slug: str | None = Field(
-        None, description="Canonical slug of the attributing instructor, if linked."
+        default=None,
+        description="Canonical slug of the attributing instructor, if linked.",
     )
     instructor_name: str | None = Field(
-        None,
+        default=None,
         description="Canonical display name of the attributing instructor, if linked.",
     )
 
@@ -344,16 +355,20 @@ class WcsEntityRelationItem(BaseModel):
     origin: str = Field(
         ..., description="Originating source or upstream attribution metadata."
     )
-    from_entity_slug: str = Field("", description="Canonical slug of the from-entity.")
+    from_entity_slug: str = Field(
+        default="", description="Canonical slug of the from-entity."
+    )
     from_entity_name: str = Field(
-        "", description="Canonical display name of the from-entity."
+        default="", description="Canonical display name of the from-entity."
     )
-    from_entity_kind: str = Field("", description="Kind of the from-entity.")
-    to_entity_slug: str = Field("", description="Canonical slug of the to-entity.")
+    from_entity_kind: str = Field(default="", description="Kind of the from-entity.")
+    to_entity_slug: str = Field(
+        default="", description="Canonical slug of the to-entity."
+    )
     to_entity_name: str = Field(
-        "", description="Canonical display name of the to-entity."
+        default="", description="Canonical display name of the to-entity."
     )
-    to_entity_kind: str = Field("", description="Kind of the to-entity.")
+    to_entity_kind: str = Field(default="", description="Kind of the to-entity.")
 
 
 class WcsDrillPurposeItem(BaseModel):
@@ -378,10 +393,10 @@ class WcsDrillPurposeItem(BaseModel):
         ..., description="Originating source or upstream attribution metadata."
     )
     drill_entity_slug: str = Field(
-        "", description="Canonical slug of the drill entity."
+        default="", description="Canonical slug of the drill entity."
     )
     drill_entity_name: str = Field(
-        "", description="Canonical display name of the drill entity."
+        default="", description="Canonical display name of the drill entity."
     )
 
 
@@ -404,10 +419,10 @@ class WcsTechniqueRequirementItem(BaseModel):
         ..., description="Originating source or upstream attribution metadata."
     )
     technique_entity_slug: str = Field(
-        "", description="Canonical slug of the technique entity."
+        default="", description="Canonical slug of the technique entity."
     )
     technique_entity_name: str = Field(
-        "", description="Canonical display name of the technique entity."
+        default="", description="Canonical display name of the technique entity."
     )
 
 
@@ -434,16 +449,19 @@ class WcsEntityDefinitionItem(BaseModel):
     origin: str = Field(
         ..., description="Originating source or upstream attribution metadata."
     )
-    entity_slug: str = Field("", description="Canonical slug of the defined entity.")
-    entity_name: str = Field(
-        "", description="Canonical display name of the defined entity."
+    entity_slug: str = Field(
+        default="", description="Canonical slug of the defined entity."
     )
-    entity_kind: str = Field("", description="Kind of the defined entity.")
+    entity_name: str = Field(
+        default="", description="Canonical display name of the defined entity."
+    )
+    entity_kind: str = Field(default="", description="Kind of the defined entity.")
     instructor_slug: str | None = Field(
-        None, description="Canonical slug of the defining instructor, if linked."
+        default=None,
+        description="Canonical slug of the defining instructor, if linked.",
     )
     instructor_name: str | None = Field(
-        None,
+        default=None,
         description="Canonical display name of the defining instructor, if linked.",
     )
 
