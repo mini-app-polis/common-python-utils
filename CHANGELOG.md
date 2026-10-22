@@ -1,3 +1,10 @@
+## [6.16.1](https://github.com/mini-app-polis/common-python-utils/compare/v6.16.0...v6.16.1) (2026-10-22)
+
+
+### Bug Fixes
+
+* **contract:** pass Field defaults by keyword so type checkers see them ([25695c4](https://github.com/mini-app-polis/common-python-utils/commit/25695c47237db09df5d0db6d2168b2b25c11c000))
+
 # [6.16.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.15.1...v6.16.0) (2026-10-22)
 
 
