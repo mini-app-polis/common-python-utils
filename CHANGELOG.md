@@ -1,3 +1,10 @@
+## [6.16.2](https://github.com/mini-app-polis/common-python-utils/compare/v6.16.1...v6.16.2) (2026-10-22)
+
+
+### Bug Fixes
+
+* **pipeline_status:** don't call a run with outcomes 'nothing to do' ([38f67f4](https://github.com/mini-app-polis/common-python-utils/commit/38f67f4e8ba246e27a71e8fe8c4093b0de8f7714))
+
 ## [6.16.1](https://github.com/mini-app-polis/common-python-utils/compare/v6.16.0...v6.16.1) (2026-10-22)
 
 
