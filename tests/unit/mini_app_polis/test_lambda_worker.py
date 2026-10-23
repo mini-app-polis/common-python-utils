@@ -13,6 +13,7 @@ import mini_app_polis
 from mini_app_polis.api.contract import (
     DeejayRunMessage,
     TaskGroomMessage,
+    TaskSweepMessage,
     TranscriptionRunMessage,
 )
 from mini_app_polis.deadline import remaining_seconds
@@ -143,6 +144,17 @@ def test_missing_payload_is_unprocessable() -> None:
     body = json.dumps({"type": "transcription.run", "version": 1})
     with pytest.raises(UnprocessableMessage, match="no payload object"):
         parse_message(body, TranscriptionRunMessage)
+
+
+def test_a_kind_with_nothing_to_carry_may_omit_its_payload() -> None:
+    body = json.dumps({"type": "task.sweep", "version": 1})
+    assert isinstance(parse_message(body, TaskSweepMessage), TaskSweepMessage)
+
+
+def test_a_kind_with_nothing_to_carry_still_refuses_a_non_object_payload() -> None:
+    body = json.dumps({"type": "task.sweep", "version": 1, "payload": [1]})
+    with pytest.raises(UnprocessableMessage, match="no payload object"):
+        parse_message(body, TaskSweepMessage)
 
 
 def test_needs_a_kind() -> None:

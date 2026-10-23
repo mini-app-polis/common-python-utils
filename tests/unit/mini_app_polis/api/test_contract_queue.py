@@ -18,6 +18,7 @@ from mini_app_polis.api.contract import (
     TaskCreateMessage,
     TaskGroomMessage,
     TaskGroomProposalMessage,
+    TaskSweepMessage,
     TranscriptionRunMessage,
     WikiJobMessage,
 )
@@ -34,6 +35,7 @@ KINDS = [
     (TaskGroomProposalMessage, "task.groom-proposal"),
     (TaskCreateMessage, "task.create"),
     (TaskAgentResultMessage, "task.agent-result"),
+    (TaskSweepMessage, "task.sweep"),
 ]
 
 
@@ -112,3 +114,8 @@ def test_a_message_built_in_code_carries_its_type_and_version() -> None:
         "version": 1,
         "payload": {"mode": "process-new-files"},
     }
+
+
+def test_a_sweep_needs_no_payload() -> None:
+    message = ADAPTER.validate_python({"type": "task.sweep", "version": 1})
+    assert isinstance(message, TaskSweepMessage)
