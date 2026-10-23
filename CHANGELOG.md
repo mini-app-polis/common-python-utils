@@ -1,3 +1,11 @@
+## [6.22.1](https://github.com/mini-app-polis/common-python-utils/compare/v6.22.0...v6.22.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* **deps:** patch vulnerable dependencies (filelock) ([bc1b501](https://github.com/mini-app-polis/common-python-utils/commit/bc1b50104002362ff20c813abf9797d4c4ce39e7))
+* **deps:** patch vulnerable dependencies (virtualenv) ([ebacf7e](https://github.com/mini-app-polis/common-python-utils/commit/ebacf7e0938503d4fa5e719bfc40035ad9aab587))
+
 # [6.22.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.21.0...v6.22.0) (2026-10-23)
 
 
