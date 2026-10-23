@@ -51,6 +51,7 @@ from .evaluations import (
 )
 from .groomings import (
     GroomingEffort,
+    GroomingExecutor,
     GroomingJobAccepted,
     GroomingJobRequest,
     GroomingOutcome,
@@ -160,6 +161,7 @@ __all__ = [
     "ErrorEnvelope",
     "GIVEN_ID_SOURCES",
     "GroomingEffort",
+    "GroomingExecutor",
     "GroomingJobAccepted",
     "GroomingJobRequest",
     "GroomingOutcome",

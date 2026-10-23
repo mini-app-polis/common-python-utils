@@ -12,6 +12,10 @@ the task manager, the one writer to the board, which moves the task. A run
 that never reports is marked failed by the task manager, and a run that
 could not be started is marked failed the same way.
 
+A run that finds its task unclear or undetermined changes nothing and ends
+as ``needs_grooming``, with its questions. The task manager sends the task
+back to grooming with them; it is not retried.
+
 The month's spend is the sum of the runs' costs, for the monthly cap.
 
     POST /v1/tasks/agent-runs           record a dispatched run
@@ -29,11 +33,14 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 #: Where a run is. ``dispatched`` until its result or failure is recorded.
-AgentRunStatus = Literal["dispatched", "succeeded", "failed", "capped"]
+AgentRunStatus = Literal[
+    "dispatched", "succeeded", "failed", "capped", "needs_grooming"
+]
 
 #: How a run ended, as its workflow reports it. ``capped``: it reached its
-#: budget limit and stopped with no pull request.
-AgentRunOutcome = Literal["succeeded", "failed", "capped"]
+#: budget limit and stopped with no pull request. ``needs_grooming``: it found
+#: the task unclear, changed nothing, and asks its questions.
+AgentRunOutcome = Literal["succeeded", "failed", "capped", "needs_grooming"]
 
 _GID = r"^\d+$"
 _RUN_ID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
@@ -70,6 +77,8 @@ class AgentRun(BaseModel):
     actions_run_url: str | None = None
     #: Why a run failed or was capped, in a sentence.
     reason: str | None = None
+    #: What a run that needs grooming asked.
+    questions: list[str] = Field(default_factory=list)
     dispatched_at: datetime
     finished_at: datetime | None = None
 
@@ -88,7 +97,8 @@ class AgentRunResult(BaseModel):
     """How a run ended, as its workflow reports it.
 
     A run that succeeded opened a pull request and names it; one that did
-    not opened none.
+    not opened none. A run that needs grooming asks at least one question;
+    no other outcome carries questions.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -101,13 +111,25 @@ class AgentRunResult(BaseModel):
     pr_url: str | None = Field(default=None, max_length=500, pattern=_URL)
     actions_run_url: str | None = Field(default=None, max_length=500, pattern=_URL)
     reason: str | None = Field(default=None, max_length=2000)
+    #: What the run could not settle, for the owner to answer in grooming.
+    questions: list[str] = Field(default_factory=list, max_length=10)
 
     @model_validator(mode="after")
     def _pull_request_only_on_success(self) -> AgentRunResult:
         if self.outcome == "succeeded" and not self.pr_url:
             raise ValueError("a run that succeeded names its pull request")
         if self.outcome != "succeeded" and self.pr_url:
-            raise ValueError(f"a run that {self.outcome} opened no pull request")
+            raise ValueError(f"a run that ended {self.outcome} opened no pull request")
+        return self
+
+    @model_validator(mode="after")
+    def _questions_only_when_grooming_is_needed(self) -> AgentRunResult:
+        if self.outcome == "needs_grooming" and not self.questions:
+            raise ValueError("a run that needs grooming asks its questions")
+        if self.outcome != "needs_grooming" and self.questions:
+            raise ValueError(f"a run that ended {self.outcome} asks no questions")
+        if any(not q.strip() for q in self.questions):
+            raise ValueError("a question is not blank")
         return self
 
 

@@ -34,6 +34,13 @@ from pydantic import BaseModel, ConfigDict, Field
 #: A task's size. An L task's implementation is to create its subtasks.
 GroomingEffort = Literal["S", "M", "L"]
 
+#: Who can do a task, as a tag on it. No tag means the agent may take it.
+#: ``cowork``: it needs a working session with the owner (his repositories,
+#: the board, consoles, his decisions). ``person``: only the owner can do it
+#: (consoles behind his login, accounts, physical checks). Consumers read the
+#: names from here, with ``typing.get_args``.
+GroomingExecutor = Literal["cowork", "person"]
+
 #: What the last sweep made of a task.
 #:
 #: ``ready``: it met the definition of ready. ``not_ready``: it did not, and
@@ -170,6 +177,8 @@ class GroomingProposal(BaseModel):
     constraints: str | None = Field(default=None, max_length=5000)
     effort: GroomingEffort | None = None
     blocked_by: str | None = Field(default=None, max_length=500)
+    #: Who can do the task. Absent means the agent.
+    executor: GroomingExecutor | None = None
     #: Why the task exists, and links to what is needed.
     body: str | None = Field(default=None, max_length=20_000)
     questions: list[str] = Field(default_factory=list, max_length=10)
