@@ -18,7 +18,7 @@ tasks with today, no more:
   - ``move_task_to_section`` — POST /sections/<gid>/addTask
   - ``get_task`` — GET /tasks/<gid>, as ``list_project_tasks`` reads one
   - ``update_task`` — PUT /tasks/<gid>, name and body
-  - ``remove_tag`` — POST /tasks/<gid>/removeTag
+  - ``add_tag`` / ``remove_tag`` — POST /tasks/<gid>/addTag and removeTag
   - ``add_comment`` / ``list_comments`` — POST and GET /tasks/<gid>/stories
 
 Anything else is absent until a caller needs it: a method with no caller
@@ -352,6 +352,15 @@ class AsanaClient:
             return
         self._request(
             "PUT", f"/tasks/{quote(task_gid, safe='')}", json_payload={"data": data}
+        )
+
+    def add_tag(self, task_gid: str, tag_name: str) -> None:
+        """Put a tag on a task, by the tag's name. Adding one it has is a no-op."""
+        tag_gid = self.find_or_create_tag(tag_name)
+        self._request(
+            "POST",
+            f"/tasks/{quote(task_gid, safe='')}/addTag",
+            json_payload={"data": {"tag": tag_gid}},
         )
 
     def remove_tag(self, task_gid: str, tag_name: str) -> None:

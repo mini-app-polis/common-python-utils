@@ -462,7 +462,7 @@ def test_move_task_to_section_posts_the_task() -> None:
 
 
 # ---------------------------------------------------------------------------
-# get_task, update_task, remove_tag, add_comment, list_comments
+# get_task, update_task, add_tag, remove_tag, add_comment, list_comments
 # ---------------------------------------------------------------------------
 
 
@@ -524,6 +524,21 @@ def test_update_task_sends_only_what_changes() -> None:
     assert json.loads(seen[1].content) == {
         "data": {"name": "MINI-2 · two", "html_notes": "<body>y</body>"}
     }
+
+
+def test_add_tag_resolves_the_name_then_adds_it() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.path == "/api/1.0/tags":
+            return httpx.Response(200, json={"data": [{"gid": "g7", "name": "cowork"}]})
+        return httpx.Response(200, json={"data": {}})
+
+    _client(handler).add_tag("t1", "Cowork")
+    assert seen[-1].method == "POST"
+    assert seen[-1].url.path == "/api/1.0/tasks/t1/addTag"
+    assert json.loads(seen[-1].content) == {"data": {"tag": "g7"}}
 
 
 def test_remove_tag_resolves_the_name_then_removes_it() -> None:

@@ -394,6 +394,70 @@ def test_a_grooming_proposal_refuses_an_unknown_executor() -> None:
         GroomingProposal(**_PROPOSAL, executor="agent")
 
 
+def _child(**overrides: Any) -> dict[str, Any]:
+    return {
+        "title": "common-python-utils: one piece",
+        "done_when": "It is released.",
+        "where": "common-python-utils",
+        "constraints": "None",
+        "effort": "S",
+        "body": "Part of the split.",
+        **overrides,
+    }
+
+
+def test_a_grooming_proposal_can_split_its_task_into_children() -> None:
+    from mini_app_polis.api.contract import GroomingProposal
+
+    proposal = GroomingProposal(
+        **_PROPOSAL,
+        children=[
+            _child(),
+            _child(where="task-manager-cog", executor="cowork"),
+            _child(blocked_by_siblings=[0, 1], blocked_by="MINI-21, 2026-11-02"),
+        ],
+    )
+    assert [c.executor for c in proposal.children] == [None, "cowork", None]
+    assert proposal.children[2].blocked_by_siblings == [0, 1]
+
+
+def test_a_grooming_proposal_without_children_still_validates() -> None:
+    from mini_app_polis.api.contract import GroomingProposal
+
+    assert GroomingProposal(**_PROPOSAL).children == []
+
+
+def test_a_grooming_proposal_over_the_children_cap_is_refused() -> None:
+    from mini_app_polis.api.contract import GROOMING_MAX_CHILDREN, GroomingProposal
+
+    GroomingProposal(**_PROPOSAL, children=[_child()] * GROOMING_MAX_CHILDREN)
+    with pytest.raises(ValidationError):
+        GroomingProposal(**_PROPOSAL, children=[_child()] * (GROOMING_MAX_CHILDREN + 1))
+
+
+@pytest.mark.parametrize("sibling", [5, 1, -1])
+def test_a_child_waiting_on_a_sibling_that_is_not_earlier_is_refused(
+    sibling: int,
+) -> None:
+    from mini_app_polis.api.contract import GroomingProposal
+
+    with pytest.raises(ValidationError):
+        GroomingProposal(
+            **_PROPOSAL,
+            children=[_child(), _child(blocked_by_siblings=[sibling])],
+        )
+
+
+def test_a_child_is_a_complete_leaf() -> None:
+    from mini_app_polis.api.contract import GroomingProposal
+
+    for missing in ("done_when", "where", "constraints", "effort", "body"):
+        child = _child()
+        del child[missing]
+        with pytest.raises(ValidationError):
+            GroomingProposal(**_PROPOSAL, children=[child])
+
+
 def test_the_executor_names_are_defined_once() -> None:
     from mini_app_polis.api.contract import GroomingExecutor
 
