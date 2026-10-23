@@ -137,7 +137,8 @@ def parse_message(body: str | bytes, *kinds: type[M]) -> M:
 
     In order: the body is JSON, it is an object, its version is one this
     consumer speaks, its type is one of ``kinds``, it carries a payload
-    object, and the payload is valid for its kind.
+    object, and the payload is valid for its kind. A kind whose payload has
+    a default (one with nothing to carry) may leave the payload out.
     """
     if not kinds:
         raise ValueError("parse_message needs at least one message kind")
@@ -164,7 +165,10 @@ def parse_message(body: str | bytes, *kinds: type[M]) -> M:
             f"message version {version!r}, {kind.message_type()} is "
             f"version {kind.VERSION}"
         )
-    if not isinstance(message.get("payload"), dict):
+    payload_optional = not kind.model_fields["payload"].is_required()
+    if not (payload_optional and "payload" not in message) and not isinstance(
+        message.get("payload"), dict
+    ):
         raise UnprocessableMessage("message carries no payload object")
     try:
         return kind.model_validate(message)

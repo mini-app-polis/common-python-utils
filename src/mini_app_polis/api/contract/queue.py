@@ -172,6 +172,23 @@ class TaskAgentResultMessage(QueueMessage[AgentRun]):
     type: Literal["task.agent-result"] = "task.agent-result"
 
 
+class TaskSweepPayload(BaseModel):
+    """A scheduled sweep of the board carries nothing."""
+
+
+class TaskSweepMessage(QueueMessage[TaskSweepPayload]):
+    """``task.sweep`` on task-manager-cog's queue, from its own schedule.
+
+    The schedule sends ``{type, version}`` with no payload, so the payload is
+    optional here: a kind with nothing to carry may leave it out.
+    """
+
+    type: Literal["task.sweep"] = "task.sweep"
+    payload: TaskSweepPayload = Field(
+        default_factory=TaskSweepPayload, description="Nothing; may be omitted."
+    )
+
+
 #: Every message kind, discriminated on ``type``.
 JobMessage = Annotated[
     TranscriptionRunMessage
@@ -182,7 +199,8 @@ JobMessage = Annotated[
     | TaskGroomMessage
     | TaskGroomProposalMessage
     | TaskCreateMessage
-    | TaskAgentResultMessage,
+    | TaskAgentResultMessage
+    | TaskSweepMessage,
     Field(discriminator="type"),
 ]
 
@@ -200,6 +218,8 @@ __all__ = [
     "TaskCreateMessage",
     "TaskGroomMessage",
     "TaskGroomProposalMessage",
+    "TaskSweepMessage",
+    "TaskSweepPayload",
     "TranscriptionRunMessage",
     "TranscriptionRunPayload",
     "WikiJobMessage",
