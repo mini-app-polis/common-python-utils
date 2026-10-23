@@ -1,3 +1,10 @@
+# [6.19.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.18.0...v6.19.0) (2026-10-23)
+
+
+### Features
+
+* **contract:** let a grooming proposal split its task into children, and add tags through the Asana client ([f7d5bea](https://github.com/mini-app-polis/common-python-utils/commit/f7d5beaaaa79a9449f77858695e363ddf7ce28c6))
+
 # [6.18.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.17.0...v6.18.0) (2026-10-23)
 
 
