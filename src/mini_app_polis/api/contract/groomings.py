@@ -42,7 +42,7 @@ GroomingEffort = Literal["S", "M", "L"]
 GroomingExecutor = Literal["cowork", "person"]
 
 #: The most children one proposal may split a task into.
-GROOMING_MAX_CHILDREN = 8
+GROOMING_MAX_CHILDREN = 25
 
 #: What the last sweep made of a task.
 #:
