@@ -107,8 +107,6 @@ from collections import Counter
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from functools import cache
-from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Literal, TypedDict
 
 from mini_app_polis import logger as logger_mod
@@ -360,59 +358,20 @@ def _merge_extras_into_text(text: str, extras: dict[str, Any]) -> str:
     return f"{text} {suffix}" if text else suffix
 
 
-@cache
-def _resolve_processor_version(repo: str) -> str | None:
-    """Return the installed distribution version for ``repo``, else ``None``.
+def stamp_version(text: str, version: str | None) -> str:
+    """Append ``(version=X.Y.Z)`` to ``text``: the build that sent it.
 
-    Pipeline Health findings benefit from carrying the version of the cog
-    that emitted them — operators triaging a recurring WARN want to know
-    which build introduced it. We resolve this once per ``repo`` via
-    :func:`importlib.metadata.version` and cache the result for the
-    lifetime of the process (cog distribution versions don't change
-    in-flight).
+    ``version`` is the caller's own ``__version__``, from its
+    ``_version.py``. Never installed package metadata: a Lambda deploy
+    strips ``*.dist-info``, so a lookup there finds nothing in production,
+    and a lookup by the wrong distribution name stamps the wrong build.
 
-    Returns ``None`` (rather than a marker like ``"0.0.0+local"``) when
-    the distribution isn't installed under that name. Pipeline Health
-    previously displayed ``(processor=0.0.0+local)`` on every voicenotes
-    heartbeat because a per-cog helper used the pre-merge distribution
-    name after the ``voicenotes-cog`` → ``transcription-cog`` merge
-    (ADR-004). Centralising the resolution here, and treating "not
-    installed" as "no suffix" rather than "stamp a marker", prevents
-    that class of noise across every cog at once.
-
-    The ``repo`` argument is the same string passed to
-    :func:`post_findings` and :func:`post_run_finding` and must match the
-    cog's ``pyproject.toml`` ``[project] name``. Mismatches (typos,
-    pre-merge names) silently fall through to ``None`` — verify by
-    looking at a real production finding after a release.
+    No-op when ``version`` is empty, and when ``text`` already carries a
+    stamp, so a caller that stamped its own text is not stamped twice.
     """
-    try:
-        return version(repo)
-    except PackageNotFoundError:
-        # Editable dev checkouts, ad-hoc invocations, or a typoed repo
-        # name. Better to emit no suffix than a misleading marker.
-        return None
-    except Exception:
-        # importlib.metadata can raise other errors on broken metadata;
-        # never let version lookup interfere with reporting itself.
-        return None
-
-
-def _stamp_processor_version(text: str, repo: str) -> str:
-    """Append ``(processor=X.Y.Z)`` to ``text`` when the version resolves.
-
-    No-op when :func:`_resolve_processor_version` returns ``None`` so
-    Pipeline Health rows stay clean for editable dev checkouts. Also
-    no-op when ``text`` already contains a ``(processor=…)`` fragment so
-    callers that pre-stamp (or legacy emissions that pre-date this
-    library) don't end up double-stamped.
-    """
-    if "(processor=" in text:
+    if not version or "(version=" in text:
         return text
-    resolved = _resolve_processor_version(repo)
-    if not resolved:
-        return text
-    return f"{text} (processor={resolved})"
+    return f"{text} (version={version})"
 
 
 def _capture(exc: BaseException) -> None:
@@ -582,6 +541,7 @@ def post_findings(
     source: str = "flow_inline",
     production_only: bool = True,
     run_id: str | None = None,
+    version: str | None = None,
 ) -> DeliveryReport:
     """Post one or more graded findings to ``/v1/evaluations``.
 
@@ -676,13 +636,7 @@ def post_findings(
             skipped += 1
             continue
 
-        # Stamp the cog's installed distribution version onto the finding
-        # text so Pipeline Health shows which build emitted a row. Done at
-        # the library funnel rather than in each cog's adapter so every cog
-        # gets it uniformly, and so a typoed cog-side helper cannot stamp a
-        # marker like "0.0.0+local" instead of a real version (the original
-        # voicenotes regression).
-        finding_text = _stamp_processor_version(finding_text, repo)
+        finding_text = stamp_version(finding_text, version)
 
         payload: dict[str, Any] = {
             "run_id": run_id,
@@ -741,6 +695,7 @@ def post_run_finding(
     source: str = "flow_inline",
     notable: bool = False,
     run_id: str | None = None,
+    version: str | None = None,
     **extras: Any,
 ) -> DeliveryReport:
     """Report one run outcome to the notification channel.
@@ -783,6 +738,9 @@ def post_run_finding(
         then processed nothing has all-zero counters and is precisely the
         case worth hearing about: something said there was work, and none
         happened. Inferring from output would silence exactly that run.
+    version:
+        The caller's own ``__version__``, stamped on the text as
+        ``(version=X.Y.Z)``; see :func:`stamp_version`.
     **extras:
         Cog-specific counters or flags. Non-zero values are appended to the
         text as ``k=v`` pairs (sorted alphabetically).
@@ -821,7 +779,7 @@ def post_run_finding(
         return DeliveryReport(skipped=1)
 
     run_id = run_id or get_run_id()
-    text_final = _stamp_processor_version(text_final, repo)
+    text_final = stamp_version(text_final, version)
 
     if severity not in NOTIFY_SEVERITIES and not notable:
         # An idle scheduled tick: nothing was waiting, nothing was done.
@@ -1027,6 +985,9 @@ class RunReport:
     #: after construction, because the id is often minted from data the
     #: report was opened to collect.
     run_id: str | None = None
+    #: The caller's own ``__version__``, stamped on the message; see
+    #: :func:`stamp_version`.
+    version: str | None = None
 
     processed: int = 0
     notes: Counter = field(default_factory=Counter)
@@ -1208,6 +1169,7 @@ class RunReport:
             suggestion=suggestion,
             notable=notable or bool(self.outcomes),
             run_id=self.run_id,
+            version=self.version,
             **self.counters,
         )
 
@@ -1221,6 +1183,7 @@ def run_report(
     notable: bool = False,
     source: str = "flow_inline",
     run_id: str | None = None,
+    version: str | None = None,
 ) -> Iterator[RunReport]:
     """Open a :class:`RunReport` that sends itself however the block ends.
 
@@ -1241,6 +1204,7 @@ def run_report(
         repo=repo,
         production_only=production_only,
         run_id=run_id,
+        version=version,
     )
     try:
         yield report
@@ -1270,4 +1234,5 @@ __all__ = [
     "post_findings",
     "post_run_finding",
     "run_report",
+    "stamp_version",
 ]

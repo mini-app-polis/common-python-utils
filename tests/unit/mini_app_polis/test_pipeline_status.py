@@ -687,80 +687,54 @@ def test_post_findings_no_base_url_no_post(monkeypatch) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Processor version stamping
+# Version stamping
 # ---------------------------------------------------------------------------
 #
-# The library appends ``(processor=X.Y.Z)`` to every report text so a
-# person reading the channel knows which build emitted it. Stamping
-# happens at the post_findings funnel so every cog routing through the
-# library gets it uniformly. The previous per-cog approach stamped
-# ``(processor=0.0.0+local)`` in production because it queried the
-# pre-merge distribution name ``"voicenotes-cog"``; centralising the
-# resolution and treating "not installed" as "no suffix" prevents that
-# class of regression.
-#
-# ``_resolve_processor_version`` is cached on ``repo``, so every test in
-# this block clears the cache to keep monkeypatches honest.
+# A caller passes its own ``__version__`` (from its ``_version.py``) and the
+# library appends ``(version=X.Y.Z)`` to the text, so a person reading the
+# channel knows which build sent it. Nothing is looked up from installed
+# package metadata, which a Lambda deploy strips.
 
 
-def _reset_version_cache() -> None:
-    ps._resolve_processor_version.cache_clear()
+def test_stamp_version_renders_the_callers_version() -> None:
+    assert ps.stamp_version("Run degraded.", "1.2.3") == "Run degraded. (version=1.2.3)"
 
 
-def test_processor_version_appended_when_resolvable(monkeypatch) -> None:
+def test_stamp_version_without_a_version_leaves_text_alone() -> None:
+    assert ps.stamp_version("Run degraded.", None) == "Run degraded."
+    assert ps.stamp_version("Run degraded.", "") == "Run degraded."
+
+
+def test_stamp_version_does_not_stamp_twice() -> None:
+    text = "Already labeled (version=9.9.9)"
+    assert ps.stamp_version(text, "1.2.3") == text
+
+
+def test_run_finding_stamped_with_the_callers_version(monkeypatch) -> None:
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
-    _reset_version_cache()
-    monkeypatch.setattr(ps, "version", lambda _: "1.2.3")
     with captured() as cap:
-        ps.post_run_finding("f", "WARN", text="Run degraded.", repo="my-cog")
-    assert _built(cap)["text"] == "Run degraded. (processor=1.2.3)"
-
-
-def test_processor_version_omitted_when_not_installed(monkeypatch) -> None:
-    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
-    _reset_version_cache()
-
-    def _missing(name: str) -> str:
-        raise ps.PackageNotFoundError(name)
-
-    monkeypatch.setattr(ps, "version", _missing)
-    with captured() as cap:
-        ps.post_run_finding("f", "WARN", text="Run degraded.", repo="my-cog")
-    assert _built(cap)["text"] == "Run degraded."
-
-
-def test_processor_version_swallows_unexpected_errors(monkeypatch) -> None:
-    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
-    _reset_version_cache()
-
-    def _boom(name: str) -> str:
-        raise RuntimeError("broken metadata")
-
-    monkeypatch.setattr(ps, "version", _boom)
-    with captured() as cap:
-        ps.post_run_finding("f", "WARN", text="Run degraded.", repo="my-cog")
-    assert _built(cap)["text"] == "Run degraded."
-
-
-def test_processor_version_not_double_stamped(monkeypatch) -> None:
-    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
-    _reset_version_cache()
-    monkeypatch.setattr(ps, "version", lambda _: "1.2.3")
-    with patch.object(ps, "_post_evaluation", return_value=True) as post:
-        ps.post_findings(
-            repo="my-cog",
-            flow_name="f",
-            findings=[
-                {"severity": "WARN", "finding": "Already labeled (processor=9.9.9)"}
-            ],
+        ps.post_run_finding(
+            "f", "WARN", text="Run degraded.", repo="my-cog", version="1.2.3"
         )
-    assert post.call_args.args[0]["finding"] == "Already labeled (processor=9.9.9)"
+    assert _built(cap)["text"] == "Run degraded. (version=1.2.3)"
 
 
-def test_processor_version_applied_to_every_row(monkeypatch) -> None:
+def test_run_finding_without_a_version_is_not_stamped(monkeypatch) -> None:
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
-    _reset_version_cache()
-    monkeypatch.setattr(ps, "version", lambda _: "1.2.3")
+    with captured() as cap:
+        ps.post_run_finding("f", "WARN", text="Run degraded.", repo="my-cog")
+    assert _built(cap)["text"] == "Run degraded."
+
+
+def test_run_report_carries_its_version(monkeypatch) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    with captured() as cap, ps.run_report("f", repo="my-cog", version="1.2.3") as r:
+        r.issue("broken", "x")
+    assert _built(cap)["text"].endswith("(version=1.2.3)")
+
+
+def test_version_applied_to_every_finding_row(monkeypatch) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
     with patch.object(ps, "_post_evaluation", return_value=True) as post:
         ps.post_findings(
             repo="my-cog",
@@ -769,40 +743,24 @@ def test_processor_version_applied_to_every_row(monkeypatch) -> None:
                 {"severity": "WARN", "finding": "first"},
                 {"severity": "ERROR", "finding": "second"},
             ],
+            version="1.2.3",
         )
     texts = [c.args[0]["finding"] for c in post.call_args_list]
-    assert texts == ["first (processor=1.2.3)", "second (processor=1.2.3)"]
+    assert texts == ["first (version=1.2.3)", "second (version=1.2.3)"]
 
 
-def test_processor_version_cached_per_repo(monkeypatch) -> None:
-    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
-    _reset_version_cache()
-    calls: list[str] = []
-
-    def _counting(name: str) -> str:
-        calls.append(name)
-        return "1.2.3"
-
-    monkeypatch.setattr(ps, "version", _counting)
-    with captured():
-        ps.post_run_finding("f", "WARN", text="x", repo="my-cog")
-        ps.post_run_finding("f", "WARN", text="x", repo="my-cog")
-        ps.post_run_finding("f", "WARN", text="x", repo="other-cog")
-    assert sorted(calls) == ["my-cog", "other-cog"]
-
-
-def test_processor_version_stamped_on_suppressed_success(monkeypatch) -> None:
+def test_version_stamped_on_suppressed_success(monkeypatch) -> None:
     """SUCCESS goes to the log, and the log line carries the build too."""
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
-    _reset_version_cache()
-    monkeypatch.setattr(ps, "version", lambda _: "1.2.3")
     mock_log = MagicMock()
     with (
         captured(),
         patch.object(ps, "get_prefect_logger", return_value=mock_log),
     ):
-        ps.post_run_finding("f", "SUCCESS", text="All good.", repo="my-cog")
-    assert "All good. (processor=1.2.3)" in mock_log.info.call_args.args
+        ps.post_run_finding(
+            "f", "SUCCESS", text="All good.", repo="my-cog", version="1.2.3"
+        )
+    assert "All good. (version=1.2.3)" in mock_log.info.call_args.args
 
 
 # ---------------------------------------------------------------------------
@@ -818,7 +776,6 @@ def test_processor_version_stamped_on_suppressed_success(monkeypatch) -> None:
 
 def test_critical_severity_preserved(monkeypatch) -> None:
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
-    _reset_version_cache()
     with captured() as cap:
         ps.post_run_finding(
             "startup",
@@ -841,7 +798,6 @@ def test_critical_in_severity_literal() -> None:
 
 def test_critical_available_via_post_findings_batch(monkeypatch) -> None:
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
-    _reset_version_cache()
     with patch.object(ps, "_post_evaluation", return_value=True) as post:
         ps.post_findings(
             repo="my-cog",

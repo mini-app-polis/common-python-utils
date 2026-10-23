@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from . import discord as discord
     from . import doppler as doppler
     from . import environment as environment
+    from . import lambda_worker as lambda_worker
     from . import sentry as sentry
     from . import timing as timing
     from .request_metrics import RequestMetricsMiddleware as RequestMetricsMiddleware
@@ -53,6 +54,7 @@ __all__ = [
     "discord",
     "doppler",
     "environment",
+    "lambda_worker",
     "load_secrets",
     "sentry",
     "timing",
@@ -68,6 +70,7 @@ _LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
     "discord": ("mini_app_polis.discord", None),
     "doppler": ("mini_app_polis.doppler", None),
     "environment": ("mini_app_polis.environment", None),
+    "lambda_worker": ("mini_app_polis.lambda_worker", None),
     "load_secrets": ("mini_app_polis.ssm_secrets", "load_secrets"),
     "sentry": ("mini_app_polis.sentry", None),
     "timing": ("mini_app_polis.timing", None),
