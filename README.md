@@ -49,6 +49,7 @@ dependencies = [
 | `discord.py` | `from mini_app_polis import discord` | Discord webhook transport: named channels, rate-limit cooldowns, environment labels, never raises |
 | `doppler.py` | `from mini_app_polis.doppler import DopplerClient` | Reads and writes secrets in one Doppler config (API or CLI), and the `check-doppler-keys` console script |
 | `google/` | `from mini_app_polis.google import GoogleAPI` | Drive + Sheets facade |
+| `lambda_worker.py` | `from mini_app_polis.lambda_worker import deadline, parse_message, process_records` | A Lambda queue consumer's glue: stop before the timeout (`RunOutOfTime`), read a `{type, version, payload}` message, name failed records in `batchItemFailures` |
 | `llm/` | `from mini_app_polis.llm import build_llm, LLMMessage` | OpenAI + Anthropic clients (optional extra) |
 | `mp3/` | `from mini_app_polis.mp3 import ...` | AcoustID identification, tagging, renaming |
 | `music/` | `from mini_app_polis.music import normalize_for_matching` | Music data normalization utilities |
@@ -355,6 +356,35 @@ cleanup itself.
 The deadline is a `contextvars` value: `asyncio.to_thread` and new asyncio
 tasks inherit it, a plain `threading.Thread` does not. See the module
 docstring.
+
+### Lambda queue consumers
+
+```python
+from mini_app_polis.api.contract import TranscriptionRunMessage
+from mini_app_polis.lambda_worker import deadline, parse_message, process_records
+
+
+def lambda_handler(event, context):
+    def handle(record):
+        message = parse_message(record["body"], TranscriptionRunMessage)
+        with deadline(context, request_headroom_seconds=60):
+            run(message.payload, run_id=record["messageId"])
+
+    return process_records(event, handle)
+```
+
+`deadline` raises `RunOutOfTime` a margin (`margin_seconds`) before the
+function's timeout, and sets the run deadline above `request_headroom_seconds`
+earlier still. `RunOutOfTime` is a `BaseException`, so a flow's
+`except Exception` cannot swallow it. `parse_message` raises
+`UnprocessableMessage` for a body that is not a message of the kinds given.
+`process_records` never raises, and names each failed record once. The message
+kinds are in `mini_app_polis.api.contract` (`QueueMessage`, `JobMessage`).
+
+A run report carries the cog's build when the cog passes its own version:
+`run_report(..., version=__version__)` stamps `(version=X.Y.Z)` on the text.
+The version comes from the cog's `_version.py`, never from installed package
+metadata, which a Lambda deploy strips.
 
 ### Logger
 
