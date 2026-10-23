@@ -363,3 +363,62 @@ def test_a_grooming_record_round_trips_and_its_write_refuses_extras() -> None:
         GroomingRecordWrite.model_validate({**write.model_dump(), "x": 1})
     with pytest.raises(ValidationError):
         GroomingRecordWrite.model_validate({**write.model_dump(), "fingerprint": "abc"})
+
+
+# ── Agent runs ────────────────────────────────────────────────────────────
+
+_RUN_ID = "0b6f7f5e-3c1a-4c8e-9a51-6f0c2f3d4e5a"
+
+
+def test_a_run_that_succeeded_names_its_pull_request() -> None:
+    from mini_app_polis.api.contract import AgentRunResult
+
+    result = AgentRunResult(
+        run_id=_RUN_ID,
+        outcome="succeeded",
+        cost_usd=0.84,
+        pr_url="https://github.com/mini-app-polis/watcher-cog/pull/7",
+    )
+    assert result.pr_url is not None
+    with pytest.raises(ValidationError):
+        AgentRunResult(run_id=_RUN_ID, outcome="succeeded", cost_usd=0.84)
+
+
+@pytest.mark.parametrize("outcome", ["failed", "capped"])
+def test_a_run_that_did_not_succeed_opened_no_pull_request(outcome: str) -> None:
+    from mini_app_polis.api.contract import AgentRunResult
+
+    assert AgentRunResult(run_id=_RUN_ID, outcome=outcome, reason="r").pr_url is None
+    with pytest.raises(ValidationError):
+        AgentRunResult(
+            run_id=_RUN_ID,
+            outcome=outcome,
+            pr_url="https://github.com/mini-app-polis/watcher-cog/pull/7",
+        )
+
+
+def test_an_agent_result_refuses_extras_and_bad_ids() -> None:
+    from mini_app_polis.api.contract import AgentRunResult
+
+    with pytest.raises(ValidationError):
+        AgentRunResult.model_validate({"run_id": _RUN_ID, "outcome": "failed", "x": 1})
+    with pytest.raises(ValidationError):
+        AgentRunResult(run_id="MINI-12", outcome="failed")
+    with pytest.raises(ValidationError):
+        AgentRunResult(run_id=_RUN_ID, outcome="failed", cost_usd=-1)
+
+
+def test_listing_agent_runs_sends_only_the_filters_given(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, calls = _client(monkeypatch, {"data": [], "meta": _META})
+    assert client.list_agent_runs() == []
+    client.list_agent_runs(status="dispatched", repository="watcher-cog")
+    assert calls == [
+        ("GET", "/v1/tasks/agent-runs", None),
+        (
+            "GET",
+            "/v1/tasks/agent-runs",
+            {"status": "dispatched", "repository": "watcher-cog"},
+        ),
+    ]

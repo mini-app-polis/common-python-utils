@@ -16,6 +16,14 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from .agent_runs import (
+    AgentResultAccepted,
+    AgentRun,
+    AgentRunCreate,
+    AgentRunFailure,
+    AgentRunResult,
+    AgentSpend,
+)
 from .deejay import (
     IngestResponseData,
     IngestSet,
@@ -327,6 +335,51 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         response=GroomingProposalAccepted,
         scope="tasks.groomings.write",
         callers=("task-groomer-cog",),
+    ),
+    Endpoint(
+        name="record_agent_run",
+        method="POST",
+        path="/v1/tasks/agent-runs",
+        request=AgentRunCreate,
+        response=AgentRun,
+        scope="tasks.agent-runs.write",
+        callers=("task-manager-cog",),
+    ),
+    Endpoint(
+        name="list_agent_runs",
+        method="GET",
+        path="/v1/tasks/agent-runs",
+        request=None,
+        response=list[AgentRun],
+        scope="tasks.agent-runs.read",
+        callers=("task-manager-cog",),
+    ),
+    Endpoint(
+        name="agent_spend",
+        method="GET",
+        path="/v1/tasks/agent-runs/spend",
+        request=None,
+        response=AgentSpend,
+        scope="tasks.agent-runs.read",
+        callers=("task-manager-cog",),
+    ),
+    Endpoint(
+        name="fail_agent_run",
+        method="POST",
+        path="/v1/tasks/agent-runs/failures",
+        request=AgentRunFailure,
+        response=AgentRun,
+        scope="tasks.agent-runs.write",
+        callers=("task-manager-cog",),
+    ),
+    Endpoint(
+        name="submit_agent_result",
+        method="POST",
+        path="/v1/tasks/agent-runs/results",
+        request=AgentRunResult,
+        response=AgentResultAccepted,
+        scope="tasks.agent-runs.report",
+        callers=(".github",),
     ),
     Endpoint(
         name="create_evaluation",

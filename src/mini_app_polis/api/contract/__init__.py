@@ -11,6 +11,16 @@ Only endpoints a cog or this library calls are here. See ``ENDPOINTS``.
 
 from __future__ import annotations
 
+from .agent_runs import (
+    AgentResultAccepted,
+    AgentRun,
+    AgentRunCreate,
+    AgentRunFailure,
+    AgentRunOutcome,
+    AgentRunResult,
+    AgentRunStatus,
+    AgentSpend,
+)
 from .deejay import (
     IngestResponseData,
     IngestSet,
@@ -131,6 +141,14 @@ from .wcs_wiki import (
 )
 
 __all__ = [
+    "AgentResultAccepted",
+    "AgentRun",
+    "AgentRunCreate",
+    "AgentRunFailure",
+    "AgentRunOutcome",
+    "AgentRunResult",
+    "AgentRunStatus",
+    "AgentSpend",
     "DeejayRunAccepted",
     "DeejayRunRequest",
     "DriveFileRef",
