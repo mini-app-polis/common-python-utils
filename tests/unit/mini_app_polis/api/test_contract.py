@@ -365,6 +365,41 @@ def test_a_grooming_record_round_trips_and_its_write_refuses_extras() -> None:
         GroomingRecordWrite.model_validate({**write.model_dump(), "fingerprint": "abc"})
 
 
+_PROPOSAL = {
+    "task_gid": "1219804023646894",
+    "fingerprint": "a" * 64,
+    "title": "common-python-utils: a grooming proposal can carry an executor tag",
+    "model": "claude-sonnet-5-5",
+    "cost_usd": 0.12,
+}
+
+
+@pytest.mark.parametrize("executor", ["cowork", "person"])
+def test_a_grooming_proposal_can_name_its_executor(executor: str) -> None:
+    from mini_app_polis.api.contract import GroomingProposal
+
+    assert GroomingProposal(**_PROPOSAL, executor=executor).executor == executor
+
+
+def test_a_grooming_proposal_without_an_executor_is_for_the_agent() -> None:
+    from mini_app_polis.api.contract import GroomingProposal
+
+    assert GroomingProposal(**_PROPOSAL).executor is None
+
+
+def test_a_grooming_proposal_refuses_an_unknown_executor() -> None:
+    from mini_app_polis.api.contract import GroomingProposal
+
+    with pytest.raises(ValidationError):
+        GroomingProposal(**_PROPOSAL, executor="agent")
+
+
+def test_the_executor_names_are_defined_once() -> None:
+    from mini_app_polis.api.contract import GroomingExecutor
+
+    assert typing.get_args(GroomingExecutor) == ("cowork", "person")
+
+
 # ── Agent runs ────────────────────────────────────────────────────────────
 
 _RUN_ID = "0b6f7f5e-3c1a-4c8e-9a51-6f0c2f3d4e5a"
@@ -393,6 +428,67 @@ def test_a_run_that_did_not_succeed_opened_no_pull_request(outcome: str) -> None
         AgentRunResult(
             run_id=_RUN_ID,
             outcome=outcome,
+            pr_url="https://github.com/mini-app-polis/watcher-cog/pull/7",
+        )
+
+
+def test_a_run_that_needs_grooming_asks_its_questions() -> None:
+    from mini_app_polis.api.contract import AgentRun, AgentRunResult
+
+    result = AgentRunResult(
+        run_id=_RUN_ID,
+        outcome="needs_grooming",
+        cost_usd=0.31,
+        questions=["Which env var name should replace FOLDER_ID?"],
+    )
+    assert result.questions == ["Which env var name should replace FOLDER_ID?"]
+    stored = AgentRun.model_validate(
+        {
+            "id": _RUN_ID,
+            "task_gid": "1219804099689049",
+            "repository": "watcher-cog",
+            "model": "claude-sonnet-5-5",
+            "status": "needs_grooming",
+            "questions": result.questions,
+            "dispatched_at": "2026-10-23T16:00:00Z",
+        }
+    )
+    assert stored.questions == result.questions
+
+
+@pytest.mark.parametrize("questions", [[], ["  "]])
+def test_a_run_that_needs_grooming_without_questions_is_refused(
+    questions: list[str],
+) -> None:
+    from mini_app_polis.api.contract import AgentRunResult
+
+    with pytest.raises(ValidationError):
+        AgentRunResult(run_id=_RUN_ID, outcome="needs_grooming", questions=questions)
+
+
+@pytest.mark.parametrize("outcome", ["failed", "capped"])
+def test_questions_on_another_outcome_are_refused(outcome: str) -> None:
+    from mini_app_polis.api.contract import AgentRunResult
+
+    with pytest.raises(ValidationError):
+        AgentRunResult(run_id=_RUN_ID, outcome=outcome, questions=["Which one?"])
+    with pytest.raises(ValidationError):
+        AgentRunResult(
+            run_id=_RUN_ID,
+            outcome="succeeded",
+            pr_url="https://github.com/mini-app-polis/watcher-cog/pull/7",
+            questions=["Which one?"],
+        )
+
+
+def test_a_run_that_needs_grooming_opened_no_pull_request() -> None:
+    from mini_app_polis.api.contract import AgentRunResult
+
+    with pytest.raises(ValidationError):
+        AgentRunResult(
+            run_id=_RUN_ID,
+            outcome="needs_grooming",
+            questions=["Which one?"],
             pr_url="https://github.com/mini-app-polis/watcher-cog/pull/7",
         )
 
