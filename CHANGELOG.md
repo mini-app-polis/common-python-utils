@@ -1,3 +1,10 @@
+# [6.20.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.19.0...v6.20.0) (2026-10-23)
+
+
+### Features
+
+* **lambda-worker:** add the shared Lambda worker module and queue message envelope, and stamp run reports with the caller's version ([dae2742](https://github.com/mini-app-polis/common-python-utils/commit/dae274264c4051d681846f12d3302f2b71740b2e))
+
 # [6.19.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.18.0...v6.19.0) (2026-10-23)
 
 
