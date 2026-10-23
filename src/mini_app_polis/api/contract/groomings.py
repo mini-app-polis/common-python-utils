@@ -29,7 +29,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 #: A task's size. An L task's implementation is to create its subtasks.
 GroomingEffort = Literal["S", "M", "L"]
@@ -40,6 +40,9 @@ GroomingEffort = Literal["S", "M", "L"]
 #: (consoles behind his login, accounts, physical checks). Consumers read the
 #: names from here, with ``typing.get_args``.
 GroomingExecutor = Literal["cowork", "person"]
+
+#: The most children one proposal may split a task into.
+GROOMING_MAX_CHILDREN = 8
 
 #: What the last sweep made of a task.
 #:
@@ -156,6 +159,34 @@ class GroomingJobAccepted(BaseModel):
     task_gid: str
 
 
+class GroomingChild(BaseModel):
+    """One task a proposal splits its task into: a leaf, ready to be worked.
+
+    It waits on earlier children by their position in the proposal's
+    ``children`` (from 0), since their ids are minted only when the task
+    manager creates them; on existing tasks and dates, by ``blocked_by``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The title without its id.
+    title: str = Field(..., min_length=1, max_length=300)
+    done_when: str = Field(..., min_length=1, max_length=5000)
+    where: str = Field(..., min_length=1, max_length=1000)
+    constraints: str = Field(..., min_length=1, max_length=5000)
+    effort: GroomingEffort
+    #: Who can do it. Absent means the agent.
+    executor: GroomingExecutor | None = None
+    #: Earlier children this one waits for, by position.
+    blocked_by_siblings: list[int] = Field(
+        default_factory=list, max_length=GROOMING_MAX_CHILDREN
+    )
+    #: Existing task ids and dates it waits for, as the template writes them.
+    blocked_by: str | None = Field(default=None, max_length=500)
+    #: Why it exists, and links to what is needed.
+    body: str = Field(..., min_length=1, max_length=20_000)
+
+
 class GroomingProposal(BaseModel):
     """What a groomer proposes a task should say.
 
@@ -182,9 +213,25 @@ class GroomingProposal(BaseModel):
     #: Why the task exists, and links to what is needed.
     body: str | None = Field(default=None, max_length=20_000)
     questions: list[str] = Field(default_factory=list, max_length=10)
+    #: The tasks this one splits into, when it is not a leaf (one
+    #: repository, one executor). The task then becomes their compound task.
+    children: list[GroomingChild] = Field(
+        default_factory=list, max_length=GROOMING_MAX_CHILDREN
+    )
     #: Who made it and what it cost, for the record.
     model: str = Field(..., min_length=1, max_length=100)
     cost_usd: float = Field(..., ge=0)
+
+    @model_validator(mode="after")
+    def _children_wait_only_on_earlier_siblings(self) -> GroomingProposal:
+        for position, child in enumerate(self.children):
+            for sibling in child.blocked_by_siblings:
+                if not 0 <= sibling < position:
+                    raise ValueError(
+                        f"child {position} waits on child {sibling}, which is "
+                        "not an earlier sibling"
+                    )
+        return self
 
 
 class GroomingProposalAccepted(BaseModel):

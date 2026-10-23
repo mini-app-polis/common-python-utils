@@ -50,6 +50,8 @@ from .evaluations import (
     PipelineEvaluationWriteResult,
 )
 from .groomings import (
+    GROOMING_MAX_CHILDREN,
+    GroomingChild,
     GroomingEffort,
     GroomingExecutor,
     GroomingJobAccepted,
@@ -160,6 +162,8 @@ __all__ = [
     "ErrorDetail",
     "ErrorEnvelope",
     "GIVEN_ID_SOURCES",
+    "GROOMING_MAX_CHILDREN",
+    "GroomingChild",
     "GroomingEffort",
     "GroomingExecutor",
     "GroomingJobAccepted",
