@@ -1,3 +1,10 @@
+# [6.21.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.20.0...v6.21.0) (2026-10-23)
+
+
+### Features
+
+* **contract:** allow up to 25 children in a grooming proposal ([49f20e0](https://github.com/mini-app-polis/common-python-utils/commit/49f20e0b732a360a3ba1e8c0f40bb3b5c9b1aee9))
+
 # [6.20.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.19.0...v6.20.0) (2026-10-23)
 
 
