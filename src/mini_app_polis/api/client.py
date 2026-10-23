@@ -58,6 +58,12 @@ from ..deadline import _ensure_time_left, _wait_crosses_deadline
 from ..environment import api_base_url
 from .contract import (
     ENDPOINTS_BY_NAME,
+    AgentResultAccepted,
+    AgentRun,
+    AgentRunCreate,
+    AgentRunFailure,
+    AgentRunResult,
+    AgentSpend,
     DeejayRunAccepted,
     DeejayRunRequest,
     Envelope,
@@ -661,6 +667,50 @@ class KaianoApiClient:
         return cast(
             GroomingProposalAccepted, self._call("submit_grooming_proposal", payload)
         )
+
+    def record_agent_run(self, payload: AgentRunCreate) -> AgentRun:
+        """``POST /v1/tasks/agent-runs`` — record a run about to be started.
+
+        The record is the lock: a repository with a run in flight is given
+        no second one.
+        """
+        return cast(AgentRun, self._call("record_agent_run", payload))
+
+    def list_agent_runs(
+        self, *, status: str | None = None, repository: str | None = None
+    ) -> list[AgentRun]:
+        """``GET /v1/tasks/agent-runs`` — runs, newest first.
+
+        ``status`` and ``repository`` narrow the list: the runs in flight are
+        ``status="dispatched"``.
+        """
+        params = {
+            key: value
+            for key, value in (("status", status), ("repository", repository))
+            if value is not None
+        }
+        return cast(
+            list[AgentRun], self._call("list_agent_runs", params=params or None)
+        )
+
+    def agent_spend(self) -> AgentSpend:
+        """``GET /v1/tasks/agent-runs/spend`` — this month's agent runs."""
+        return cast(AgentSpend, self._call("agent_spend"))
+
+    def fail_agent_run(self, payload: AgentRunFailure) -> AgentRun:
+        """``POST /v1/tasks/agent-runs/failures`` — mark a dispatched run failed.
+
+        For a run that could not be started, or that never reported.
+        """
+        return cast(AgentRun, self._call("fail_agent_run", payload))
+
+    def submit_agent_result(self, payload: AgentRunResult) -> AgentResultAccepted:
+        """``POST /v1/tasks/agent-runs/results`` — how a run ended.
+
+        Accepted once per run. The API queues it for the task manager,
+        which moves the task.
+        """
+        return cast(AgentResultAccepted, self._call("submit_agent_result", payload))
 
     def create_evaluation(
         self, payload: PipelineEvaluationCreate

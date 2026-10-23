@@ -76,6 +76,10 @@ NOT_EXERCISED: dict[str, str] = {
         "development has no queues: task-manager-dev-jobs.fifo is not "
         "provisioned, so the API cannot enqueue the proposal"
     ),
+    "submit_agent_result": (
+        "development has no queues: task-manager-dev-jobs.fifo is not "
+        "provisioned, so the API cannot enqueue the result"
+    ),
     "create_wcs_source": (
         "a source cannot be deleted and every source is in the unfiltered "
         "wiki export, so a fixture would stay in dev's wiki for good"
@@ -104,6 +108,15 @@ NOT_DEPLOYED: dict[str, str] = {
     ),
     "submit_grooming_proposal": (
         "POST /v1/tasks/groomings/proposals is not on the development API yet"
+    ),
+    "record_agent_run": "POST /v1/tasks/agent-runs is not on the development API yet",
+    "list_agent_runs": "GET /v1/tasks/agent-runs is not on the development API yet",
+    "agent_spend": "GET /v1/tasks/agent-runs/spend is not on the development API yet",
+    "fail_agent_run": (
+        "POST /v1/tasks/agent-runs/failures is not on the development API yet"
+    ),
+    "submit_agent_result": (
+        "POST /v1/tasks/agent-runs/results is not on the development API yet"
     ),
 }
 
