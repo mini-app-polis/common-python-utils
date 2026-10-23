@@ -151,10 +151,9 @@ def _key_for(machine_name: str | None) -> str | None:
 # ── Retrying without piling on ───────────────────────────────────────────
 #
 # A retry sent the moment the last attempt failed lands on a service that is
-# still busy with the request it gave up on. During the wiki-export incident
-# (2026-10-18) each curator job's 30-second timeout fired while the API was
-# still building the export, and the immediate retry started a second build
-# beside the first, then a third. A GET is idempotent, so it is retried on a
+# still busy with the request it gave up on. A slow GET whose timeout fires
+# while the server is still building the answer would, retried at once,
+# start a second build beside the first, then a third. A GET is idempotent, so it is retried on a
 # gateway error and on 429 as well as on a lost connection, but only after a
 # wait that grows each attempt, jittered so callers that failed together do
 # not come back together. A ``Retry-After`` from the server is used instead.

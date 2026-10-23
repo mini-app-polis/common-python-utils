@@ -163,7 +163,7 @@ class WcsWikiStateWriteResult(BaseModel):
     total: int = Field(..., description="Entries in the store afterwards.")
 
 
-# ── Page documents: what materialise writes (ADR-006) ──
+# ── Page documents: what materialise writes ──
 #
 # One document per entity page, built by the curator, which owns the page
 # logic (folds, the reference overlay, By teacher). The API stores, filters
@@ -448,7 +448,7 @@ class WcsWikiThinWriteResult(BaseModel):
     total: int = Field(..., description="Thin entities in the store afterwards.")
 
 
-# ── Wiki jobs: the wiki-curator queue (ADR-006) ──
+# ── Wiki jobs: the wiki-curator queue ──
 
 
 class WcsWikiJob(BaseModel):

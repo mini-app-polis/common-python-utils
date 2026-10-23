@@ -56,9 +56,9 @@ environment logs a WARNING and delivers nothing.
 
 ``production_only`` is a misnomer kept for compatibility: it has never
 consulted the environment, and never gated on it. It means "this caller
-delivers at all" — deejay-cog's manual flows pass ``production_only=False``
-so their reports stay local. Renaming it is a 6.0 change; every consumer
-pins ``>=5,<6``. Development *does* deliver, to the development API.
+delivers at all" — a caller passes ``production_only=False`` to keep its
+reports local. Renaming it is a major-release change. Development *does*
+deliver, to the development API.
 
 The fleet no longer runs on Prefect. :func:`get_prefect_logger` and
 :func:`get_run_id` still import it lazily, and fall back when it is
@@ -148,10 +148,10 @@ broken typically can't reach this code path at all — it died before
 reporting". That reasoning was correct for its scope and is preserved
 here, because it still governs how CRITICAL may be used.
 
-The July 2026 fleet-down incident produced the exception the original
-note anticipated: a transient Prefect Cloud 503 on deployment
-registration killed every ``serve()``-based cog at startup, before any
-flow run existed to report on. The Prefect-era startup retry helper
+The exception the original note anticipated did arrive: a transient
+Prefect Cloud 503 on deployment registration could kill a
+``serve()``-based worker at startup, before any flow run existed to
+report on. The Prefect-era startup retry helper
 that answered it reported that case as CRITICAL. That helper went with
 Prefect, and nothing in this library emits CRITICAL now; the value is
 kept so a consumer that has the same need can.
@@ -546,8 +546,7 @@ def post_findings(
     """Post one or more graded findings to ``/v1/evaluations``.
 
     .. deprecated::
-        Nothing in the fleet calls this: evaluator-cog posts its findings
-        through its own client. Use ``KaianoApiClient.create_evaluation``
+        Use ``KaianoApiClient.create_evaluation``
         with a ``PipelineEvaluationCreate``. Removed in the next major
         release.
 
