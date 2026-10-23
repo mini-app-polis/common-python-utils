@@ -1,3 +1,10 @@
+# [6.22.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.21.0...v6.22.0) (2026-10-23)
+
+
+### Features
+
+* **contract:** add the task.sweep queue message, whose payload may be omitted ([58661f8](https://github.com/mini-app-polis/common-python-utils/commit/58661f894086ee7d0a206dcecd6e13af336c58c1))
+
 # [6.21.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.20.0...v6.21.0) (2026-10-23)
 
 
