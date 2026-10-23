@@ -1,3 +1,10 @@
+# [6.18.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.17.0...v6.18.0) (2026-10-23)
+
+
+### Features
+
+* **contract:** let grooming name a task's executor and an agent run end as needing grooming ([17f6293](https://github.com/mini-app-polis/common-python-utils/commit/17f6293f2418e6a474014d4536fa6826d5cd6a32))
+
 # [6.17.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.16.2...v6.17.0) (2026-10-23)
 
 
