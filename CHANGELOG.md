@@ -1,3 +1,10 @@
+# [6.17.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.16.2...v6.17.0) (2026-10-23)
+
+
+### Features
+
+* **contract:** add agent-run records, spend and results ([3667e1b](https://github.com/mini-app-polis/common-python-utils/commit/3667e1b49085e71b8ced3c4df977ae5dceebdc78))
+
 ## [6.16.2](https://github.com/mini-app-polis/common-python-utils/compare/v6.16.1...v6.16.2) (2026-10-22)
 
 
