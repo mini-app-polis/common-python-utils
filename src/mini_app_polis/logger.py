@@ -32,8 +32,8 @@ Debugging your own code must never print your credentials.
 
 The floor keeps header dumps out, but not a secret carried in a URL's path:
 httpx's INFO line ``HTTP Request: POST <url> …`` prints the full URL, and a
-Discord webhook URL is ``/api/webhooks/<id>/<token>``. That is how live
-webhook tokens reached api-kaianolevine-com's Railway logs on 2026-09-23. A
+Discord webhook URL is ``/api/webhooks/<id>/<token>``, so without this live
+webhook tokens reach a service's logs. A
 filter on the same loggers replaces those secrets with ``<redacted>`` and
 keeps the line (:data:`_URL_SECRET_PATTERNS`).
 

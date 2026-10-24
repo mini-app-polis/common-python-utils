@@ -19,7 +19,7 @@ the exact pin:
 ```toml
 [project]
 dependencies = [
-  "miniapppolis-common-utils>=5.0,<6",
+  "miniapppolis-common-utils>=6.0,<7",
 ]
 ```
 
@@ -30,7 +30,7 @@ To use the LLM module, add the `llm` extra:
 
 ```toml
 dependencies = [
-  "miniapppolis-common-utils[llm]>=5.0,<6",
+  "miniapppolis-common-utils[llm]>=6.0,<7",
 ]
 ```
 
@@ -48,13 +48,18 @@ dependencies = [
 | `deadline.py` | `from mini_app_polis.deadline import run_deadline` | A run deadline the library's retry loops respect: no attempt starts, and no backoff is waited out, past it; `without_run_deadline()` lifts it for cleanup |
 | `discord.py` | `from mini_app_polis import discord` | Discord webhook transport: named channels, rate-limit cooldowns, environment labels, never raises |
 | `doppler.py` | `from mini_app_polis.doppler import DopplerClient` | Reads and writes secrets in one Doppler config (API or CLI), and the `check-doppler-keys` console script |
+| `environment.py` | `from mini_app_polis.environment import current_environment, effect_enabled` | Which environment this process is in, which outbound effects it may make, and which name an environment-specific variable is read under (`_DEV` outside production) |
 | `google/` | `from mini_app_polis.google import GoogleAPI` | Drive + Sheets facade |
 | `lambda_worker.py` | `from mini_app_polis.lambda_worker import deadline, parse_message, process_records` | A Lambda queue consumer's glue: stop before the timeout (`RunOutOfTime`), read a `{type, version, payload}` message, name failed records in `batchItemFailures` |
 | `llm/` | `from mini_app_polis.llm import build_llm, LLMMessage` | OpenAI + Anthropic clients (optional extra) |
+| `logger.py` | `from mini_app_polis import logger` | The fleet's logger: level from `LOGGING_LEVEL`, JSON on Railway, credential-printing libraries held at INFO |
 | `mp3/` | `from mini_app_polis.mp3 import ...` | AcoustID identification, tagging, renaming |
 | `music/` | `from mini_app_polis.music import normalize_for_matching` | Music data normalization utilities |
+| `pipeline_status.py` | `from mini_app_polis.pipeline_status import RunReport, post_findings` | Run reports to the runs channel and graded findings to the API |
+| `request_metrics.py` | `from mini_app_polis.request_metrics import RequestMetricsMiddleware` | ASGI middleware publishing an API's request latency and error counts to CloudWatch |
 | `sentry.py` | `from mini_app_polis.sentry import init_sentry` | Starts Sentry for a service with the fleet defaults; an empty DSN in production logs an ERROR instead of skipping silently (CD-038) |
 | `spotify/` | `from mini_app_polis.spotify import SpotifyAPI` | Spotipy wrapper; raises `SpotifyTokenExpired` when Spotify refuses the refresh token (`invalid_grant`, not retried); every request, token refresh included, is bounded by `SPOTIFY_REQUEST_TIMEOUT_SECONDS` |
+| `ssm_secrets.py` | `from mini_app_polis.ssm_secrets import load_secrets` | Loads a Lambda worker's secrets from SSM Parameter Store into the environment, at cold start and again each invocation |
 | `timing.py` | `from mini_app_polis import timing` | Per-invocation working vs waiting time, by service, as one CloudWatch line |
 | `vdj/` | `from mini_app_polis.vdj.m3u import ParseFacade` | VirtualDJ M3U parsing |
 
@@ -259,13 +264,11 @@ suffix). See the module docstring for the rest.
 ### Activity feed (requires `activity` extra)
 
 Committed data changes to `activity`, faults to `errors`, for a FastAPI
-service on SQLAlchemy 2. Needs the `activity` extra and a release that has
-these modules: `>=5.0` is not enough, since earlier 5.x releases lack them.
-Use the minor release that introduced `mini_app_polis.activity` (and
-`mini_app_polis.discord`) as the lower bound:
+service on SQLAlchemy 2. Needs the `activity` extra; every 6.x release has
+these modules:
 
 ```toml
-dependencies = ["miniapppolis-common-utils[activity]>=<that release>,<6"]
+dependencies = ["miniapppolis-common-utils[activity]>=6.0,<7"]
 ```
 
 ```python
@@ -502,25 +505,11 @@ commented ones optional. Every repo that depends on this library gets the
 uv run check-doppler-keys
 ```
 
-Key variables:
-
-| Variable | Used by | Required for |
-|---|---|---|
-| `KAIANO_API_BASE_URL` | `KaianoApiClient` | Calling internal FastAPI services, in production. Every other environment reads `KAIANO_API_BASE_URL_DEV`, with no fallback between the two |
-| `<MACHINE_NAME>_API_KEY` | `KaianoApiClient` | This machine's own named key, e.g. `DEEJAY_COG_API_KEY`. Derived from the machine name by `machine_key_env_var()` |
-| `KAIANO_API_KEY` | `KaianoApiClient` | Unnamed fallback for a caller that declares no machine name. Authenticates, but its writes are unattributable |
-| `ASANA_ACCESS_TOKEN` | `AsanaClient` | Asana personal access token. Read per request, so rotation needs no restart |
-| `ASANA_WORKSPACE_ID` | `AsanaClient` | Workspace gid. Required only by `find_or_create_tag()`, since tags are workspace-scoped objects |
-| `LOGGING_LEVEL` | `logger` | Log verbosity (`INFO` default). Importing `logger` calls `basicConfig`, so this reaches every library in the process. Loggers known to print credentials (`websockets`, `httpx`, `httpcore`, …) are held at INFO regardless — raising this to DEBUG will not print your secrets |
-| `GOOGLE_CREDENTIALS_JSON` | `GoogleAPI` | Google Drive + Sheets access |
-| `SPOTIPY_CLIENT_ID` | `SpotifyAPI` | Spotify operations |
-| `SPOTIPY_CLIENT_SECRET` | `SpotifyAPI` | Spotify operations |
-| `SPOTIPY_REFRESH_TOKEN` | `SpotifyAPI` | Spotify operations |
-| `DISCORD_WEBHOOK_URL` | `discord`, `activity` | Fallback webhook for any channel whose own variable is unset |
-| `DISCORD_WEBHOOK_URL_DEFAULT` / `_ERRORS` / `_ACTIVITY` / `_RUNS` | `discord`, `activity` | One webhook per channel. Optional; each falls back to `DISCORD_WEBHOOK_URL` |
-| `ANTHROPIC_API_KEY` | `llm` extra | Anthropic LLM calls |
-| `OPENAI_API_KEY` | `llm` extra | OpenAI LLM calls |
-| `DOPPLER_TOKEN` / `DOPPLER_PROJECT` / `DOPPLER_CONFIG` | `DopplerClient.from_env()` | Writing a secret back to Doppler from a service. The token is a service token with write access to that one config; Doppler's syncs inject the other two |
+Every variable the library reads, which module reads it, and whether it is
+required is listed in [`.env.example`](.env.example). A caller's own named
+API key, `<MACHINE_NAME>_API_KEY`, is derived from its machine name by
+`machine_key_env_var()` (`deejay-cog` → `DEEJAY_COG_API_KEY`), so each caller
+lists its own.
 
 ---
 

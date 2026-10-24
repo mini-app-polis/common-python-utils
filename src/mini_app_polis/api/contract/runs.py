@@ -16,7 +16,7 @@ class DriveFileRef(BaseModel):
 
     ``revision`` is the file's modifiedTime, sent only for a folder whose
     files are edited in place and never leave; it makes the claim one per
-    version rather than one per file. See services/dispatch_claims.py.
+    version rather than one per file.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -46,8 +46,8 @@ class DeejayRunRequest(BaseModel):
     mode: Literal["process-new-files", "ingest-live-history"] = Field(
         ...,
         description=(
-            "Which deejay-cog flow to run. Mirrors DeejayMode in deejay-cog; "
-            "the cog refuses a mode it does not recognise."
+            "Which deejay-cog flow to run. The cog refuses a mode it does "
+            "not recognise."
         ),
     )
     drive_files: list[DriveFileRef] | None = Field(
@@ -107,9 +107,8 @@ class TranscriptionRunRequest(BaseModel):
     mode: Literal["wcs-transcripts", "voicenotes", "voicenotes-cleanup"] = Field(
         ...,
         description=(
-            "Which transcription-cog pipeline to run. Mirrors MODES in "
-            "transcription-cog's worker; the cog refuses a mode it does not "
-            "recognise."
+            "Which transcription-cog pipeline to run. The cog refuses a mode "
+            "it does not recognise."
         ),
     )
     drive_file_id: str | None = Field(

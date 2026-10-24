@@ -164,10 +164,7 @@ class WcsExtractionReference(BaseModel):
 
 
 class WcsExtractionRawOutput(BaseModel):
-    """The full extraction payload produced by transcription-cog's prompt.
-
-    Matches EXTRACTION_SCHEMA in transcription_cog/schema.py.
-    """
+    """The full extraction payload produced by transcription-cog's prompt."""
 
     model_config = ConfigDict(extra="allow")  # forward-compatible
 

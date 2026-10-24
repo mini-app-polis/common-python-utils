@@ -6,7 +6,7 @@ rate-limited service posting through the limit, and a send that logs and
 reports its failures rather than raising them. A second service wants the
 same thing, and two copies of the cooldown logic is how one of them ends up
 without the fix the other got. So it lives here, and each service keeps only
-what is genuinely its own (api-kaianolevine-com's GitHub forwarding is built
+what is genuinely its own (forwarding GitHub's own payloads, say, is built
 on ``post_webhook`` below).
 
 **Channels.** Every send names a channel, and this module resolves it to

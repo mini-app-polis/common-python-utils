@@ -85,8 +85,7 @@ class Endpoint:
 
     ``response`` is the type of the envelope's ``data``, not the envelope.
     ``scope`` is what the API requires of the caller; ``None`` means the
-    route checks no scope. ``callers`` names who calls it today, so a change
-    here says who has to move.
+    route checks no scope.
     """
 
     name: str
@@ -95,7 +94,6 @@ class Endpoint:
     request: type[BaseModel] | None
     response: Any
     scope: str | None
-    callers: tuple[str, ...]
 
 
 ENDPOINTS: tuple[Endpoint, ...] = (
@@ -106,7 +104,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=IngestSet,
         response=IngestResponseData,
         scope="catalog.sets.write",
-        callers=("deejay-cog",),
     ),
     Endpoint(
         name="ingest_live_plays",
@@ -115,7 +112,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=LivePlaysIngest,
         response=LivePlaysResponseData,
         scope="catalog.plays.write",
-        callers=("deejay-cog",),
     ),
     Endpoint(
         name="ingest_spotify_playlists",
@@ -124,7 +120,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=SpotifyPlaylistsIngest,
         response=SpotifyPlaylistsIngestResponse,
         scope="catalog.sets.write",
-        callers=("deejay-cog",),
     ),
     Endpoint(
         name="create_wcs_transcript",
@@ -133,7 +128,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=WcsTranscriptCreate,
         response=WcsTranscriptItem,
         scope="wcs.transcripts.write",
-        callers=("transcription-cog",),
     ),
     Endpoint(
         name="create_wcs_source",
@@ -142,7 +136,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=WcsSourceCreate,
         response=WcsSourceItem,
         scope="wcs.sources.write",
-        callers=("transcription-cog",),
     ),
     Endpoint(
         name="export_wcs_wiki",
@@ -151,9 +144,8 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=None,
         response=WcsWikiExportItem,
         scope="wcs.corpus.read",
-        callers=("wiki-curator-cog",),
     ),
-    # The curator's state (wiki-curator-cog ADR-006). Read with the
+    # The curator's state. Read with the
     # corpus scope — the statements quote private sources — and written with
     # a scope of its own, so reading the corpus does not imply rewriting the
     # wiki.
@@ -164,7 +156,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=None,
         response=WcsWikiLinksState,
         scope="wcs.corpus.read",
-        callers=("wiki-curator-cog",),
     ),
     Endpoint(
         name="put_wcs_wiki_links",
@@ -173,7 +164,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=WcsWikiLinksState,
         response=WcsWikiStateWriteResult,
         scope="wcs.wiki.write",
-        callers=("wiki-curator-cog",),
     ),
     Endpoint(
         name="get_wcs_wiki_facets",
@@ -182,7 +172,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=None,
         response=WcsWikiFacetsState,
         scope="wcs.corpus.read",
-        callers=("wiki-curator-cog",),
     ),
     Endpoint(
         name="put_wcs_wiki_facets",
@@ -191,7 +180,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=WcsWikiFacetsState,
         response=WcsWikiStateWriteResult,
         scope="wcs.wiki.write",
-        callers=("wiki-curator-cog",),
     ),
     Endpoint(
         name="get_wcs_wiki_prose",
@@ -200,7 +188,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=None,
         response=WcsWikiProseState,
         scope="wcs.corpus.read",
-        callers=("wiki-curator-cog",),
     ),
     Endpoint(
         name="put_wcs_wiki_prose",
@@ -209,7 +196,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=WcsWikiProseState,
         response=WcsWikiStateWriteResult,
         scope="wcs.wiki.write",
-        callers=("wiki-curator-cog",),
     ),
     # The thin entities consolidation finds, for the admin's review in
     # /admin/wiki. The curator reads the list to know what to
@@ -221,7 +207,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=None,
         response=WcsWikiThinState,
         scope="wcs.corpus.read",
-        callers=("wiki-curator-cog",),
     ),
     Endpoint(
         name="put_wcs_wiki_thin",
@@ -230,10 +215,9 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=WcsWikiThinWrite,
         response=WcsWikiThinWriteResult,
         scope="wcs.wiki.write",
-        callers=("wiki-curator-cog",),
     ),
     # The page documents materialise builds; the API stores, filters and
-    # serves them (ADR-006). Reading them is web-facing, so only the
+    # serves them. Reading them is web-facing, so only the
     # write is here.
     Endpoint(
         name="put_wcs_wiki_pages",
@@ -242,10 +226,9 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=WcsWikiPagesWrite,
         response=WcsWikiPagesWriteResult,
         scope="wcs.wiki.write",
-        callers=("wiki-curator-cog",),
     ),
     # The follow-on jobs a wiki job names, put on the wiki-curator queue by the
-    # API, which stays the fleet's one producer (ADR-006).
+    # API, which stays the fleet's one producer.
     Endpoint(
         name="enqueue_wcs_wiki_jobs",
         method="POST",
@@ -253,7 +236,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=WcsWikiJobsRequest,
         response=WcsWikiJobsAccepted,
         scope="wcs.wiki.write",
-        callers=("wiki-curator-cog",),
     ),
     Endpoint(
         name="request_deejay_run",
@@ -262,7 +244,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=DeejayRunRequest,
         response=DeejayRunAccepted,
         scope="deejay.runs.create",
-        callers=("watcher-cog",),
     ),
     Endpoint(
         name="request_transcription_run",
@@ -271,7 +252,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=TranscriptionRunRequest,
         response=TranscriptionRunAccepted,
         scope="transcription.runs.create",
-        callers=("watcher-cog",),
     ),
     Endpoint(
         name="request_task",
@@ -280,7 +260,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=TaskCreateRequest,
         response=TaskCreateAccepted,
         scope="tasks.requests.create",
-        callers=("transcription-cog",),
     ),
     Endpoint(
         name="list_groomings",
@@ -289,7 +268,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=None,
         response=list[GroomingRecord],
         scope="tasks.groomings.read",
-        callers=("task-manager-cog",),
     ),
     Endpoint(
         name="record_grooming",
@@ -298,7 +276,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=GroomingRecordWrite,
         response=GroomingRecord,
         scope="tasks.groomings.write",
-        callers=("task-manager-cog",),
     ),
     Endpoint(
         name="record_grooming_run",
@@ -307,7 +284,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=GroomingRunCreate,
         response=GroomingRunRecorded,
         scope="tasks.groomings.write",
-        callers=("task-groomer-cog",),
     ),
     Endpoint(
         name="grooming_spend",
@@ -316,7 +292,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=None,
         response=GroomingSpend,
         scope="tasks.groomings.read",
-        callers=("task-groomer-cog",),
     ),
     Endpoint(
         name="request_grooming",
@@ -325,7 +300,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=GroomingJobRequest,
         response=GroomingJobAccepted,
         scope="tasks.groomings.write",
-        callers=("task-manager-cog",),
     ),
     Endpoint(
         name="submit_grooming_proposal",
@@ -334,7 +308,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=GroomingProposal,
         response=GroomingProposalAccepted,
         scope="tasks.groomings.write",
-        callers=("task-groomer-cog",),
     ),
     Endpoint(
         name="record_agent_run",
@@ -343,7 +316,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=AgentRunCreate,
         response=AgentRun,
         scope="tasks.agent-runs.write",
-        callers=("task-manager-cog",),
     ),
     Endpoint(
         name="list_agent_runs",
@@ -352,7 +324,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=None,
         response=list[AgentRun],
         scope="tasks.agent-runs.read",
-        callers=("task-manager-cog",),
     ),
     Endpoint(
         name="agent_spend",
@@ -361,7 +332,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=None,
         response=AgentSpend,
         scope="tasks.agent-runs.read",
-        callers=("task-manager-cog",),
     ),
     Endpoint(
         name="fail_agent_run",
@@ -370,7 +340,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=AgentRunFailure,
         response=AgentRun,
         scope="tasks.agent-runs.write",
-        callers=("task-manager-cog",),
     ),
     Endpoint(
         name="submit_agent_result",
@@ -379,7 +348,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=AgentRunResult,
         response=AgentResultAccepted,
         scope="tasks.agent-runs.report",
-        callers=(".github",),
     ),
     Endpoint(
         name="create_evaluation",
@@ -388,7 +356,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=PipelineEvaluationCreate,
         response=PipelineEvaluationWriteResult,
         scope="pipeline.evaluations.write",
-        callers=("evaluator-cog", "wiki-curator-cog", "common-python-utils"),
     ),
     Endpoint(
         name="list_sets",
@@ -397,7 +364,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=None,
         response=list[SetListItem],
         scope=None,
-        callers=("deejay-cog",),
     ),
     Endpoint(
         name="list_evaluations",
@@ -406,7 +372,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=None,
         response=list[PipelineEvaluationItem],
         scope=None,
-        callers=("evaluator-cog",),
     ),
     Endpoint(
         name="send_notification",
@@ -415,7 +380,6 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=NotifyRequest,
         response=NotificationResult,
         scope="notify.messages.send",
-        callers=("common-python-utils",),
     ),
 )
 
