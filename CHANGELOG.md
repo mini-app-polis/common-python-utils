@@ -1,3 +1,10 @@
+## [6.22.2](https://github.com/mini-app-polis/common-python-utils/compare/v6.22.1...v6.22.2) (2026-10-24)
+
+
+### Bug Fixes
+
+* **contract:** drop the unused callers field, and describe the library in its own terms ([ee3f4dc](https://github.com/mini-app-polis/common-python-utils/commit/ee3f4dcb5c6a0c5fd4a02f10206a286ee6420b6b))
+
 ## [6.22.1](https://github.com/mini-app-polis/common-python-utils/compare/v6.22.0...v6.22.1) (2026-10-23)
 
 
