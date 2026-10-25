@@ -8,6 +8,9 @@ assignee — is the task manager's to add, so no source carries a copy of it.
 The request is answered 202 once the job is on the queue. Nothing has been
 created yet; the task manager does that afterwards, and its run report names
 the task.
+
+:class:`TaskUpdateRequest` changes a task made that way, naming it by the
+same key: a comment, and optionally a move to another column.
 """
 
 from __future__ import annotations
@@ -143,6 +146,38 @@ class TaskCreateRequest(BaseModel):
         elif self.id:
             raise ValueError(f"{self.source} ids are minted; send no id")
         return self
+
+
+class TaskUpdateRequest(BaseModel):
+    """Change a task that ``task.create`` already put on the board.
+
+    ``external_id`` is the key the task was created under, which the task
+    manager stored on it, so whatever asked for the task can name it again
+    without knowing its id. It is bounded as ``TaskCreateRequest``'s is but
+    not checked against a source prefix: that rule pairs the key with the
+    request's ``source``, and an update has none. A key that names no task
+    is the task manager's to report.
+
+    ``comment`` is plain text, added to the task as a comment. ``section``,
+    when set, is the column to move the task to, by name (``"Review"``); the
+    task manager resolves it on the board.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    external_id: str = Field(..., min_length=1, max_length=256)
+    comment: str = Field(
+        ...,
+        min_length=1,
+        max_length=20_000,
+        description="Plain text, added to the task as a comment.",
+    )
+    section: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=200,
+        description="The column to move the task to, by name; None leaves it.",
+    )
 
 
 class TaskCreateAccepted(BaseModel):

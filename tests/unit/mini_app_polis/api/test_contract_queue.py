@@ -19,6 +19,7 @@ from mini_app_polis.api.contract import (
     TaskGroomMessage,
     TaskGroomProposalMessage,
     TaskSweepMessage,
+    TaskUpdateMessage,
     TranscriptionRunMessage,
     WikiJobMessage,
 )
@@ -34,6 +35,7 @@ KINDS = [
     (TaskGroomMessage, "task.groom"),
     (TaskGroomProposalMessage, "task.groom-proposal"),
     (TaskCreateMessage, "task.create"),
+    (TaskUpdateMessage, "task.update"),
     (TaskAgentResultMessage, "task.agent-result"),
     (TaskSweepMessage, "task.sweep"),
 ]
@@ -119,3 +121,51 @@ def test_a_message_built_in_code_carries_its_type_and_version() -> None:
 def test_a_sweep_needs_no_payload() -> None:
     message = ADAPTER.validate_python({"type": "task.sweep", "version": 1})
     assert isinstance(message, TaskSweepMessage)
+
+
+def _update_body(**payload: Any) -> dict[str, Any]:
+    return {"type": "task.update", "version": 1, "payload": payload}
+
+
+def test_an_update_round_trips_through_the_union() -> None:
+    body = _update_body(
+        external_id="ci.api-kaianolevine-com#3f2a",
+        comment="Healed: the last three runs passed.",
+        section="Review",
+    )
+    message = ADAPTER.validate_python(body)
+    assert isinstance(message, TaskUpdateMessage)
+    assert message.model_dump(mode="json", exclude_none=True) == body
+
+
+def test_an_update_may_leave_the_section_out() -> None:
+    body = _update_body(external_id="github-issue.r#7", comment="Closed on GitHub.")
+    message = ADAPTER.validate_python(body)
+    assert isinstance(message, TaskUpdateMessage)
+    assert message.payload.section is None
+
+
+@pytest.mark.parametrize("missing", ["external_id", "comment"])
+def test_an_update_refuses_a_payload_without_its_key_or_comment(
+    missing: str,
+) -> None:
+    payload = {"external_id": "ci.r#1", "comment": "c"}
+    del payload[missing]
+    with pytest.raises(ValidationError):
+        ADAPTER.validate_python(_update_body(**payload))
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"external_id": "", "comment": "c"},
+        {"external_id": "ci.r#1", "comment": ""},
+        {"external_id": "ci.r#1", "comment": "c" * 20_001},
+        {"external_id": "x" * 257, "comment": "c"},
+        {"external_id": "ci.r#1", "comment": "c", "section": ""},
+        {"external_id": "ci.r#1", "comment": "c", "signal": "s"},
+    ],
+)
+def test_an_update_refuses_a_payload_out_of_bounds(payload: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        ADAPTER.validate_python(_update_body(**payload))
