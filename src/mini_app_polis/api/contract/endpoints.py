@@ -59,6 +59,12 @@ from .runs import (
     TranscriptionRunAccepted,
     TranscriptionRunRequest,
 )
+from .secret_rotations import (
+    RotationEvent,
+    RotationEventCreate,
+    RotationRequest,
+    RotationRequestAccepted,
+)
 from .tasks import TaskCreateAccepted, TaskCreateRequest
 from .wcs import (
     WcsSourceCreate,
@@ -391,6 +397,33 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=None,
         response=list[PipelineEvaluationItem],
         scope=None,
+    ),
+    # The record of secret rotations. The rotator writes and
+    # reads events; asking for a rotation has a scope of its own, so holding
+    # the record's scopes does not let a caller start one.
+    Endpoint(
+        name="record_rotation_event",
+        method="POST",
+        path="/v1/secrets/rotation-events",
+        request=RotationEventCreate,
+        response=RotationEvent,
+        scope="secrets.rotation-events.write",
+    ),
+    Endpoint(
+        name="list_rotation_events",
+        method="GET",
+        path="/v1/secrets/rotation-events",
+        request=None,
+        response=list[RotationEvent],
+        scope="secrets.rotation-events.read",
+    ),
+    Endpoint(
+        name="request_rotation",
+        method="POST",
+        path="/v1/secrets/rotations",
+        request=RotationRequest,
+        response=RotationRequestAccepted,
+        scope="secrets.rotations.create",
     ),
     Endpoint(
         name="send_notification",

@@ -101,6 +101,16 @@ from .runs import (
     TranscriptionRunAccepted,
     TranscriptionRunRequest,
 )
+from .secret_rotations import (
+    RotationConfig,
+    RotationEvent,
+    RotationEventCreate,
+    RotationKind,
+    RotationMode,
+    RotationRequest,
+    RotationRequestAccepted,
+    RotationVerification,
+)
 from .tasks import (
     GIVEN_ID_SOURCES,
     TaskCreateAccepted,
@@ -226,6 +236,14 @@ __all__ = [
     "PipelineEvaluationWriteResult",
     "QUEUE_MESSAGE_VERSION",
     "QueueMessage",
+    "RotationConfig",
+    "RotationEvent",
+    "RotationEventCreate",
+    "RotationKind",
+    "RotationMode",
+    "RotationRequest",
+    "RotationRequestAccepted",
+    "RotationVerification",
     "SetListItem",
     "SpotifyPlaylistIngest",
     "SpotifyPlaylistsIngest",
