@@ -22,6 +22,15 @@ proposal.
     GET  /v1/tasks/groomings/spend      this month's paid runs, in total
     POST /v1/tasks/groomings/jobs       ask for one task to be groomed
     POST /v1/tasks/groomings/proposals  hand a groomer's proposal back
+    POST /v1/tasks/groomings/claims     claim one job before grooming it
+    POST /v1/tasks/groomings/claims/release  give a claim back after a failure
+
+A queue can deliver the same grooming job more than once. The groomer claims
+the task and the fingerprint of the content it was sent before it calls the
+model, and grooms only if it won the claim, so a second delivery costs
+nothing. A run that fails releases its claim, so the next send can groom the
+same content; a run that succeeds keeps it, so unchanged content is not
+groomed twice.
 """
 
 from __future__ import annotations
@@ -232,6 +241,44 @@ class GroomingProposal(BaseModel):
                         "not an earlier sibling"
                     )
         return self
+
+
+class GroomingClaimRequest(BaseModel):
+    """Claim one grooming job, or give a claim back.
+
+    A claim is keyed on the task and the fingerprint of the content the job
+    was sent for, so the same content sent again in a new message is the
+    same claim.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    task_gid: str = Field(..., min_length=1, max_length=64, pattern=r"^\d+$")
+    fingerprint: str = Field(..., pattern=r"^[0-9a-f]{64}$")
+
+
+class GroomingClaimResult(BaseModel):
+    """Whether the caller won the claim.
+
+    ``claimed`` is false when the claim is already held, by an earlier
+    delivery or a run that succeeded. That is an answer, not an error: the
+    caller skips the job.
+    """
+
+    task_gid: str
+    fingerprint: str
+    claimed: bool
+
+
+class GroomingClaimReleased(BaseModel):
+    """Whether a held claim was given back.
+
+    ``released`` is false when there was no held claim to give back.
+    """
+
+    task_gid: str
+    fingerprint: str
+    released: bool
 
 
 class GroomingProposalAccepted(BaseModel):

@@ -67,6 +67,9 @@ from .contract import (
     DeejayRunAccepted,
     DeejayRunRequest,
     Envelope,
+    GroomingClaimReleased,
+    GroomingClaimRequest,
+    GroomingClaimResult,
     GroomingJobAccepted,
     GroomingJobRequest,
     GroomingProposal,
@@ -665,6 +668,24 @@ class KaianoApiClient:
         """
         return cast(
             GroomingProposalAccepted, self._call("submit_grooming_proposal", payload)
+        )
+
+    def claim_grooming(self, payload: GroomingClaimRequest) -> GroomingClaimResult:
+        """``POST /v1/tasks/groomings/claims`` — claim one job before grooming it.
+
+        ``claimed`` is false when the job is already held; skip it.
+        """
+        return cast(GroomingClaimResult, self._call("claim_grooming", payload))
+
+    def release_grooming_claim(
+        self, payload: GroomingClaimRequest
+    ) -> GroomingClaimReleased:
+        """``POST /v1/tasks/groomings/claims/release`` — give a claim back.
+
+        For a run that failed, so the next send can groom the same content.
+        """
+        return cast(
+            GroomingClaimReleased, self._call("release_grooming_claim", payload)
         )
 
     def record_agent_run(self, payload: AgentRunCreate) -> AgentRun:
