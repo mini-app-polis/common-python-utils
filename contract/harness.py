@@ -109,6 +109,12 @@ NOT_DEPLOYED: dict[str, str] = {
     "submit_grooming_proposal": (
         "POST /v1/tasks/groomings/proposals is not on the development API yet"
     ),
+    "claim_grooming": (
+        "POST /v1/tasks/groomings/claims is not on the development API yet"
+    ),
+    "release_grooming_claim": (
+        "POST /v1/tasks/groomings/claims/release is not on the development API yet"
+    ),
     "record_agent_run": "POST /v1/tasks/agent-runs is not on the development API yet",
     "list_agent_runs": "GET /v1/tasks/agent-runs is not on the development API yet",
     "agent_spend": "GET /v1/tasks/agent-runs/spend is not on the development API yet",

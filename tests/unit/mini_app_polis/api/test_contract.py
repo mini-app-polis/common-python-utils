@@ -365,6 +365,72 @@ def test_a_grooming_record_round_trips_and_its_write_refuses_extras() -> None:
         GroomingRecordWrite.model_validate({**write.model_dump(), "fingerprint": "abc"})
 
 
+# ── Grooming claims ───────────────────────────────────────────────────────
+
+_GID = "1219848148842653"
+
+
+def test_a_grooming_claim_request_refuses_extras_and_bad_keys() -> None:
+    from mini_app_polis.api.contract import GroomingClaimRequest
+
+    claim = GroomingClaimRequest(task_gid=_GID, fingerprint="b" * 64)
+    assert claim.model_dump() == {"task_gid": _GID, "fingerprint": "b" * 64}
+    with pytest.raises(ValidationError):
+        GroomingClaimRequest.model_validate({**claim.model_dump(), "x": 1})
+    with pytest.raises(ValidationError):
+        GroomingClaimRequest(task_gid="MINI-292", fingerprint="b" * 64)
+    with pytest.raises(ValidationError):
+        GroomingClaimRequest(task_gid=_GID, fingerprint="B" * 64)
+    with pytest.raises(ValidationError):
+        GroomingClaimRequest(task_gid=_GID, fingerprint="b" * 63)
+
+
+def test_a_claim_already_held_is_an_answer_not_an_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from mini_app_polis.api.contract import GroomingClaimRequest, GroomingClaimResult
+
+    answer = {"task_gid": _GID, "fingerprint": "b" * 64, "claimed": False}
+    client, calls = _client(monkeypatch, {"data": answer, "meta": _META})
+
+    out = client.claim_grooming(
+        GroomingClaimRequest(task_gid=_GID, fingerprint="b" * 64)
+    )
+
+    assert calls == [
+        (
+            "POST",
+            "/v1/tasks/groomings/claims",
+            {"task_gid": _GID, "fingerprint": "b" * 64},
+        )
+    ]
+    assert isinstance(out, GroomingClaimResult)
+    assert out.claimed is False
+
+
+def test_releasing_a_claim_posts_the_same_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from mini_app_polis.api.contract import GroomingClaimReleased, GroomingClaimRequest
+
+    answer = {"task_gid": _GID, "fingerprint": "b" * 64, "released": True}
+    client, calls = _client(monkeypatch, {"data": answer, "meta": _META})
+
+    out = client.release_grooming_claim(
+        GroomingClaimRequest(task_gid=_GID, fingerprint="b" * 64)
+    )
+
+    assert calls == [
+        (
+            "POST",
+            "/v1/tasks/groomings/claims/release",
+            {"task_gid": _GID, "fingerprint": "b" * 64},
+        )
+    ]
+    assert isinstance(out, GroomingClaimReleased)
+    assert out.released is True
+
+
 _PROPOSAL = {
     "task_gid": "1219804023646894",
     "fingerprint": "a" * 64,
