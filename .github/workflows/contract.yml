@@ -4,7 +4,7 @@ name: Contract
 # mini_app_polis.api.contract, called against the development Kaiano API
 # through the same typed client methods the cogs use (TEST-016). The cogs
 # call the API through this library, so the suite lives here once rather
-# than in every cog (ADR-012).
+# than in every cog (ecosystem-standards ADR-0012).
 #
 # It writes to that API, so it runs one at a time and only ever with the
 # development contract-suite key — see contract/harness.py for the guards

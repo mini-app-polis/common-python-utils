@@ -1,4 +1,4 @@
-"""Page documents and the materialise job (wiki-curator-cog ADR-006)."""
+"""Page documents and the materialise job (wiki-curator-cog ADR-0006)."""
 
 from __future__ import annotations
 

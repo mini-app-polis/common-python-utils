@@ -1,4 +1,4 @@
-# ADR-002: Rename import namespace from kaiano to mini_app_polis
+# ADR-0002: Rename import namespace from kaiano to mini_app_polis
 
 Date: 2026-03-27
 
@@ -17,7 +17,7 @@ and tooling, the personal-name prefix became a poor fit:
 - New contributors and future readers would see `kaiano.*` imports
   without context for what the namespace meant.
 - The distribution had already been renamed to `common-python-utils`
-  (see ADR-001), so the `kaiano` import was the last remaining piece
+  (see ADR-0001), so the `kaiano` import was the last remaining piece
   of the old branding.
 
 The question was whether the break was worth the coordinated update
@@ -29,7 +29,7 @@ Rename the import namespace from `kaiano` to `mini_app_polis` in a
 single breaking v2.0.0 release. Every consumer updates imports from
 `from kaiano.x` to `from mini_app_polis.x` in lockstep.
 
-Distribution name remains `common-python-utils` (unchanged from ADR-001).
+Distribution name remains `common-python-utils` (unchanged from ADR-0001).
 
 ## Consequences
 
@@ -40,5 +40,5 @@ Distribution name remains `common-python-utils` (unchanged from ADR-001).
 - Older documentation, old commits, and external references to
   `kaiano.*` become dated. CHANGELOG and README cover the rename
   clearly enough that this is not a burden.
-- The split between distribution name and import name (ADR-001) remains.
+- The split between distribution name and import name (ADR-0001) remains.
   This ADR addresses only the import namespace.
