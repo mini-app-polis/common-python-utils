@@ -1,3 +1,11 @@
+## [6.22.3](https://github.com/mini-app-polis/common-python-utils/compare/v6.22.2...v6.22.3) (2026-10-25)
+
+
+### Bug Fixes
+
+* **deps:** bump the minor-and-patch group with 8 updates ([a418431](https://github.com/mini-app-polis/common-python-utils/commit/a4184311b3330a2e13f175eb1e8989b382a5f7cf))
+* **deps:** bump types-requests from 2.33.0.20260906 to 2.33.0.20261006 ([e3c6128](https://github.com/mini-app-polis/common-python-utils/commit/e3c61282f0242558ab1fe7aebbd8b31433d0e0af))
+
 ## [6.22.2](https://github.com/mini-app-polis/common-python-utils/compare/v6.22.1...v6.22.2) (2026-10-24)
 
 
