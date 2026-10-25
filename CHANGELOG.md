@@ -1,3 +1,10 @@
+# [6.26.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.25.0...v6.26.0) (2026-10-25)
+
+
+### Features
+
+* **contract:** add the rotation.job and rotation.sweep queue messages ([98933f1](https://github.com/mini-app-polis/common-python-utils/commit/98933f1777bdcaf80955047b5947228e2e1b8a50))
+
 # [6.25.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.24.0...v6.25.0) (2026-10-25)
 
 
