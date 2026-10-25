@@ -14,6 +14,8 @@ from mini_app_polis.api.contract import (
     EvaluationRepositoryMessage,
     JobMessage,
     QueueMessage,
+    RotationJobMessage,
+    RotationSweepMessage,
     TaskAgentResultMessage,
     TaskCreateMessage,
     TaskGroomMessage,
@@ -38,6 +40,8 @@ KINDS = [
     (TaskUpdateMessage, "task.update"),
     (TaskAgentResultMessage, "task.agent-result"),
     (TaskSweepMessage, "task.sweep"),
+    (RotationJobMessage, "rotation.job"),
+    (RotationSweepMessage, "rotation.sweep"),
 ]
 
 
@@ -169,3 +173,81 @@ def test_an_update_refuses_a_payload_without_its_key_or_comment(
 def test_an_update_refuses_a_payload_out_of_bounds(payload: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):
         ADAPTER.validate_python(_update_body(**payload))
+
+
+@pytest.mark.parametrize("config", ["prd", "dev"])
+def test_the_scheduled_sweep_body_is_a_rotation_sweep(config: str) -> None:
+    body = {"type": "rotation.sweep", "version": 1, "payload": {"config": config}}
+    message = ADAPTER.validate_python(body)
+    assert isinstance(message, RotationSweepMessage)
+    assert message.payload.config == config
+    assert message.model_dump(mode="json") == body
+
+
+def test_a_rotation_job_round_trips_through_the_union() -> None:
+    body = {
+        "type": "rotation.job",
+        "version": 1,
+        "payload": {"name": "TICK_SECRET", "config": "dev", "mode": "compromised"},
+    }
+    message = ADAPTER.validate_python(body)
+    assert isinstance(message, RotationJobMessage)
+    assert message.model_dump(mode="json") == body
+
+
+def test_rotation_messages_built_in_code_carry_their_type_and_version() -> None:
+    job = RotationJobMessage(
+        payload={"name": "TICK_SECRET", "config": "prd", "mode": "routine"}  # type: ignore[arg-type]
+    )
+    sweep = RotationSweepMessage(payload={"config": "dev"})  # type: ignore[arg-type]
+    assert job.model_dump(mode="json") == {
+        "type": "rotation.job",
+        "version": 1,
+        "payload": {"name": "TICK_SECRET", "config": "prd", "mode": "routine"},
+    }
+    assert sweep.model_dump(mode="json") == {
+        "type": "rotation.sweep",
+        "version": 1,
+        "payload": {"config": "dev"},
+    }
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"config": "dev", "mode": "routine"},
+        {"name": "TICK_SECRET", "mode": "routine"},
+        {"name": "TICK_SECRET", "config": "dev"},
+        {"name": "tick_secret", "config": "dev", "mode": "routine"},
+        {"name": "TICK SECRET", "config": "dev", "mode": "routine"},
+        {"name": "X" * 129, "config": "dev", "mode": "routine"},
+        {"name": "TICK_SECRET", "config": "stg", "mode": "routine"},
+        {"name": "TICK_SECRET", "config": "dev", "mode": "scheduled"},
+        {"name": "TICK_SECRET", "config": "dev", "mode": "routine", "value": "v"},
+    ],
+)
+def test_a_rotation_job_refuses_a_payload_out_of_shape(
+    payload: dict[str, Any],
+) -> None:
+    with pytest.raises(ValidationError):
+        ADAPTER.validate_python(
+            {"type": "rotation.job", "version": 1, "payload": payload}
+        )
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"type": "rotation.sweep", "version": 1},
+        {"type": "rotation.sweep", "version": 1, "payload": {}},
+        {"type": "rotation.sweep", "version": 1, "payload": {"config": "stg"}},
+        {
+            "type": "rotation.sweep",
+            "version": 1,
+            "payload": {"config": "prd", "name": "TICK_SECRET"},
+        },
+    ],
+)
+def test_a_rotation_sweep_refuses_a_body_out_of_shape(body: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        ADAPTER.validate_python(body)
