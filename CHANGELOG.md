@@ -1,3 +1,10 @@
+# [6.23.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.22.3...v6.23.0) (2026-10-25)
+
+
+### Features
+
+* **api:** grooming claim contract and claim_grooming / release_grooming_claim calls ([cb697cd](https://github.com/mini-app-polis/common-python-utils/commit/cb697cda6b20a443e0cccf72af3f0e4d7638c277))
+
 ## [6.22.3](https://github.com/mini-app-polis/common-python-utils/compare/v6.22.2...v6.22.3) (2026-10-25)
 
 
