@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 
 from .agent_runs import AgentRun
 from .groomings import GroomingJobRequest, GroomingProposal
-from .tasks import TaskCreateRequest
+from .tasks import TaskCreateRequest, TaskUpdateRequest
 from .wcs_wiki import WcsWikiJob
 
 #: The schema version every message kind is on today.
@@ -166,6 +166,12 @@ class TaskCreateMessage(QueueMessage[TaskCreateRequest]):
     type: Literal["task.create"] = "task.create"
 
 
+class TaskUpdateMessage(QueueMessage[TaskUpdateRequest]):
+    """``task.update`` on task-manager-cog's queue."""
+
+    type: Literal["task.update"] = "task.update"
+
+
 class TaskAgentResultMessage(QueueMessage[AgentRun]):
     """``task.agent-result`` on task-manager-cog's queue."""
 
@@ -199,6 +205,7 @@ JobMessage = Annotated[
     | TaskGroomMessage
     | TaskGroomProposalMessage
     | TaskCreateMessage
+    | TaskUpdateMessage
     | TaskAgentResultMessage
     | TaskSweepMessage,
     Field(discriminator="type"),
@@ -220,6 +227,7 @@ __all__ = [
     "TaskGroomProposalMessage",
     "TaskSweepMessage",
     "TaskSweepPayload",
+    "TaskUpdateMessage",
     "TranscriptionRunMessage",
     "TranscriptionRunPayload",
     "WikiJobMessage",

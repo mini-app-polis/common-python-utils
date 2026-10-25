@@ -89,6 +89,7 @@ from .queue import (
     TaskGroomProposalMessage,
     TaskSweepMessage,
     TaskSweepPayload,
+    TaskUpdateMessage,
     TranscriptionRunMessage,
     TranscriptionRunPayload,
     WikiJobMessage,
@@ -109,6 +110,7 @@ from .tasks import (
     TaskLink,
     TaskSection,
     TaskSource,
+    TaskUpdateRequest,
 )
 from .wcs import (
     WcsDrillPurposeItem,
@@ -241,6 +243,8 @@ __all__ = [
     "TaskSource",
     "TaskSweepMessage",
     "TaskSweepPayload",
+    "TaskUpdateMessage",
+    "TaskUpdateRequest",
     "TranscriptionRunAccepted",
     "TranscriptionRunMessage",
     "TranscriptionRunPayload",
