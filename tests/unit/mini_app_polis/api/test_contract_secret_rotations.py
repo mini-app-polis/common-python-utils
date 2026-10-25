@@ -32,7 +32,7 @@ def _event(**overrides: Any) -> dict[str, Any]:
         "config": "prd",
         "kind": "machine-key",
         "mode": "routine",
-        "actor": "secrets-rotator-cog",
+        "actor": "rotator-cog",
         "minted": _MINTED.isoformat(),
         "verification": "ok",
     }

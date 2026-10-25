@@ -20,10 +20,11 @@ from __future__ import annotations
 
 from typing import Annotated, Any, ClassVar, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .agent_runs import AgentRun
 from .groomings import GroomingJobRequest, GroomingProposal
+from .secret_rotations import RotationConfig, RotationRequest
 from .tasks import TaskCreateRequest, TaskUpdateRequest
 from .wcs_wiki import WcsWikiJob
 
@@ -195,6 +196,28 @@ class TaskSweepMessage(QueueMessage[TaskSweepPayload]):
     )
 
 
+class RotationJobMessage(QueueMessage[RotationRequest]):
+    """``rotation.job`` on rotator-cog's queue: rotate one secret in
+    one config, now."""
+
+    type: Literal["rotation.job"] = "rotation.job"
+
+
+class RotationSweepPayload(BaseModel):
+    """A scheduled sweep of one config: rotate every secret that is due."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    config: RotationConfig
+
+
+class RotationSweepMessage(QueueMessage[RotationSweepPayload]):
+    """``rotation.sweep`` on rotator-cog's queue, from its daily
+    schedule, once per config."""
+
+    type: Literal["rotation.sweep"] = "rotation.sweep"
+
+
 #: Every message kind, discriminated on ``type``.
 JobMessage = Annotated[
     TranscriptionRunMessage
@@ -207,7 +230,9 @@ JobMessage = Annotated[
     | TaskCreateMessage
     | TaskUpdateMessage
     | TaskAgentResultMessage
-    | TaskSweepMessage,
+    | TaskSweepMessage
+    | RotationJobMessage
+    | RotationSweepMessage,
     Field(discriminator="type"),
 ]
 
@@ -221,6 +246,9 @@ __all__ = [
     "EvaluationRepositoryPayload",
     "JobMessage",
     "QueueMessage",
+    "RotationJobMessage",
+    "RotationSweepMessage",
+    "RotationSweepPayload",
     "TaskAgentResultMessage",
     "TaskCreateMessage",
     "TaskGroomMessage",

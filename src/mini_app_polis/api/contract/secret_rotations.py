@@ -55,7 +55,7 @@ RotationVerification = Literal["ok", "failed"]
 #: name, never free text.
 _NAME = r"^[A-Z][A-Z0-9_]*$"
 
-#: Who rotated or asked: a machine by its name (``secrets-rotator-cog``:
+#: Who rotated or asked: a machine by its name (``rotator-cog``:
 #: lowercase words joined by hyphens, each starting with a letter) or a person
 #: by email.
 _ACTOR = (

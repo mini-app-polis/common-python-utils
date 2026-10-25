@@ -12,6 +12,8 @@ import pytest
 import mini_app_polis
 from mini_app_polis.api.contract import (
     DeejayRunMessage,
+    RotationJobMessage,
+    RotationSweepMessage,
     TaskGroomMessage,
     TaskSweepMessage,
     TranscriptionRunMessage,
@@ -155,6 +157,21 @@ def test_a_kind_with_nothing_to_carry_still_refuses_a_non_object_payload() -> No
     body = json.dumps({"type": "task.sweep", "version": 1, "payload": [1]})
     with pytest.raises(UnprocessableMessage, match="no payload object"):
         parse_message(body, TaskSweepMessage)
+
+
+def test_the_rotator_reads_its_scheduled_sweep() -> None:
+    body = json.dumps(
+        {"type": "rotation.sweep", "version": 1, "payload": {"config": "prd"}}
+    )
+    message = parse_message(body, RotationJobMessage, RotationSweepMessage)
+    assert isinstance(message, RotationSweepMessage)
+    assert message.payload.config == "prd"
+
+
+def test_a_rotation_sweep_without_its_config_is_unprocessable() -> None:
+    body = json.dumps({"type": "rotation.sweep", "version": 1})
+    with pytest.raises(UnprocessableMessage, match="no payload object"):
+        parse_message(body, RotationJobMessage, RotationSweepMessage)
 
 
 def test_needs_a_kind() -> None:
