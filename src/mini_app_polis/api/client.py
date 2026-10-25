@@ -88,6 +88,11 @@ from .contract import (
     PipelineEvaluationCreate,
     PipelineEvaluationItem,
     PipelineEvaluationWriteResult,
+    RotationConfig,
+    RotationEvent,
+    RotationEventCreate,
+    RotationRequest,
+    RotationRequestAccepted,
     SetListItem,
     SpotifyPlaylistsIngest,
     SpotifyPlaylistsIngestResponse,
@@ -778,6 +783,54 @@ class KaianoApiClient:
             list[PipelineEvaluationItem],
             self._call("list_evaluations", params=params),
         )
+
+    def record_rotation_event(self, payload: RotationEventCreate) -> RotationEvent:
+        """``POST /v1/secrets/rotation-events`` — record one rotation.
+
+        Keyed on name, config and minted: writing the same key again updates
+        the event, as when its old value is retired.
+        """
+        return cast(RotationEvent, self._call("record_rotation_event", payload))
+
+    def list_rotation_events(
+        self,
+        *,
+        name: str | None = None,
+        config: RotationConfig | None = None,
+        latest: bool | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[RotationEvent]:
+        """``GET /v1/secrets/rotation-events`` — events, newest minted first.
+
+        ``name`` and ``config`` narrow the list. ``latest=True`` returns only
+        the newest event for each name and config, which is what the daily
+        sweep reads. Unset filters are not sent, so the API's own defaults
+        apply.
+        """
+        params = {
+            key: value
+            for key, value in {
+                "name": name,
+                "config": config,
+                "latest": "true" if latest else None,
+                "limit": limit,
+                "offset": offset,
+            }.items()
+            if value is not None
+        }
+        return cast(
+            list[RotationEvent],
+            self._call("list_rotation_events", params=params or None),
+        )
+
+    def request_rotation(self, payload: RotationRequest) -> RotationRequestAccepted:
+        """``POST /v1/secrets/rotations`` — ask for one secret to be rotated now.
+
+        The API queues it for the rotator and answers 202; the rotation is
+        recorded as an event once it has run.
+        """
+        return cast(RotationRequestAccepted, self._call("request_rotation", payload))
 
     def send_notification(self, payload: NotifyRequest) -> NotificationResult:
         """``POST /v1/notify`` — one Discord message, typed.

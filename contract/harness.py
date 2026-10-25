@@ -80,6 +80,14 @@ NOT_EXERCISED: dict[str, str] = {
         "development has no queues: task-manager-dev-jobs.fifo is not "
         "provisioned, so the API cannot enqueue the result"
     ),
+    "record_rotation_event": (
+        "rotation events are the only record of what was rotated, and an "
+        "event cannot be deleted, so a fixture would stay in that record"
+    ),
+    "request_rotation": (
+        "development has no queues: the rotator's queue is not provisioned, "
+        "and a request that reached it would rotate a real secret"
+    ),
     "create_wcs_source": (
         "a source cannot be deleted and every source is in the unfiltered "
         "wiki export, so a fixture would stay in dev's wiki for good"
@@ -123,6 +131,15 @@ NOT_DEPLOYED: dict[str, str] = {
     ),
     "submit_agent_result": (
         "POST /v1/tasks/agent-runs/results is not on the development API yet"
+    ),
+    "record_rotation_event": (
+        "POST /v1/secrets/rotation-events is not on the development API yet"
+    ),
+    "list_rotation_events": (
+        "GET /v1/secrets/rotation-events is not on the development API yet"
+    ),
+    "request_rotation": (
+        "POST /v1/secrets/rotations is not on the development API yet"
     ),
 }
 
