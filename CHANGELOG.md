@@ -1,3 +1,10 @@
+# [6.24.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.23.0...v6.24.0) (2026-10-25)
+
+
+### Features
+
+* **contract:** add the task.update queue message ([be19602](https://github.com/mini-app-polis/common-python-utils/commit/be19602d1b59f3aec8994edb76940361e9786d38))
+
 # [6.23.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.22.3...v6.23.0) (2026-10-25)
 
 
