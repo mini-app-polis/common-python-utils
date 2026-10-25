@@ -1,3 +1,10 @@
+# [6.25.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.24.0...v6.25.0) (2026-10-25)
+
+
+### Features
+
+* **contract:** add secret rotation events and rotation requests ([41d4f66](https://github.com/mini-app-polis/common-python-utils/commit/41d4f666dbc9e91c45553fa96750099a77c6ec45))
+
 # [6.24.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.23.0...v6.24.0) (2026-10-25)
 
 
