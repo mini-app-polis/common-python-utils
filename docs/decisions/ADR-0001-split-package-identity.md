@@ -1,4 +1,4 @@
-# ADR-001: Split package identity
+# ADR-0001: Split package identity
 
 Date: 2026-03-27
 
@@ -49,6 +49,6 @@ This decision is codified as a PY-011 exemption in `evaluator.yaml`.
 - PY-011 cannot be cleanly audited for this repo; the exemption must be
   honored by every future version of the checker.
 - If ecosystem-wide rebranding happens, the rename cost is paid in one
-  breaking release rather than being amortized. ADR-002 covers one
+  breaking release rather than being amortized. ADR-0002 covers one
   prior such rename (`kaiano` -> `mini_app_polis`) and sets precedent
   for how to handle the next if it comes.

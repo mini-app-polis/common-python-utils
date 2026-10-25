@@ -1,10 +1,10 @@
-# ADR-003: Clerk M2M auth with opaque tokens
+# ADR-0003: Clerk M2M auth with opaque tokens
 
 Date: 2026-04-18
 
 ## Status
 
-Superseded (Sep 2026) by ecosystem-standards **ADR-008 — Named Machine
+Superseded (Sep 2026) by ecosystem-standards **ADR-0008 — Named Machine
 Keys as the Machine Identity**. Shipped across v2.2.0 - v3.x; removed in
 v4.0.0.
 
