@@ -3,7 +3,7 @@
 # `mini_app_polis` — renaming that would touch every call site in the fleet
 # for no gain. The namespace prefix is deliberate: this package is public on
 # PyPI, and `common-python-utils` in a public namespace is a name anyone
-# could reasonably want. See docs/pypi-package-publishing.md §6.
+# could reasonably want. See ecosystem-standards' playbooks/pypi-package-publishing.md §6.
 name = "miniapppolis-common-utils"
 dynamic = ["version"]
 description = "Common utility functions shared across the MiniAppPolis ecosystem."

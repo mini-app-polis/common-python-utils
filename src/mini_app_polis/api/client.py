@@ -93,6 +93,7 @@ from .contract import (
     RotationEventCreate,
     RotationRequest,
     RotationRequestAccepted,
+    SecretChange,
     SetListItem,
     SpotifyPlaylistsIngest,
     SpotifyPlaylistsIngestResponse,
@@ -822,6 +823,30 @@ class KaianoApiClient:
         return cast(
             list[RotationEvent],
             self._call("list_rotation_events", params=params or None),
+        )
+
+    def list_secret_changes(
+        self,
+        *,
+        config: RotationConfig | None = None,
+        since: dt.datetime | None = None,
+        until: dt.datetime | None = None,
+    ) -> list[SecretChange]:
+        """``GET /v1/secrets/changes`` — names Doppler reported changed, oldest first.
+
+        ``config`` narrows the list to one config. ``since`` and ``until``
+        bound when the API received the change (``since`` inclusive,
+        ``until`` exclusive). Unset filters are not sent.
+        Names and times only: Doppler's webhook carries no values.
+        """
+        params = {
+            key: value.isoformat() if isinstance(value, dt.datetime) else value
+            for key, value in {"config": config, "since": since, "until": until}.items()
+            if value is not None
+        }
+        return cast(
+            list[SecretChange],
+            self._call("list_secret_changes", params=params or None),
         )
 
     def request_rotation(self, payload: RotationRequest) -> RotationRequestAccepted:

@@ -141,6 +141,7 @@ NOT_DEPLOYED: dict[str, str] = {
     "request_rotation": (
         "POST /v1/secrets/rotations is not on the development API yet"
     ),
+    "list_secret_changes": "GET /v1/secrets/changes is not on the development API yet",
 }
 
 
