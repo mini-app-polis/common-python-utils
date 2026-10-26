@@ -113,6 +113,8 @@ from .secret_rotations import (
     RotationRequest,
     RotationRequestAccepted,
     RotationVerification,
+    SecretChange,
+    SecretChangeKind,
 )
 from .tasks import (
     GIVEN_ID_SOURCES,
@@ -250,6 +252,8 @@ __all__ = [
     "RotationSweepMessage",
     "RotationSweepPayload",
     "RotationVerification",
+    "SecretChange",
+    "SecretChangeKind",
     "SetListItem",
     "SpotifyPlaylistIngest",
     "SpotifyPlaylistsIngest",

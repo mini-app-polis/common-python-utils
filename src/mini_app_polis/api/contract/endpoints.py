@@ -64,6 +64,7 @@ from .secret_rotations import (
     RotationEventCreate,
     RotationRequest,
     RotationRequestAccepted,
+    SecretChange,
 )
 from .tasks import TaskCreateAccepted, TaskCreateRequest
 from .wcs import (
@@ -424,6 +425,14 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=RotationRequest,
         response=RotationRequestAccepted,
         scope="secrets.rotations.create",
+    ),
+    Endpoint(
+        name="list_secret_changes",
+        method="GET",
+        path="/v1/secrets/changes",
+        request=None,
+        response=list[SecretChange],
+        scope="secrets.changes.read",
     ),
     Endpoint(
         name="send_notification",

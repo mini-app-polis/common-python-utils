@@ -10,6 +10,7 @@ is due.
     POST /v1/secrets/rotation-events   record one rotation, or update it
     GET  /v1/secrets/rotation-events   events, newest first, by secret and config
     POST /v1/secrets/rotations         ask for one secret to be rotated now
+    GET  /v1/secrets/changes           names Doppler reported changed, oldest first
 
 An event is keyed on its secret, its config and when the new value was
 minted. Writing the same key again updates that event: the rotator writes it
@@ -149,3 +150,27 @@ class RotationRequestAccepted(BaseModel):
     message_id: str = Field(..., max_length=100)
     name: str = Field(..., max_length=128, pattern=_NAME)
     config: RotationConfig
+
+
+#: What Doppler reported happened to a secret's name in a config.
+SecretChangeKind = Literal["added", "removed", "updated"]
+
+
+class SecretChange(BaseModel):
+    """One secret name Doppler reported changed in one config.
+
+    Doppler's ``config.secrets.update`` webhook lists the names added,
+    removed and updated, never values; the API stores one change per name.
+    The rotator's sweep compares changes with rotation events, so a value
+    changed outside the rotation process is found. Tolerates fields a newer
+    API adds.
+    """
+
+    name: str = Field(..., min_length=1, max_length=128, pattern=_NAME)
+    config: RotationConfig
+    change: SecretChangeKind
+    #: When the API received Doppler's webhook.
+    changed_at: datetime
+    #: The stored webhook delivery the change came from; several names share
+    #: one when they changed together.
+    received_id: str = Field(..., max_length=36, pattern=_EVENT_ID)

@@ -18,6 +18,7 @@ from mini_app_polis.api.contract import (
     RotationEventCreate,
     RotationRequest,
     RotationRequestAccepted,
+    SecretChange,
     secret_rotations,
 )
 
@@ -66,6 +67,7 @@ def test_the_routes_and_their_scopes() -> None:
             "record_rotation_event",
             "list_rotation_events",
             "request_rotation",
+            "list_secret_changes",
         )
         for e in [ENDPOINTS_BY_NAME[name]]
     }
@@ -87,6 +89,12 @@ def test_the_routes_and_their_scopes() -> None:
             "/v1/secrets/rotations",
             RotationRequest,
             "secrets.rotations.create",
+        ),
+        "list_secret_changes": (
+            "GET",
+            "/v1/secrets/changes",
+            None,
+            "secrets.changes.read",
         ),
     }
 
@@ -265,6 +273,77 @@ def test_requesting_a_rotation_posts_name_config_and_mode(
     assert out.message_id == "m-1"
 
 
+# ── Secret changes ────────────────────────────────────────────────────────
+
+
+def _change(**overrides: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "name": "OPENAI_API_KEY",
+        "config": "dev",
+        "change": "updated",
+        "changed_at": _MINTED.isoformat(),
+        "received_id": _EVENT_ID,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_a_change_names_a_secret_and_when_doppler_reported_it() -> None:
+    change = SecretChange.model_validate(_change())
+    assert (change.name, change.config, change.change) == (
+        "OPENAI_API_KEY",
+        "dev",
+        "updated",
+    )
+    assert change.changed_at == _MINTED
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("change", "rotated"),
+        ("config", "stg"),
+        ("name", "openai key"),
+        ("received_id", "delivery-1"),
+    ],
+)
+def test_a_change_refuses_what_is_not_its_shape(field: str, value: str) -> None:
+    with pytest.raises(ValidationError):
+        SecretChange.model_validate(_change(**{field: value}))
+
+
+def test_a_change_tolerates_fields_a_newer_api_adds() -> None:
+    assert SecretChange.model_validate(_change(source="doppler")).name == (
+        "OPENAI_API_KEY"
+    )
+
+
+def test_listing_changes_sends_only_the_filters_given(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, calls = _client(monkeypatch, {"data": [_change()], "meta": _META})
+    changes = client.list_secret_changes(config="dev")
+    client.list_secret_changes()
+    client.list_secret_changes(
+        config="prd", since=_MINTED, until=_MINTED + timedelta(days=1)
+    )
+
+    assert changes == [SecretChange.model_validate(_change())]
+    assert calls == [
+        ("GET", "/v1/secrets/changes", {"config": "dev"}),
+        ("GET", "/v1/secrets/changes", None),
+        (
+            "GET",
+            "/v1/secrets/changes",
+            {
+                "config": "prd",
+                "since": _MINTED.isoformat(),
+                "until": (_MINTED + timedelta(days=1)).isoformat(),
+            },
+        ),
+    ]
+
+
 def test_a_request_does_not_say_who_asked() -> None:
     # The person asking is the authenticated caller; a body cannot claim one.
     with pytest.raises(ValidationError):
@@ -342,6 +421,7 @@ def test_the_models_checked_are_every_model_in_the_contract() -> None:
         RotationEventCreate,
         RotationRequest,
         RotationRequestAccepted,
+        SecretChange,
     }
 
 
