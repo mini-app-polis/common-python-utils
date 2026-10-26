@@ -1,3 +1,10 @@
+# [6.28.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.27.0...v6.28.0) (2026-10-26)
+
+
+### Features
+
+* **contract:** add verification unchecked for rotations written with no automatic check ([cb5ce82](https://github.com/mini-app-polis/common-python-utils/commit/cb5ce82ab109f9aa64e6a925719e12c94eb142fe))
+
 # [6.27.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.26.0...v6.27.0) (2026-10-26)
 
 
