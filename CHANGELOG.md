@@ -1,3 +1,10 @@
+# [6.30.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.29.0...v6.30.0) (2026-10-26)
+
+
+### Features
+
+* **contract:** add secret changes and a client method to list them ([f4dc7e1](https://github.com/mini-app-polis/common-python-utils/commit/f4dc7e1e54aa1fef2f9f3d9df8e500d16288cda3))
+
 # [6.29.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.28.0...v6.29.0) (2026-10-26)
 
 
