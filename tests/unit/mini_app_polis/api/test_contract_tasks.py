@@ -81,6 +81,25 @@ def test_detected_problems_are_minted_sources(source: str) -> None:
     assert request.id is None
 
 
+def test_a_due_secret_rotation_is_a_minted_source() -> None:
+    request = TaskCreateRequest.model_validate(
+        _request(
+            source="secret-rotation",
+            external_id="secret-rotation.prd.BREVO_API_KEY.2026-10",
+        )
+    )
+    assert request.source == "secret-rotation"
+    assert request.id is None
+    with pytest.raises(ValidationError, match="minted"):
+        TaskCreateRequest.model_validate(
+            _request(
+                source="secret-rotation",
+                external_id="secret-rotation.prd.BREVO_API_KEY.2026-10",
+                id="ROT-1",
+            )
+        )
+
+
 def test_template_fields_are_optional_and_blank_by_default() -> None:
     draft = TaskDraft(title="t")
     assert (draft.done_when, draft.constraints, draft.effort) == (None, None, None)
