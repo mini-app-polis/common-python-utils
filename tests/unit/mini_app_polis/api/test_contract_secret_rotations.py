@@ -123,6 +123,30 @@ def test_a_verified_event_has_no_failure_reason() -> None:
         RotationEventCreate.model_validate(_event(verification_reason="fine"))
 
 
+def test_an_unchecked_rotation_is_recorded_without_a_reason() -> None:
+    event = RotationEventCreate.model_validate(_event(verification="unchecked"))
+    assert event.verification == "unchecked"
+    assert event.verification_reason is None
+
+
+def test_an_unchecked_rotation_has_no_failure_reason() -> None:
+    with pytest.raises(ValidationError):
+        RotationEventCreate.model_validate(
+            _event(verification="unchecked", verification_reason="no check")
+        )
+
+
+def test_a_stored_event_can_be_unchecked() -> None:
+    stored = RotationEvent.model_validate(
+        {
+            **_event(verification="unchecked"),
+            "id": _EVENT_ID,
+            "recorded_at": _MINTED.isoformat(),
+        }
+    )
+    assert stored.verification == "unchecked"
+
+
 def test_only_an_aws_rotation_names_a_key_id() -> None:
     with pytest.raises(ValidationError, match="no AWS key id"):
         RotationEventCreate.model_validate(_event(aws_key_last4="7QXZ"))

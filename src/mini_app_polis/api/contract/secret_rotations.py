@@ -16,9 +16,12 @@ minted. Writing the same key again updates that event: the rotator writes it
 once the new value has been verified (or has failed verification), and again
 with ``retired`` once the old value is gone.
 
-A rotation succeeds only when its new value is verified. Writing the value to
-Doppler is not success, so an event always carries the verification result,
-and one that failed says so.
+An event always carries what is known about the new value. ``ok``: a check
+proved it works. ``failed``: the check did not pass, or did not run when one
+exists, and the event says why. ``unchecked``: the value was written through
+the rotation process and no automatic check exists for that secret. An
+unchecked rotation counts as rotated; a broken value shows up in the
+failures of whatever uses it.
 
 **No model here carries a secret value.** Names, configs, kinds, people and
 times only. Every string is either one of a fixed set, shaped by a pattern a
@@ -48,8 +51,11 @@ RotationMode = Literal["routine", "compromised"]
 #: The Doppler config the secret was rotated in.
 RotationConfig = Literal["prd", "dev"]
 
-#: Whether the new value was verified. Only ``ok`` is a successful rotation.
-RotationVerification = Literal["ok", "failed"]
+#: What is known about the new value. ``ok``: a check proved it works.
+#: ``failed``: it did not. ``unchecked``: written through the rotation
+#: process, and no automatic check exists for the secret. ``ok`` and
+#: ``unchecked`` both count as rotated.
+RotationVerification = Literal["ok", "failed", "unchecked"]
 
 #: A secret's name in the inventory and in Doppler: an environment variable
 #: name, never free text.
@@ -104,8 +110,8 @@ class RotationEventCreate(_RotationEventFields):
 
     @model_validator(mode="after")
     def _consistent(self) -> RotationEventCreate:
-        if self.verification == "ok" and self.verification_reason is not None:
-            raise ValueError("a verified rotation has no failure reason")
+        if self.verification != "failed" and self.verification_reason is not None:
+            raise ValueError("a rotation that did not fail has no failure reason")
         if self.aws_key_last4 is not None and self.kind != "aws-access-key":
             raise ValueError(f"a {self.kind} rotation has no AWS key id")
         if self.retired is not None and self.retired < self.minted:
