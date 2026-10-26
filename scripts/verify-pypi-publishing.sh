@@ -81,5 +81,5 @@ then
   exit 0
 fi
 
-echo "::error::PyPI refused to mint a publishing token (HTTP ${status}), so this release was stopped before the version was bumped. Check the pending publisher: PyPI project name, owner, repository name, workflow filename (ci.yml) and environment must all match exactly. See docs/pypi-package-publishing.md §3." >&2
+echo "::error::PyPI refused to mint a publishing token (HTTP ${status}), so this release was stopped before the version was bumped. Check the pending publisher: PyPI project name, owner, repository name, workflow filename (ci.yml) and environment must all match exactly. See ecosystem-standards' playbooks/pypi-package-publishing.md §3." >&2
 exit 1
