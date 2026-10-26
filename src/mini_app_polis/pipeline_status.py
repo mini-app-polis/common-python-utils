@@ -932,7 +932,7 @@ class RunReport:
     through return values, and — used as a context manager — no send call
     to remember. One verb, at the point where the problem is known.
 
-    Four verbs, mapped onto the severity vocabulary this module already
+    Five verbs, mapped onto the severity vocabulary this module already
     documents rather than a new one:
 
     ``ok(n)``
@@ -944,6 +944,11 @@ class RunReport:
         not because anyone needs to act on them.
     ``issue(reason, item, detail=...)``
         Something a human should look at. Any issue makes the run WARN.
+    ``notice(reason, item)``
+        Something worth naming that is not a problem with this run: "task
+        newly held". Named like an issue and makes the run ``notable``, but
+        never raises severity, so a standing condition can be reported when
+        it changes without turning every run that sees it into a WARN.
 
     ``created(kind, item)`` / ``updated(...)`` / ``removed(...)``
         Something now exists, differs, or is gone outside this process.
@@ -991,6 +996,7 @@ class RunReport:
     processed: int = 0
     notes: Counter = field(default_factory=Counter)
     issues: Counter = field(default_factory=Counter)
+    notices: Counter = field(default_factory=Counter)
     examples: dict[str, list[str]] = field(default_factory=dict)
     counters: dict[str, Any] = field(default_factory=dict)
     outcomes: list[Outcome] = field(default_factory=list)
@@ -1016,6 +1022,11 @@ class RunReport:
         """Record something a human should look at. Makes the run WARN."""
         self.issues[reason] += 1
         self._remember(reason, item if detail is None else f"{item or ''} ({detail})")
+
+    def notice(self, reason: str, item: str | None = None) -> None:
+        """Record something worth naming. Makes the run notable; never WARN."""
+        self.notices[reason] += 1
+        self._remember(reason, item)
 
     def count(self, key: str, value: Any) -> None:
         """Carry a domain counter that has no bearing on severity."""
@@ -1099,6 +1110,8 @@ class RunReport:
             parts.append(f"processed={self.processed}")
         for reason, n in sorted(self.issues.items()):
             parts.append(f"{reason}={n}")
+        for reason, n in sorted(self.notices.items()):
+            parts.append(f"{reason}={n}")
         for reason, n in sorted(self.notes.items()):
             parts.append(f"{reason}={n}")
         return ", ".join(parts)
@@ -1109,9 +1122,10 @@ class RunReport:
         Outcomes come before problems because a clean run has only
         outcomes, and that is the whole message on a good day.
 
-        Among the problems, only flagged reasons name names. An ordinary
-        skip is counted and left at that — naming every already-processed
-        file is how the interesting line ends up below the fold.
+        Only notices and flagged reasons name names, notices first. An
+        ordinary skip is counted and left at that — naming every
+        already-processed file is how the interesting line ends up below
+        the fold.
         """
         tally = self.tally()
         took = f"Run complete in {format_duration(self.duration)}"
@@ -1126,13 +1140,14 @@ class RunReport:
 
         lines = [body]
         lines.extend(self.outcome_lines())
-        for reason in sorted(self.issues):
-            named = self.examples.get(reason) or []
-            if not named:
-                continue
-            more = self.issues[reason] - len(named)
-            suffix = f", +{more} more" if more > 0 else ""
-            lines.append(f"{reason}: {', '.join(named)}{suffix}")
+        for counted in (self.notices, self.issues):
+            for reason in sorted(counted):
+                named = self.examples.get(reason) or []
+                if not named:
+                    continue
+                more = counted[reason] - len(named)
+                suffix = f", +{more} more" if more > 0 else ""
+                lines.append(f"{reason}: {', '.join(named)}{suffix}")
         return "\n".join(lines)
 
     # -- delivery ----------------------------------------------------------
@@ -1166,7 +1181,7 @@ class RunReport:
             production_only=self.production_only,
             source=source,
             suggestion=suggestion,
-            notable=notable or bool(self.outcomes),
+            notable=notable or bool(self.outcomes) or bool(self.notices),
             run_id=self.run_id,
             version=self.version,
             **self.counters,
