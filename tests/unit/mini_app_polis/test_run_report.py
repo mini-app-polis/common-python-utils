@@ -55,6 +55,12 @@ def test_one_issue_makes_the_run_warn():
     assert r.severity == "WARN"
 
 
+def test_a_notice_does_not_raise_severity():
+    r = ps.RunReport(flow_name="f", repo="c")
+    r.notice("task newly held", "MINI-2")
+    assert r.severity == "SUCCESS"
+
+
 def test_domain_counters_do_not_raise_severity():
     r = ps.RunReport(flow_name="f", repo="c")
     r.count("tracks", 412)
@@ -110,6 +116,18 @@ def test_only_flagged_reasons_name_names():
     text = r.text()
     assert "invalid_filename: bad.txt" in text
     assert "boring.txt" not in text
+
+
+def test_a_notice_names_its_items_before_the_issues():
+    r = ps.RunReport(flow_name="f", repo="c", duration_sec=0.4)
+    r.issue("invalid_filename", "bad.txt")
+    r.notice("task newly held", "MINI-2")
+    r.notice("task newly held", "MINI-3")
+    assert r.text().splitlines() == [
+        "Run complete in 0.40s — invalid_filename=1, task newly held=2.",
+        "task newly held: MINI-2, MINI-3",
+        "invalid_filename: bad.txt",
+    ]
 
 
 def test_examples_are_capped_and_the_rest_counted():
@@ -288,6 +306,14 @@ def test_a_run_with_nothing_to_show_is_still_the_caller_s_call(sent):
     r2 = ps.RunReport(flow_name="f", repo="c")
     r2.send(notable=True)
     assert sent[1]["notable"] is True
+
+
+def test_a_notice_makes_a_success_run_notable(sent):
+    r = ps.RunReport(flow_name="f", repo="c")
+    r.notice("task newly held", "MINI-2")
+    r.send()
+    assert sent[0]["severity"] == "SUCCESS"
+    assert sent[0]["notable"] is True
 
 
 def test_counted_work_alone_is_not_an_outcome(sent):
