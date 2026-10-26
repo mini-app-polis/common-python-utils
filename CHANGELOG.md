@@ -1,3 +1,10 @@
+# [6.27.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.26.0...v6.27.0) (2026-10-26)
+
+
+### Features
+
+* **pipeline_status:** add RunReport.notice, which names items and makes a run notable without raising severity ([d628d73](https://github.com/mini-app-polis/common-python-utils/commit/d628d737a308f983379985bc420935dbc1454b6c))
+
 # [6.26.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.25.0...v6.26.0) (2026-10-25)
 
 
