@@ -26,6 +26,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 #: ``ci``, ``cog-run``, ``conformance`` and ``api-fault`` are problems the
 #: fleet detected: a signal that did not heal on its own and was escalated to
 #: a task. Their requests come from the API's signal engine.
+#:
+#: ``secret-rotation`` is a manual secret that is due: the secrets rotator
+#: asks for a task telling a person how to rotate it.
 TaskSource = Literal[
     "voicenote",
     "github-issue",
@@ -33,6 +36,7 @@ TaskSource = Literal[
     "cog-run",
     "conformance",
     "api-fault",
+    "secret-rotation",
 ]
 
 #: A task's size, as the board's template writes it.
