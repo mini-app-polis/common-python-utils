@@ -1,3 +1,10 @@
+# [6.29.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.28.0...v6.29.0) (2026-10-26)
+
+
+### Features
+
+* **contract:** add the secret-rotation task source ([04afeef](https://github.com/mini-app-polis/common-python-utils/commit/04afeefdf94afdcb5fa684b32addbb0650c1170c))
+
 # [6.28.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.27.0...v6.28.0) (2026-10-26)
 
 
