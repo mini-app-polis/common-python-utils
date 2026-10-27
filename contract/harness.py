@@ -88,6 +88,41 @@ NOT_EXERCISED: dict[str, str] = {
         "development has no queues: the rotator's queue is not provisioned, "
         "and a request that reached it would rotate a real secret"
     ),
+    # Task-manager-cog's and the groomer's records, which the board is run
+    # from. The contract-suite machine holds no tasks.* scope, and a fixture
+    # in them would be read as a real grooming, claim or agent run.
+    "list_groomings": "the contract-suite machine holds no tasks.groomings scope",
+    "record_grooming": (
+        "the contract-suite machine holds no tasks.groomings scope, and a "
+        "fixture grooming record would be read as a real one"
+    ),
+    "record_grooming_run": (
+        "the contract-suite machine holds no tasks.groomings scope, and a "
+        "fixture run would count toward the groomer's spend"
+    ),
+    "grooming_spend": "the contract-suite machine holds no tasks.groomings scope",
+    "claim_grooming": (
+        "the contract-suite machine holds no tasks.groomings scope, and a "
+        "fixture claim would hold a task away from the groomer"
+    ),
+    "release_grooming_claim": (
+        "the contract-suite machine holds no tasks.groomings scope"
+    ),
+    "record_agent_run": (
+        "the contract-suite machine holds no tasks.agent-runs scope, and a "
+        "fixture run would count toward the agent's spend"
+    ),
+    "list_agent_runs": "the contract-suite machine holds no tasks.agent-runs scope",
+    "agent_spend": "the contract-suite machine holds no tasks.agent-runs scope",
+    "fail_agent_run": (
+        "the contract-suite machine holds no tasks.agent-runs scope, and a "
+        "failure is reported to the board"
+    ),
+    # The secrets record is the rotator's and the owner's alone.
+    "list_rotation_events": (
+        "the contract-suite machine holds no secrets.rotation-events scope"
+    ),
+    "list_secret_changes": "the contract-suite machine holds no secrets.changes scope",
     "create_wcs_source": (
         "a source cannot be deleted and every source is in the unfiltered "
         "wiki export, so a fixture would stay in dev's wiki for good"
@@ -101,48 +136,7 @@ NOT_EXERCISED: dict[str, str] = {
 #: 404, not the 401 the access check expects. Listed here, an endpoint is
 #: neither probed nor exercised; take it off once the development API has it,
 #: and exercise it in test_contract.py.
-NOT_DEPLOYED: dict[str, str] = {
-    "request_task": "POST /v1/tasks is not on the development API yet",
-    "list_groomings": "GET /v1/tasks/groomings is not on the development API yet",
-    "record_grooming": "POST /v1/tasks/groomings is not on the development API yet",
-    "record_grooming_run": (
-        "POST /v1/tasks/groomings/runs is not on the development API yet"
-    ),
-    "grooming_spend": (
-        "GET /v1/tasks/groomings/spend is not on the development API yet"
-    ),
-    "request_grooming": (
-        "POST /v1/tasks/groomings/jobs is not on the development API yet"
-    ),
-    "submit_grooming_proposal": (
-        "POST /v1/tasks/groomings/proposals is not on the development API yet"
-    ),
-    "claim_grooming": (
-        "POST /v1/tasks/groomings/claims is not on the development API yet"
-    ),
-    "release_grooming_claim": (
-        "POST /v1/tasks/groomings/claims/release is not on the development API yet"
-    ),
-    "record_agent_run": "POST /v1/tasks/agent-runs is not on the development API yet",
-    "list_agent_runs": "GET /v1/tasks/agent-runs is not on the development API yet",
-    "agent_spend": "GET /v1/tasks/agent-runs/spend is not on the development API yet",
-    "fail_agent_run": (
-        "POST /v1/tasks/agent-runs/failures is not on the development API yet"
-    ),
-    "submit_agent_result": (
-        "POST /v1/tasks/agent-runs/results is not on the development API yet"
-    ),
-    "record_rotation_event": (
-        "POST /v1/secrets/rotation-events is not on the development API yet"
-    ),
-    "list_rotation_events": (
-        "GET /v1/secrets/rotation-events is not on the development API yet"
-    ),
-    "request_rotation": (
-        "POST /v1/secrets/rotations is not on the development API yet"
-    ),
-    "list_secret_changes": "GET /v1/secrets/changes is not on the development API yet",
-}
+NOT_DEPLOYED: dict[str, str] = {}
 
 
 class ContractConfigError(RuntimeError):
