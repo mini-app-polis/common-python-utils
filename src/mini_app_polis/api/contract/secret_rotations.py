@@ -40,9 +40,13 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 #: How a secret is minted and checked, as the secrets inventory names it.
+#: ``provider-api``: minted by the provider, through its API, by the rotator
+#: (a ``manual`` secret is minted in the provider's console by a person).
 #: Secrets the inventory lists as never rotated have no events, so their
 #: kind is not here.
-RotationKind = Literal["machine-key", "generated", "aws-access-key", "manual"]
+RotationKind = Literal[
+    "machine-key", "generated", "aws-access-key", "manual", "provider-api"
+]
 
 #: Why a rotation ran. ``routine``: it was due, and the old value stays valid
 #: beside the new one until it is retired. ``compromised``: the old value may

@@ -5,8 +5,8 @@ Two jobs, both small.
 **Checking a repo's contract against Doppler.** Every repo lists the names it
 reads in ``.env.example``: an uncommented ``NAME=`` line is required, a
 commented ``# NAME=`` line is optional (the code has a default). The repo's
-``doppler.yaml`` pins it to a project, and local runs always use the shared
-``dev`` config, never ``prd``. ``check-doppler-keys``, a console script this
+``doppler.yaml`` pins it to its own project, and local runs use that
+project's ``dev`` config unless a command names ``prd``. ``check-doppler-keys``, a console script this
 package installs, compares the two and lists what ``dev`` is missing::
 
     uv run check-doppler-keys

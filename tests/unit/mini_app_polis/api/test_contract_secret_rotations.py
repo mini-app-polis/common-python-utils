@@ -118,6 +118,17 @@ def test_an_event_carries_what_a_rotation_did() -> None:
     assert event.aws_key_last4 == "7QXZ"
 
 
+def test_a_secret_the_rotator_mints_through_a_provider_api_is_a_kind() -> None:
+    event = RotationEventCreate.model_validate(
+        _event(
+            kind="provider-api",
+            name="TURNSTILE_SECRET_KEY",
+            retired=(_MINTED + timedelta(hours=2)).isoformat(),
+        )
+    )
+    assert event.kind == "provider-api"
+
+
 def test_a_failed_verification_says_why() -> None:
     event = RotationEventCreate.model_validate(
         _event(verification="failed", verification_reason="whoami answered 401")
