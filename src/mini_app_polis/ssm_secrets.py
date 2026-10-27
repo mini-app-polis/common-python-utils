@@ -2,16 +2,16 @@
 
 Why this exists. The Lambda cogs used to receive their secrets as Terraform
 variables, which put every one of them in plaintext Terraform state and in
-every plan. Now Doppler syncs the ecosystem's ``prd`` config into Parameter
-Store under one prefix, Terraform declares *which* parameters each worker
-may read — names only, never values — and the worker loads them itself at
-cold start. Nothing secret passes through Terraform.
+every plan. Now each worker has a Doppler config of its own, synced into
+Parameter Store under a prefix of its own, Terraform declares *which*
+parameters the worker may read — names only, never values — and the worker
+loads them itself at cold start. Nothing secret passes through Terraform.
 
 The worker's environment, set by Terraform, says what to load:
 
 ``SSM_PREFIX``
-    The path Doppler syncs to, with leading and trailing slashes:
-    ``/mini-app-polis/prd/``.
+    The path Doppler syncs the worker's config to, with leading and trailing
+    slashes: ``/mini-app-polis/<repository>/prd/``.
 ``SSM_PARAMETERS``
     JSON object, environment variable name → parameter name under the
     prefix. Every one must exist; a missing one fails the cold start.
@@ -111,7 +111,7 @@ def load_secrets(*, client: Any | None = None, refresh: bool = False) -> list[st
     if not (prefix.startswith("/") and prefix.endswith("/") and len(prefix) > 1):
         raise ValueError(
             f"{PREFIX_VAR} must be a path with leading and trailing slashes, "
-            f"such as /mini-app-polis/prd/; got {prefix!r}"
+            f"such as /mini-app-polis/deejay-cog/prd/; got {prefix!r}"
         )
 
     if client is None:
