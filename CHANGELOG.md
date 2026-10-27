@@ -1,3 +1,10 @@
+# [6.31.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.30.0...v6.31.0) (2026-10-27)
+
+
+### Features
+
+* **contract:** add the provider-api rotation kind ([1f19eaa](https://github.com/mini-app-polis/common-python-utils/commit/1f19eaa276c0a24279460f575161cd6a4612f445))
+
 # [6.30.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.29.0...v6.30.0) (2026-10-26)
 
 
