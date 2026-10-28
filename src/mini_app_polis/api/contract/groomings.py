@@ -40,6 +40,13 @@ as ``budget_spent_fingerprint``. The sweep sends a task that is not ready
 again when that equals the task's current fingerprint, so content the budget
 stopped is groomed once there is budget, without waiting for a change. The
 API clears the stop when a later claim for that task and content is won.
+
+A grooming can also be lost for good: a run that crashes, or a proposal that
+never reaches the board. The task manager records when it sent content for
+grooming (``groom_sent_at``) and how many times it has sent that content
+without a grooming coming back (``groom_attempts``). Writing the record of an
+applied grooming clears both. A send still outstanding after a while is sent
+again, up to a limit the task manager sets.
 """
 
 from __future__ import annotations
@@ -92,6 +99,13 @@ class _GroomingFields(BaseModel):
     #: grooming wrote. A task is sent again only once its content differs
     #: from this, so it is groomed once per change and never loops.
     groomed_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    #: When the content in ``groomed_fingerprint`` was last sent for grooming,
+    #: while no grooming of it has come back. None once one has, or when the
+    #: content was never sent.
+    groom_sent_at: datetime | None = None
+    #: How many times that content has been sent with no grooming coming back.
+    #: 0 once one has.
+    groom_attempts: int = Field(default=0, ge=0)
 
 
 class GroomingRecordWrite(_GroomingFields):
