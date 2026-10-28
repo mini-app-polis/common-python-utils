@@ -1,3 +1,10 @@
+# [6.32.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.31.0...v6.32.0) (2026-10-28)
+
+
+### Features
+
+* **api:** grooming budget-spent report contract and mark_grooming_budget_spent call ([c124524](https://github.com/mini-app-polis/common-python-utils/commit/c1245243a5e803acb5786e8cb92ef49c8650dda4))
+
 # [6.31.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.30.0...v6.31.0) (2026-10-27)
 
 
