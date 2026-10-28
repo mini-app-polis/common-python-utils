@@ -1,3 +1,10 @@
+# [6.33.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.32.0...v6.33.0) (2026-10-28)
+
+
+### Features
+
+* **contract:** record when a grooming was sent and how many sends had nothing back ([3dfe2aa](https://github.com/mini-app-polis/common-python-utils/commit/3dfe2aadf1967183f1053f752bdc6d8a0fe8cc86))
+
 # [6.32.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.31.0...v6.32.0) (2026-10-28)
 
 
