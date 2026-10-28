@@ -511,6 +511,26 @@ def test_a_grooming_record_carries_a_budget_stop_only_when_read() -> None:
     assert "budget_spent_fingerprint" not in GroomingRecordWrite.model_fields
 
 
+def test_a_grooming_record_tracks_a_send_with_no_grooming_back() -> None:
+    from mini_app_polis.api.contract import GroomingRecord, GroomingRecordWrite
+
+    written = {"task_gid": _GID, "fingerprint": "a" * 64, "outcome": "not_ready"}
+    plain = GroomingRecordWrite.model_validate(written)
+    assert (plain.groom_sent_at, plain.groom_attempts) == (None, 0)
+    sent = GroomingRecordWrite.model_validate(
+        {**written, "groom_sent_at": "2026-10-28T09:15:00Z", "groom_attempts": 2}
+    )
+    assert sent.groom_attempts == 2
+    assert sent.groom_sent_at is not None
+    with pytest.raises(ValidationError):
+        GroomingRecordWrite.model_validate({**written, "groom_attempts": -1})
+    # A record from an API that does not store them yet reads as never sent.
+    stored = GroomingRecord.model_validate(
+        {**written, "updated_at": "2026-10-28T09:15:00Z"}
+    )
+    assert (stored.groom_sent_at, stored.groom_attempts) == (None, 0)
+
+
 _PROPOSAL = {
     "task_gid": "1219804023646894",
     "fingerprint": "a" * 64,

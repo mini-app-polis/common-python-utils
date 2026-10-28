@@ -126,6 +126,12 @@ The sweep sends a task that is not ready again when that equals the task's
 current fingerprint, and the API clears the stop when a later claim for that
 task and content is won. The sweep's `GroomingRecordWrite` never carries it.
 
+**Lost groomings.** A `GroomingRecord` also says when its content was last
+sent for grooming with no grooming back yet (`groom_sent_at`) and how many
+times that content has been sent so (`groom_attempts`). The task manager sets
+them when it sends and clears them when it writes an applied grooming, so it
+can send again content whose grooming was lost.
+
 **Contract suite.** `contract/` checks the catalog against the deployed
 development API (TEST-016). It calls every endpoint through the typed methods
 and fails if an endpoint is neither exercised nor listed in
