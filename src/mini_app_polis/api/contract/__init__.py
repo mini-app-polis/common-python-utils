@@ -51,6 +51,8 @@ from .evaluations import (
 )
 from .groomings import (
     GROOMING_MAX_CHILDREN,
+    GroomingBudgetSpentMarked,
+    GroomingBudgetSpentRequest,
     GroomingChild,
     GroomingClaimReleased,
     GroomingClaimRequest,
@@ -209,6 +211,8 @@ __all__ = [
     "EvaluationRepositoryPayload",
     "GIVEN_ID_SOURCES",
     "GROOMING_MAX_CHILDREN",
+    "GroomingBudgetSpentMarked",
+    "GroomingBudgetSpentRequest",
     "GroomingChild",
     "GroomingClaimReleased",
     "GroomingClaimRequest",

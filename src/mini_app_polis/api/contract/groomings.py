@@ -24,6 +24,7 @@ proposal.
     POST /v1/tasks/groomings/proposals  hand a groomer's proposal back
     POST /v1/tasks/groomings/claims     claim one job before grooming it
     POST /v1/tasks/groomings/claims/release  give a claim back after a failure
+    POST /v1/tasks/groomings/budget-spent    report a run stopped by the budget
 
 A queue can deliver the same grooming job more than once. The groomer claims
 the task and the fingerprint of the content it was sent before it calls the
@@ -31,6 +32,14 @@ model, and grooms only if it won the claim, so a second delivery costs
 nothing. A run that fails releases its claim, so the next send can groom the
 same content; a run that succeeds keeps it, so unchanged content is not
 groomed twice.
+
+When a run is stopped because the month's grooming budget is spent, the
+groomer reports the stop (the task and its content's fingerprint) to the API,
+which stores it apart from the grooming record and returns it on each record
+as ``budget_spent_fingerprint``. The sweep sends a task that is not ready
+again when that equals the task's current fingerprint, so content the budget
+stopped is groomed once there is budget, without waiting for a change. The
+API clears the stop when a later claim for that task and content is won.
 """
 
 from __future__ import annotations
@@ -95,6 +104,13 @@ class GroomingRecord(_GroomingFields):
     """A stored record. Tolerates fields a newer API adds."""
 
     updated_at: datetime
+    #: The fingerprint of the content whose last grooming run was stopped by
+    #: the spent budget, until a later claim for it is won. The sweep never
+    #: writes it: the groomer reports it, and the API keeps it apart from the
+    #: record.
+    budget_spent_fingerprint: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
 
 
 class GroomingRunCreate(BaseModel):
@@ -279,6 +295,26 @@ class GroomingClaimReleased(BaseModel):
     task_gid: str
     fingerprint: str
     released: bool
+
+
+class GroomingBudgetSpentRequest(BaseModel):
+    """Report a grooming run stopped because the month's budget is spent.
+
+    Keyed like a claim, on the task and the fingerprint of the content the
+    job was sent for.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    task_gid: str = Field(..., min_length=1, max_length=64, pattern=r"^\d+$")
+    fingerprint: str = Field(..., pattern=r"^[0-9a-f]{64}$")
+
+
+class GroomingBudgetSpentMarked(BaseModel):
+    """The stop the API stored."""
+
+    task_gid: str = Field(..., min_length=1, max_length=64, pattern=r"^\d+$")
+    fingerprint: str = Field(..., pattern=r"^[0-9a-f]{64}$")
 
 
 class GroomingProposalAccepted(BaseModel):

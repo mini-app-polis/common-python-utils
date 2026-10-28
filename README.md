@@ -117,6 +117,15 @@ kept body is validated again, so each call gets a model of its own. A warm
 Lambda keeps that copy between invocations. The export also gets a 120 s
 timeout, since a cold build takes longer than the default 30 s.
 
+**Grooming budget stops.** When a grooming run is stopped because the month's
+grooming budget is spent, the groomer reports the stop with
+`mark_grooming_budget_spent()` (`POST /v1/tasks/groomings/budget-spent`, the
+task and its content fingerprint). The API stores it apart from the grooming
+record and returns it on each `GroomingRecord` as `budget_spent_fingerprint`.
+The sweep sends a task that is not ready again when that equals the task's
+current fingerprint, and the API clears the stop when a later claim for that
+task and content is won. The sweep's `GroomingRecordWrite` never carries it.
+
 **Contract suite.** `contract/` checks the catalog against the deployed
 development API (TEST-016). It calls every endpoint through the typed methods
 and fails if an endpoint is neither exercised nor listed in

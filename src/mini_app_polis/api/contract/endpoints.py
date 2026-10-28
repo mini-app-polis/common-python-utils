@@ -39,6 +39,8 @@ from .evaluations import (
     PipelineEvaluationWriteResult,
 )
 from .groomings import (
+    GroomingBudgetSpentMarked,
+    GroomingBudgetSpentRequest,
     GroomingClaimReleased,
     GroomingClaimRequest,
     GroomingClaimResult,
@@ -333,6 +335,14 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         path="/v1/tasks/groomings/claims/release",
         request=GroomingClaimRequest,
         response=GroomingClaimReleased,
+        scope="tasks.groomings.write",
+    ),
+    Endpoint(
+        name="mark_grooming_budget_spent",
+        method="POST",
+        path="/v1/tasks/groomings/budget-spent",
+        request=GroomingBudgetSpentRequest,
+        response=GroomingBudgetSpentMarked,
         scope="tasks.groomings.write",
     ),
     Endpoint(

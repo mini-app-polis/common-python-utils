@@ -67,6 +67,8 @@ from .contract import (
     DeejayRunAccepted,
     DeejayRunRequest,
     Envelope,
+    GroomingBudgetSpentMarked,
+    GroomingBudgetSpentRequest,
     GroomingClaimReleased,
     GroomingClaimRequest,
     GroomingClaimResult,
@@ -692,6 +694,19 @@ class KaianoApiClient:
         """
         return cast(
             GroomingClaimReleased, self._call("release_grooming_claim", payload)
+        )
+
+    def mark_grooming_budget_spent(
+        self, payload: GroomingBudgetSpentRequest
+    ) -> GroomingBudgetSpentMarked:
+        """``POST /v1/tasks/groomings/budget-spent`` — report a budget stop.
+
+        For a run stopped because the month's grooming budget is spent, so
+        the sweep sends the same content again. A later won claim clears it.
+        """
+        return cast(
+            GroomingBudgetSpentMarked,
+            self._call("mark_grooming_budget_spent", payload),
         )
 
     def record_agent_run(self, payload: AgentRunCreate) -> AgentRun:
