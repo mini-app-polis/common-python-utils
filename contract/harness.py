@@ -108,6 +108,10 @@ NOT_EXERCISED: dict[str, str] = {
     "release_grooming_claim": (
         "the contract-suite machine holds no tasks.groomings scope"
     ),
+    "mark_grooming_budget_spent": (
+        "the contract-suite machine holds no tasks.groomings scope, and a "
+        "fixture stop would send a task to the groomer again"
+    ),
     "record_agent_run": (
         "the contract-suite machine holds no tasks.agent-runs scope, and a "
         "fixture run would count toward the agent's spend"
@@ -136,7 +140,11 @@ NOT_EXERCISED: dict[str, str] = {
 #: 404, not the 401 the access check expects. Listed here, an endpoint is
 #: neither probed nor exercised; take it off once the development API has it,
 #: and exercise it in test_contract.py.
-NOT_DEPLOYED: dict[str, str] = {}
+NOT_DEPLOYED: dict[str, str] = {
+    "mark_grooming_budget_spent": (
+        "POST /v1/tasks/groomings/budget-spent is not on the development API yet"
+    ),
+}
 
 
 class ContractConfigError(RuntimeError):

@@ -431,6 +431,86 @@ def test_releasing_a_claim_posts_the_same_key(
     assert out.released is True
 
 
+# ── Grooming budget stops ─────────────────────────────────────────────────
+
+
+def test_a_budget_spent_report_refuses_extras_and_bad_keys() -> None:
+    from mini_app_polis.api.contract import GroomingBudgetSpentRequest
+
+    stop = GroomingBudgetSpentRequest(task_gid=_GID, fingerprint="c" * 64)
+    assert stop.model_dump() == {"task_gid": _GID, "fingerprint": "c" * 64}
+    with pytest.raises(ValidationError):
+        GroomingBudgetSpentRequest.model_validate({**stop.model_dump(), "x": 1})
+    with pytest.raises(ValidationError):
+        GroomingBudgetSpentRequest(task_gid="MINI-292", fingerprint="c" * 64)
+    with pytest.raises(ValidationError):
+        GroomingBudgetSpentRequest(task_gid=_GID, fingerprint="C" * 64)
+    with pytest.raises(ValidationError):
+        GroomingBudgetSpentRequest(task_gid=_GID, fingerprint="c" * 63)
+
+
+def test_marking_a_budget_stop_posts_the_task_and_fingerprint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from mini_app_polis.api.contract import (
+        GroomingBudgetSpentMarked,
+        GroomingBudgetSpentRequest,
+    )
+
+    answer = {"task_gid": _GID, "fingerprint": "c" * 64}
+    client, calls = _client(monkeypatch, {"data": answer, "meta": _META})
+
+    out = client.mark_grooming_budget_spent(
+        GroomingBudgetSpentRequest(task_gid=_GID, fingerprint="c" * 64)
+    )
+
+    assert calls == [
+        (
+            "POST",
+            "/v1/tasks/groomings/budget-spent",
+            {"task_gid": _GID, "fingerprint": "c" * 64},
+        )
+    ]
+    assert isinstance(out, GroomingBudgetSpentMarked)
+    assert out.fingerprint == "c" * 64
+
+
+def test_the_budget_spent_endpoint_is_a_grooming_write() -> None:
+    from mini_app_polis.api.contract import (
+        ENDPOINTS_BY_NAME,
+        GroomingBudgetSpentMarked,
+        GroomingBudgetSpentRequest,
+    )
+
+    endpoint = ENDPOINTS_BY_NAME["mark_grooming_budget_spent"]
+    assert (endpoint.method, endpoint.path, endpoint.scope) == (
+        "POST",
+        "/v1/tasks/groomings/budget-spent",
+        "tasks.groomings.write",
+    )
+    assert endpoint.request is GroomingBudgetSpentRequest
+    assert endpoint.response is GroomingBudgetSpentMarked
+
+
+def test_a_grooming_record_carries_a_budget_stop_only_when_read() -> None:
+    from mini_app_polis.api.contract import GroomingRecord, GroomingRecordWrite
+
+    stored = {
+        "task_gid": _GID,
+        "fingerprint": "a" * 64,
+        "outcome": "not_ready",
+        "updated_at": "2026-10-21T19:38:16Z",
+    }
+    assert GroomingRecord.model_validate(stored).budget_spent_fingerprint is None
+    stopped = GroomingRecord.model_validate(
+        {**stored, "budget_spent_fingerprint": "a" * 64}
+    )
+    assert stopped.budget_spent_fingerprint == "a" * 64
+    with pytest.raises(ValidationError):
+        GroomingRecord.model_validate({**stored, "budget_spent_fingerprint": "abc"})
+    assert "budget_spent_fingerprint" not in GroomingRecordWrite.model_fields
+
+
 _PROPOSAL = {
     "task_gid": "1219804023646894",
     "fingerprint": "a" * 64,
