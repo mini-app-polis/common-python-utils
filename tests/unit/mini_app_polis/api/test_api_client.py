@@ -156,9 +156,9 @@ def test_headers_send_the_key_with_no_network_call(
 ) -> None:
     """Building headers must not talk to anything.
 
-    This used to exchange a machine secret for a Clerk token, so every first
-    request carried a round trip before the request it wanted to make. The key
-    is the credential now, so nothing happens here but string assembly.
+    The key is the credential, so nothing happens here but string assembly:
+    no first request carries a round trip before the request it wants to
+    make.
     """
     with patch("httpx.Client") as any_http:
         client = KaianoApiClient(
@@ -335,13 +335,12 @@ def test_get_preserves_a_query_string_written_into_the_path() -> None:
     """A filter in the path must survive the request.
 
     httpx replaces a URL's query string whenever `params` is supplied at
-    all, and this client used to pass `params=query` unconditionally with
-    query defaulting to `{}`. So `/v1/evaluations?repo=x&limit=1` went out
-    as `/v1/evaluations`: no filter, default limit, newest row across every
-    repo. It returned 200 with plausible-looking data, which is why it went
-    unnoticed — it made the evaluator's duplicate check compare one repo's
-    finding against another repo's most recent row, and silently drop
-    findings that were true.
+    all, so passing `params=query` unconditionally with query defaulting to
+    `{}` would send `/v1/evaluations?repo=x&limit=1` as `/v1/evaluations`:
+    no filter, default limit, newest row across every repo. That returns 200
+    with plausible-looking data, so it goes unnoticed — and it makes the
+    evaluator's duplicate check compare one repo's finding against another
+    repo's most recent row, and silently drop findings that are true.
     """
     response = MagicMock()
     response.status_code = 200

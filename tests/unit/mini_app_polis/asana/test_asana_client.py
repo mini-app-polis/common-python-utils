@@ -389,7 +389,7 @@ def test_list_project_tasks_reads_body_column_and_tags_across_pages() -> None:
             "data": [
                 {
                     "gid": "t1",
-                    "name": "MINI-1 · one",
+                    "name": "TASK-1 · one",
                     "notes": "Done when: it works",
                     "completed": False,
                     "tags": [{"gid": "g1", "name": "review"}],
@@ -426,7 +426,7 @@ def test_list_project_tasks_reads_body_column_and_tags_across_pages() -> None:
     assert tasks == [
         AsanaTaskRecord(
             gid="t1",
-            name="MINI-1 · one",
+            name="TASK-1 · one",
             notes="Done when: it works",
             completed=False,
             section_gid="s1",
@@ -475,7 +475,7 @@ def test_get_task_reads_one_task_as_the_listing_does() -> None:
             json={
                 "data": {
                     "gid": "t1",
-                    "name": "MINI-1 · one",
+                    "name": "TASK-1 · one",
                     "notes": "body",
                     "completed": False,
                     "tags": [{"name": "review"}],
@@ -492,7 +492,7 @@ def test_get_task_reads_one_task_as_the_listing_does() -> None:
     task = _client(handler).get_task("t1", "proj-1")
     assert task == AsanaTaskRecord(
         gid="t1",
-        name="MINI-1 · one",
+        name="TASK-1 · one",
         notes="body",
         completed=False,
         section_gid="s2",
@@ -511,7 +511,7 @@ def test_a_task_record_carries_its_assignee_and_rich_body() -> None:
             json={
                 "data": {
                     "gid": "t1",
-                    "name": "MINI-1 · one",
+                    "name": "TASK-1 · one",
                     "notes": "Done when: it works",
                     "html_notes": "<body>Done when: <strong>it works</strong></body>",
                     "assignee": {"gid": "u1"},
@@ -552,11 +552,11 @@ def test_update_task_assigns_and_unassigns() -> None:
     client = _client(handler)
     client.update_task("t1", assignee="me")
     client.update_task("t1", unassign=True)
-    client.update_task("t1", name="MINI-1 · one")
+    client.update_task("t1", name="TASK-1 · one")
 
     assert json.loads(seen[0].content) == {"data": {"assignee": "me"}}
     assert json.loads(seen[1].content) == {"data": {"assignee": None}}
-    assert json.loads(seen[2].content) == {"data": {"name": "MINI-1 · one"}}
+    assert json.loads(seen[2].content) == {"data": {"name": "TASK-1 · one"}}
 
 
 def test_update_task_refuses_assignee_and_unassign_together() -> None:
@@ -581,14 +581,14 @@ def test_update_task_sends_only_what_changes() -> None:
     client = _client(handler)
     client.update_task("t1", html_notes="<body>x</body>")
     client.update_task("t1")
-    client.update_task("t1", name="MINI-2 · two", html_notes="<body>y</body>")
+    client.update_task("t1", name="TASK-2 · two", html_notes="<body>y</body>")
 
     assert len(seen) == 2
     assert seen[0].method == "PUT"
     assert seen[0].url.path == "/api/1.0/tasks/t1"
     assert json.loads(seen[0].content) == {"data": {"html_notes": "<body>x</body>"}}
     assert json.loads(seen[1].content) == {
-        "data": {"name": "MINI-2 · two", "html_notes": "<body>y</body>"}
+        "data": {"name": "TASK-2 · two", "html_notes": "<body>y</body>"}
     }
 
 

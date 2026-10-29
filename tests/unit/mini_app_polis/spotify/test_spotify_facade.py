@@ -702,8 +702,8 @@ def test_rate_limit_sleeps_for_retry_after(sp, headers, expected_sleep):
 
 
 def test_call_with_retry_raises_when_rate_limited_on_every_attempt(sp):
-    # Exhausting the retries on 429 used to fall out of the loop and return
-    # None, which callers then treated as a Spotify response.
+    # Exhausting the retries on 429 must raise, not fall out of the loop and
+    # return None, which callers would treat as a Spotify response.
     _, api, _, sleeps, _ = sp
     calls = []
 

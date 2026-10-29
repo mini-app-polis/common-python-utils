@@ -20,15 +20,15 @@ def parse_json(text: str) -> dict[str, Any]:
 
     The provider is told to return JSON only, but models sometimes write
     one valid object and then a stray line ("Extra data"), or a sentence
-    before it. Either used to fail the whole call. Stray text before or
-    after the object is now ignored; anything that parsed before parses
-    the same, and schema validation is unchanged.
+    before it. Neither fails the whole call: stray text before or after
+    the object is ignored, text that json.loads accepts parses exactly as
+    json.loads parses it, and schema validation still applies.
 
     When there is no object, the error quotes the start of the response.
     """
-    # The whole text first, so a response that parsed before is returned
-    # exactly as before (a top-level array included); the scan is only the
-    # fallback for text json.loads refuses.
+    # The whole text first, so a response json.loads accepts is returned
+    # exactly as json.loads parses it (a top-level array included); the
+    # scan is only the fallback for text json.loads refuses.
     try:
         return json.loads(text)
     except json.JSONDecodeError:

@@ -818,10 +818,11 @@ class DriveFacade:
         is first.
 
         Raises when there is no folder to list, and lets a failed listing
-        raise. Both used to be logged and answered with ``[]``, which a
-        caller could not tell from an empty folder: a Drive outage read as
-        "no history yet", and a scheduled run reported an idle tick instead
-        of a failure. An empty list now means the folder really is empty.
+        raise, rather than logging and answering ``[]``, which a caller
+        could not tell from an empty folder: a Drive outage would read as
+        "no history yet", and a scheduled run would report an idle tick
+        instead of a failure. An empty list means the folder really is
+        empty.
         """
         folder = self._history_folder(folder_id)
         files = [

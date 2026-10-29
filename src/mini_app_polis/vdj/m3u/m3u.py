@@ -23,7 +23,7 @@ class M3UEntry:
     last_play: str = ""
 
     def dedup_key(self) -> str:
-        """Return a normalized key used to deduplicate parsed M3U entries."""
+        """Return a normalized key for deduplicating parsed M3U entries."""
         return "||".join(
             [
                 self.dt.strip().lower(),

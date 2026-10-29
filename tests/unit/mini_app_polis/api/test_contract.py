@@ -358,7 +358,7 @@ def test_a_grooming_record_round_trips_and_its_write_refuses_extras() -> None:
 
     write = GroomingRecordWrite(
         task_gid="1219755103049631",
-        task_id="MINI-151",
+        task_id="TASK-151",
         fingerprint="a" * 64,
         outcome="not_ready",
         problems=["Effort is blank, not S, M or L"],
@@ -387,7 +387,7 @@ def test_a_grooming_claim_request_refuses_extras_and_bad_keys() -> None:
     with pytest.raises(ValidationError):
         GroomingClaimRequest.model_validate({**claim.model_dump(), "x": 1})
     with pytest.raises(ValidationError):
-        GroomingClaimRequest(task_gid="MINI-292", fingerprint="b" * 64)
+        GroomingClaimRequest(task_gid="TASK-292", fingerprint="b" * 64)
     with pytest.raises(ValidationError):
         GroomingClaimRequest(task_gid=_GID, fingerprint="B" * 64)
     with pytest.raises(ValidationError):
@@ -451,7 +451,7 @@ def test_a_budget_spent_report_refuses_extras_and_bad_keys() -> None:
     with pytest.raises(ValidationError):
         GroomingBudgetSpentRequest.model_validate({**stop.model_dump(), "x": 1})
     with pytest.raises(ValidationError):
-        GroomingBudgetSpentRequest(task_gid="MINI-292", fingerprint="c" * 64)
+        GroomingBudgetSpentRequest(task_gid="TASK-292", fingerprint="c" * 64)
     with pytest.raises(ValidationError):
         GroomingBudgetSpentRequest(task_gid=_GID, fingerprint="C" * 64)
     with pytest.raises(ValidationError):
@@ -589,7 +589,7 @@ def test_a_grooming_proposal_can_split_its_task_into_children() -> None:
         children=[
             _child(),
             _child(where="task-manager-cog", executor="cowork"),
-            _child(blocked_by_siblings=[0, 1], blocked_by="MINI-21, 2026-11-02"),
+            _child(blocked_by_siblings=[0, 1], blocked_by="TASK-21, 2026-11-02"),
         ],
     )
     assert [c.executor for c in proposal.children] == [None, "cowork", None]
@@ -738,7 +738,7 @@ def test_an_agent_result_refuses_extras_and_bad_ids() -> None:
     with pytest.raises(ValidationError):
         AgentRunResult.model_validate({"run_id": _RUN_ID, "outcome": "failed", "x": 1})
     with pytest.raises(ValidationError):
-        AgentRunResult(run_id="MINI-12", outcome="failed")
+        AgentRunResult(run_id="TASK-12", outcome="failed")
     with pytest.raises(ValidationError):
         AgentRunResult(run_id=_RUN_ID, outcome="failed", cost_usd=-1)
 

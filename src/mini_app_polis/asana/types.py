@@ -69,8 +69,8 @@ class AsanaTaskInput:
     :meth:`~mini_app_polis.asana.client.AsanaClient.find_task_by_external_id`.
 
     This is the reason to prefer Asana over a task manager without
-    search: the caller no longer has to embed a marker in the body and
-    scan for it, and so no longer misses tasks that have been
+    search: the caller does not have to embed a marker in the body and
+    scan for it, and so does not miss tasks that have been
     completed and dropped out of the active list."""
 
 

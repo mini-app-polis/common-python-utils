@@ -62,7 +62,7 @@ def summarize_body(body: str) -> str:
 
     The API's own errors are a short JSON envelope and are kept whole. Anything
     else comes from in front of the API — Cloudflare's or Railway's error page
-    — and its HTML used to be quoted in full, a page of markup in a Discord run
+    — and quoting its HTML in full would put a page of markup in a Discord run
     report. An HTML page is reduced to its title and, when Cloudflare served it,
     its Ray ID (what Cloudflare support asks for); other text is cut short.
     """

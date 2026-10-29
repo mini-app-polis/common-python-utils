@@ -108,7 +108,7 @@ def test_a_task_filed_by_hand_is_a_minted_manual_source() -> None:
     assert request.id is None
     with pytest.raises(ValidationError, match="minted"):
         TaskCreateRequest.model_validate(
-            _request(source="manual", external_id="manual.x", id="MINI-1")
+            _request(source="manual", external_id="manual.x", id="TASK-1")
         )
     with pytest.raises(ValidationError, match=r"must start with manual\."):
         TaskCreateRequest.model_validate(

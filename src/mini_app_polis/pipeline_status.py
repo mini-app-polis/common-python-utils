@@ -14,14 +14,12 @@ over time, so they are written to a table and stay there.
 
 :func:`post_run_finding` and :class:`RunReport` → ``POST
 /v1/notify``. Run status: this flow finished, this flow crashed. Nothing
-is persisted. It used to travel the findings path, which is why the API
-had to null out ``standards_version`` on those rows to stop Pipeline
-Health claiming they had been evaluated against something — nothing
-graded "the flow crashed" against anything.
+is persisted, and nothing grades "the flow crashed" against the standards
+catalog, so run status carries no ``standards_version``.
 
-The two no longer share a funnel. Sharing one is what let run telemetry
-into the evaluations table in the first place, and a single change to
-"the sink" then moves both.
+The two do not share a funnel. A shared one would let run telemetry into
+the evaluations table, and a single change to "the sink" would then move
+both.
 
 What run status gives up by not being written down: "did it run" is
 answered by Healthchecks.io, which fires on absence rather than on
@@ -64,10 +62,10 @@ production's record, and a development run says what it did in its own
 logs. Graded findings (:func:`post_findings`) still go to the development
 API from development, since they are records, not messages.
 
-The fleet no longer runs on Prefect. :func:`get_prefect_logger` and
-:func:`get_run_id` still import it lazily, and fall back when it is
-absent, because callers still use them; ``mini_app_polis`` does not
-declare Prefect as a dependency.
+The fleet does not run on Prefect. :func:`get_prefect_logger` and
+:func:`get_run_id` import it lazily, and fall back when it is absent,
+because callers use them; ``mini_app_polis`` does not declare Prefect as
+a dependency.
 
 Severity classification:
 
@@ -145,23 +143,14 @@ outcome distinct from SUCCESS — a clean "nothing to do" run is still
 a success. Collapsing INFO into SUCCESS keeps the cog's mental model
 "did I do my job?" rather than "what category of event was this?".
 
-**On CRITICAL.** This enum originally excluded CRITICAL, on the
-reasoning that it is reserved for cross-cog signals no single *flow
-run* can authoritatively raise, and that "a cog that is critically
-broken typically can't reach this code path at all — it died before
-reporting". That reasoning was correct for its scope and is preserved
-here, because it still governs how CRITICAL may be used.
+**On CRITICAL.** CRITICAL is reserved for signals no single *flow
+run* can authoritatively raise: a cog that is critically broken
+typically can't reach this code path at all — it dies before reporting.
+The one case a cog can report is a failure at startup, before any flow
+run exists to report on. Nothing in this library emits CRITICAL; the
+value exists so a consumer that has that need can.
 
-The exception the original note anticipated did arrive: a transient
-Prefect Cloud 503 on deployment registration could kill a
-``serve()``-based worker at startup, before any flow run existed to
-report on. The Prefect-era startup retry helper
-that answered it reported that case as CRITICAL. That helper went with
-Prefect, and nothing in this library emits CRITICAL now; the value is
-kept so a consumer that has the same need can.
-
-CRITICAL therefore remains **narrowly scoped**, and the original
-prohibition still stands for everything else:
+CRITICAL is therefore **narrowly scoped**:
 
 - CRITICAL is for the **pre-flow process lifecycle only** — the cog
   cannot register, cannot start, and is exiting. It always carries
@@ -281,7 +270,7 @@ def get_run_id() -> str:
     is a trigger, not a run identity, in the Kaiano cog ecosystem.
 
     **Every caller should prefer passing its own run id.** Both resolution
-    steps above are Prefect's, and a cog that no longer runs under Prefect
+    steps above are Prefect's, and a cog that does not run under Prefect
     reaches the ``"local-run"`` fallback on every invocation — so its run
     reports all arrive under one id that identifies nothing and cannot be
     joined to the findings the same run filed. ``post_findings``,
@@ -338,7 +327,7 @@ def _should_post(production_only: bool) -> bool:
 def _nonzero_extras(counters: dict[str, Any]) -> dict[str, Any]:
     """Return ``counters`` with zero/empty/falsy values stripped.
 
-    Used to build the counter sections appended to the run report's text:
+    Called when building the counter sections appended to the run report's text:
     only counters that actually have something to say are shown.
     """
     out: dict[str, Any] = {}
@@ -764,8 +753,8 @@ def post_run_finding(
 ) -> DeliveryReport:
     """Report one run outcome to the notification channel.
 
-    Run status, not a finding — nothing is persisted. It no longer routes
-    through :func:`post_findings`: sharing that funnel is what put run
+    Run status, not a finding — nothing is persisted. It does not route
+    through :func:`post_findings`: sharing that funnel would put run
     telemetry in the evaluations table, and two sinks with two meanings
     should not share one path back.
 
@@ -785,7 +774,7 @@ def post_run_finding(
         name the API authenticates and attributes the message to.
     dimension:
         Carried into the message footer. Retained for call-site
-        compatibility; it no longer selects anything, since run reports are
+        compatibility; it selects nothing, since run reports are
         not graded against the standards catalog.
     suggestion:
         Optional remediation hint, rendered as a field on the message.

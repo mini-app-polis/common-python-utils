@@ -57,7 +57,7 @@ def test_one_issue_makes_the_run_warn():
 
 def test_a_notice_does_not_raise_severity():
     r = ps.RunReport(flow_name="f", repo="c")
-    r.notice("task newly held", "MINI-2")
+    r.notice("task newly held", "TASK-2")
     assert r.severity == "SUCCESS"
 
 
@@ -93,12 +93,12 @@ def test_empty_run_says_so():
 
 def test_a_run_with_only_outcomes_is_not_called_empty():
     r = ps.RunReport(flow_name="f", repo="c", duration_sec=0.4)
-    r.updated("grooming proposal", "MINI-129")
+    r.updated("grooming proposal", "TASK-129")
     assert r.text().splitlines() == [
         "Run complete in 0.40s.",
         "",
         "grooming proposal",
-        "  ~ MINI-129",
+        "  ~ TASK-129",
     ]
 
 
@@ -125,14 +125,14 @@ def test_only_flagged_reasons_name_names():
 def test_a_notice_names_its_items_before_the_issues():
     r = ps.RunReport(flow_name="f", repo="c", duration_sec=0.4)
     r.issue("invalid_filename", "bad.txt")
-    r.notice("task newly held", "MINI-2")
-    r.notice("task newly held", "MINI-3")
+    r.notice("task newly held", "TASK-2")
+    r.notice("task newly held", "TASK-3")
     assert r.text().splitlines() == [
         "Run complete in 0.40s — 1 to look at.",
         "",
         "task newly held",
-        "  MINI-2",
-        "  MINI-3",
+        "  TASK-2",
+        "  TASK-3",
         "",
         "invalid_filename",
         "  bad.txt",
@@ -176,8 +176,8 @@ def test_what_the_run_made_is_in_the_message():
 
 def test_a_link_makes_the_item_clickable():
     r = ps.RunReport(flow_name="f", repo="c")
-    r.created("asana task", "Fix it", link="https://app.asana.com/0/0/1")
-    assert "  + [Fix it](https://app.asana.com/0/0/1)" in r.text()
+    r.created("asana task", "Fix it", link="https://tasks.example.com/1")
+    assert "  + [Fix it](https://tasks.example.com/1)" in r.text()
 
 
 def test_operations_render_in_a_fixed_order_whatever_order_they_happened():
@@ -327,7 +327,7 @@ def test_a_run_with_nothing_to_show_is_still_the_caller_s_call(sent):
 
 def test_a_notice_makes_a_success_run_notable(sent):
     r = ps.RunReport(flow_name="f", repo="c")
-    r.notice("task newly held", "MINI-2")
+    r.notice("task newly held", "TASK-2")
     r.send()
     assert sent[0]["severity"] == "SUCCESS"
     assert sent[0]["notable"] is True

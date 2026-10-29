@@ -337,8 +337,8 @@ def _ok(remaining: int = 4, reset_after: float = 0.4) -> httpx.Response:
 
 
 def test_bucket_429_is_waited_out_and_the_message_sent(channels, fake, clock) -> None:
-    """The production failure: a sub-second bucket 429 used to drop the
-    message and everything after it."""
+    """A sub-second bucket 429 must not drop the message or anything
+    after it."""
     fake.answer(RUNS_URL, _limited(0.3), httpx.Response(204))
 
     async def scenario() -> list[bool]:
@@ -402,9 +402,9 @@ def test_absurd_retry_after_is_capped(channels, fake, clock) -> None:
 def test_an_hour_long_limit_is_checked_again_after_a_minute(
     channels, fake, clock
 ) -> None:
-    """One 429 asking for an hour used to mute every webhook for that hour,
-    while Discord was answering normally (2026-10-18). After a minute the
-    next message is posted; a limit still in force answers 429 again."""
+    """One 429 asking for an hour must not mute every webhook for that hour
+    while Discord answers normally. After a minute the next message is
+    posted; a limit still in force answers 429 again."""
     fake.answer(
         RUNS_URL,
         _limited(3600, scope_global=True),

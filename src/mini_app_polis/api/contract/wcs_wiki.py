@@ -327,8 +327,8 @@ class WcsWikiPagesWrite(BaseModel):
     """``POST /v1/wcs/wiki/pages`` — upsert pages, and remove pages gone.
 
     Each page given replaces the stored one with its slug. A slug in
-    ``remove`` is a page that no longer exists — folded into another, or no
-    longer in the corpus — and is deleted. Re-sending is a no-op.
+    ``remove`` is a page that no longer exists — folded into another, or
+    dropped from the corpus — and is deleted. Re-sending is a no-op.
     """
 
     pages: list[WcsWikiPage] = Field(
@@ -428,7 +428,7 @@ class WcsWikiThinWrite(BaseModel):
     """``POST /v1/wcs/wiki/state/thin`` — upsert thin entities, remove the rest.
 
     Each entity given replaces the stored one with its slug. A slug in
-    ``remove`` is no longer thin, or no longer exists, and is deleted. The
+    ``remove`` is not thin any more, or does not exist, and is deleted. The
     curator reads the list, sends what is thin now, and removes what is not.
     """
 

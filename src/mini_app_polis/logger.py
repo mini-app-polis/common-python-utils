@@ -12,19 +12,16 @@ Use :func:`with_log_prefix` when building messages so spacing stays consistent.
 
 Log level
 ---------
-``LOGGING_LEVEL`` sets the level; the default is ``INFO``. It used to be
-``DEBUG``, which was a mistake with real consequences: importing this
-module calls :func:`logging.basicConfig`, which configures the **root**
-logger, so the level applies to every third-party library in the process
-— not just to ``mini_app_polis``. Any consumer that had not set
-``LOGGING_LEVEL`` therefore ran every dependency at DEBUG.
+``LOGGING_LEVEL`` sets the level; the default is ``INFO``, not ``DEBUG``.
+Importing this module calls :func:`logging.basicConfig`, which configures
+the **root** logger, so the level applies to every third-party library in
+the process — not just to ``mini_app_polis``. A DEBUG default would run
+every dependency at DEBUG in any consumer that has not set
+``LOGGING_LEVEL``, and ``websockets`` logs its full request headers at
+DEBUG, including ``Authorization: bearer <key>``, and then logs the auth
+frame body as well — a credential in plaintext in the service's logs.
 
-That is how a Prefect API key ended up in plaintext in Railway logs on
-2026-09-09: ``websockets`` logs its full request headers at DEBUG,
-including ``Authorization: bearer <key>``, and then logs the auth frame
-body as well.
-
-Changing the default is necessary but not sufficient — anyone raising
+The INFO default is necessary but not sufficient — anyone raising
 ``LOGGING_LEVEL`` to DEBUG to debug their own cog would reopen the leak.
 So the loggers known to print credentials are held at a floor
 (:data:`_CREDENTIAL_LOGGER_FLOOR`) regardless of ``LOGGING_LEVEL``.
@@ -69,9 +66,8 @@ import sys
 
 # No load_dotenv(). Secrets and settings come from the process environment
 # only: Doppler (`doppler run` locally, SSM or the platform sync deployed).
-# This used to load a .env file at import, which made every consumer of the
-# library read one wherever it happened to sit, and hid where a value came
-# from.
+# Loading a .env file at import would make every consumer of the library
+# read one wherever it happened to sit, and hide where a value came from.
 
 # Ecosystem log prefix conventions
 LOG_START = "🚀"
