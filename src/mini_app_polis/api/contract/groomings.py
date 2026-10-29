@@ -20,6 +20,7 @@ proposal.
     POST /v1/tasks/groomings            write one record (keyed by task_gid)
     POST /v1/tasks/groomings/runs       record one paid run
     GET  /v1/tasks/groomings/spend      this month's paid runs, in total
+    GET  /v1/tasks/groomings/return-rate  how often Ready tasks came back out
     POST /v1/tasks/groomings/jobs       ask for one task to be groomed
     POST /v1/tasks/groomings/proposals  hand a groomer's proposal back
     POST /v1/tasks/groomings/claims     claim one job before grooming it
@@ -154,6 +155,38 @@ class GroomingSpend(BaseModel):
     month: str = Field(..., pattern=r"^\d{4}-\d{2}$")
     runs: int = Field(..., ge=0)
     cost_usd: float = Field(..., ge=0)
+
+
+#: The window a return-from-Ready read covers when none is asked for, in days.
+RETURN_RATE_DEFAULT_DAYS = 30
+#: The longest window a return-from-Ready read covers, in days.
+RETURN_RATE_MAX_DAYS = 365
+
+
+class GroomingReturnRate(BaseModel):
+    """How often a task moved to Ready came back out, over the last ``days``.
+
+    ``moved_to_ready`` counts the moves to Ready in the window,
+    ``returned`` the tasks sent back out of Ready in it (by a person, or by
+    the sweep finding the task no longer ready), and ``ratio`` is
+    ``returned / moved_to_ready``: None when nothing moved to Ready. The
+    counts come from events recorded as the grooming records change, so a
+    window reaching back before the first of them counts only from
+    ``counting_since``, which is then later than ``since``.
+    """
+
+    days: int = Field(..., ge=1, le=RETURN_RATE_MAX_DAYS)
+    since: datetime = Field(..., description="The window's start.")
+    counting_since: datetime = Field(
+        ...,
+        description=(
+            "Where the counts start: the window's start, or the first "
+            "recorded event when that is later."
+        ),
+    )
+    moved_to_ready: int = Field(..., ge=0)
+    returned: int = Field(..., ge=0)
+    ratio: float | None = Field(default=None, ge=0)
 
 
 class GroomingTask(BaseModel):

@@ -81,6 +81,7 @@ from .contract import (
     GroomingProposalAccepted,
     GroomingRecord,
     GroomingRecordWrite,
+    GroomingReturnRate,
     GroomingRunCreate,
     GroomingRunRecorded,
     GroomingSpend,
@@ -696,6 +697,15 @@ class KaianoApiClient:
     def grooming_spend(self) -> GroomingSpend:
         """``GET /v1/tasks/groomings/spend`` — this month's paid grooming."""
         return cast(GroomingSpend, self._call("grooming_spend"))
+
+    def grooming_return_rate(self, days: int | None = None) -> GroomingReturnRate:
+        """``GET /v1/tasks/groomings/return-rate`` — how often a task moved to
+        Ready came back out, over the last ``days`` (the API's default, 30,
+        when None)."""
+        params = {"days": days} if days is not None else None
+        return cast(
+            GroomingReturnRate, self._call("grooming_return_rate", params=params)
+        )
 
     def request_grooming(self, payload: GroomingJobRequest) -> GroomingJobAccepted:
         """``POST /v1/tasks/groomings/jobs`` — queue one task for the groomer."""

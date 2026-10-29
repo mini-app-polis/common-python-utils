@@ -52,6 +52,7 @@ from .groomings import (
     GroomingProposalAccepted,
     GroomingRecord,
     GroomingRecordWrite,
+    GroomingReturnRate,
     GroomingRunCreate,
     GroomingRunRecorded,
     GroomingSpend,
@@ -322,6 +323,14 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         path="/v1/tasks/groomings/spend",
         request=None,
         response=GroomingSpend,
+        scope="tasks.groomings.read",
+    ),
+    Endpoint(
+        name="grooming_return_rate",
+        method="GET",
+        path="/v1/tasks/groomings/return-rate",
+        request=None,
+        response=GroomingReturnRate,
         scope="tasks.groomings.read",
     ),
     Endpoint(

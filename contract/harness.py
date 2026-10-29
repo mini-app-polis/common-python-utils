@@ -101,6 +101,9 @@ NOT_EXERCISED: dict[str, str] = {
         "fixture run would count toward the groomer's spend"
     ),
     "grooming_spend": "the contract-suite machine holds no tasks.groomings scope",
+    "grooming_return_rate": (
+        "the contract-suite machine holds no tasks.groomings scope"
+    ),
     "claim_grooming": (
         "the contract-suite machine holds no tasks.groomings scope, and a "
         "fixture claim would hold a task away from the groomer"
