@@ -1,3 +1,10 @@
+## [7.1.1](https://github.com/mini-app-polis/common-python-utils/compare/v7.1.0...v7.1.1) (2026-10-29)
+
+
+### Bug Fixes
+
+* **contract:** probe the return-rate read now the development API serves it ([278e206](https://github.com/mini-app-polis/common-python-utils/commit/278e20673aeb19cc70053c54803483e64ba90d31))
+
 # [7.1.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.0.0...v7.1.0) (2026-10-29)
 
 
