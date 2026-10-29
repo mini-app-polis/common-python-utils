@@ -57,8 +57,12 @@ environment logs a WARNING and delivers nothing.
 ``production_only`` is a misnomer kept for compatibility: it has never
 consulted the environment, and never gated on it. It means "this caller
 delivers at all" — a caller passes ``production_only=False`` to keep its
-reports local. Renaming it is a major-release change. Development *does*
-deliver, to the development API.
+reports local. Renaming it is a major-release change.
+
+Run reports are posted from production only: the runs channel is
+production's record, and a development run says what it did in its own
+logs. Graded findings (:func:`post_findings`) still go to the development
+API from development, since they are records, not messages.
 
 The fleet no longer runs on Prefect. :func:`get_prefect_logger` and
 :func:`get_run_id` still import it lazily, and fall back when it is
@@ -334,8 +338,8 @@ def _should_post(production_only: bool) -> bool:
 def _nonzero_extras(counters: dict[str, Any]) -> dict[str, Any]:
     """Return ``counters`` with zero/empty/falsy values stripped.
 
-    Used to build the ``k=v`` suffix appended to the finding text — we
-    only surface counters that actually have something to say.
+    Used to build the counter sections appended to the run report's text:
+    only counters that actually have something to say are shown.
     """
     out: dict[str, Any] = {}
     for k, v in counters.items():
@@ -349,17 +353,73 @@ def _nonzero_extras(counters: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _merge_extras_into_text(text: str, extras: dict[str, Any]) -> str:
-    """Append non-zero ``extras`` as ``k=v`` pairs after ``text``."""
-    nz = _nonzero_extras(extras)
-    if not nz:
+#: The section counters go under when their caller names none.
+DEFAULT_COUNTER_SECTION = "Counts"
+
+#: Indents an item under its section's label.
+_INDENT = "  "
+
+
+def counter_line(key: str, value: Any, label: str | None = None) -> str:
+    """One counter in plain words: ``42 tasks checked``.
+
+    ``label`` is what the counter is called (``"tasks checked"``); a label
+    with ``{}`` in it places the value itself (``"${} spent"``). Without
+    one, the counter's name is read as words (``tasks_checked`` ->
+    ``tasks checked``), so no counter is ever shown as ``name=value``.
+    """
+    words = label or key.replace("_", " ")
+    if "{}" in words:
+        return words.replace("{}", str(value))
+    return f"{value} {words}"
+
+
+def counter_sections(
+    extras: dict[str, Any],
+    labels: dict[str, str] | None = None,
+    sections: dict[str, str] | None = None,
+) -> list[tuple[str, list[str]]]:
+    """Non-zero ``extras`` as labelled sections of plain-word lines.
+
+    ``sections`` puts a counter under a section's label (``"Board"``);
+    the rest go under :data:`DEFAULT_COUNTER_SECTION`. Sections keep the
+    order their first counter came in, and counters within one theirs.
+    """
+    grouped: dict[str, list[str]] = {}
+    for key, value in _nonzero_extras(extras).items():
+        section = (sections or {}).get(key, DEFAULT_COUNTER_SECTION)
+        grouped.setdefault(section, []).append(
+            counter_line(key, value, (labels or {}).get(key))
+        )
+    return list(grouped.items())
+
+
+def render_sections(sections: Iterable[tuple[str, list[str]]]) -> str:
+    """Labelled sections, one item a line, a blank line between them."""
+    blocks = [
+        "\n".join([label, *(f"{_INDENT}{line}" for line in lines)])
+        for label, lines in sections
+        if lines
+    ]
+    return "\n\n".join(blocks)
+
+
+def _merge_extras_into_text(
+    text: str,
+    extras: dict[str, Any],
+    labels: dict[str, str] | None = None,
+    sections: dict[str, str] | None = None,
+) -> str:
+    """``text``, then the non-zero ``extras`` as sections of plain words."""
+    rendered = render_sections(counter_sections(extras, labels, sections))
+    if not rendered:
         return text
-    suffix = "; ".join(f"{k}={v}" for k, v in sorted(nz.items()))
-    return f"{text} {suffix}" if text else suffix
+    return f"{text}\n\n{rendered}" if text else rendered
 
 
 def stamp_version(text: str, version: str | None) -> str:
-    """Append ``(version=X.Y.Z)`` to ``text``: the build that sent it.
+    """Add ``(version=X.Y.Z)`` to the first line of ``text``: the build that
+    sent it.
 
     ``version`` is the caller's own ``__version__``, from its
     ``_version.py``. Never installed package metadata: a Lambda deploy
@@ -371,7 +431,10 @@ def stamp_version(text: str, version: str | None) -> str:
     """
     if not version or "(version=" in text:
         return text
-    return f"{text} (version={version})"
+    # On the headline, so the stamp stays with what the run says about
+    # itself rather than trailing the last counter of the last section.
+    headline, sep, rest = text.partition("\n")
+    return f"{headline} (version={version}){sep}{rest}"
 
 
 def _capture(exc: BaseException) -> None:
@@ -464,6 +527,7 @@ def _build_message(
     else. The run id is in the footer rather than the body because it is
     what you search the logs for once you have decided to.
     """
+    del source, dimension  # carried by the caller; not shown on the message
     embed: dict[str, Any] = {
         # Prefix, not a footer field: the footer is where the metadata
         # lives and is the part of an embed people skim past. The one
@@ -471,9 +535,8 @@ def _build_message(
         # production.
         "title": f"{_environment_prefix()}{repo} · {flow_name}"[:256],
         "color": _SEVERITY_COLORS.get(severity, _DEFAULT_COLOR),
-        "footer": {
-            "text": f"{severity} · {source} · {dimension} · run {run_id}"[:2048]
-        },
+        # Severity first: the API's cog-run detector reads it from here.
+        "footer": {"text": f"{severity} · run {run_id[:8]}"[:2048]},
     }
     if text:
         embed["description"] = text[:4096]
@@ -695,6 +758,8 @@ def post_run_finding(
     notable: bool = False,
     run_id: str | None = None,
     version: str | None = None,
+    counter_labels: dict[str, str] | None = None,
+    counter_sections: dict[str, str] | None = None,
     **extras: Any,
 ) -> DeliveryReport:
     """Report one run outcome to the notification channel.
@@ -740,9 +805,19 @@ def post_run_finding(
     version:
         The caller's own ``__version__``, stamped on the text as
         ``(version=X.Y.Z)``; see :func:`stamp_version`.
+    counter_labels:
+        What each counter in ``extras`` is called, in words (see
+        :func:`counter_line`). A counter with no label is read from its
+        name.
+    counter_sections:
+        Which labelled section each counter goes under; the rest go under
+        :data:`DEFAULT_COUNTER_SECTION`.
     **extras:
         Cog-specific counters or flags. Non-zero values are appended to the
-        text as ``k=v`` pairs (sorted alphabetically).
+        text in plain words, one a line, under their sections.
+
+    Nothing is sent from outside production: the channel is production's
+    record, and a development run says so in its logs alone.
 
     Returns
     -------
@@ -755,7 +830,19 @@ def post_run_finding(
     if severity == "SUCCESS" and text is None:
         text = "Run completed successfully."
 
-    text_final = _merge_extras_into_text(text or "", extras).strip()
+    text_final = _merge_extras_into_text(
+        text or "", extras, counter_labels, counter_sections
+    ).strip()
+
+    if current_environment() is not Environment.PRODUCTION:
+        logger.info(
+            "pipeline_status: %s %s/%s not posted outside production — %s",
+            severity,
+            repo,
+            flow_name,
+            text_final,
+        )
+        return DeliveryReport(suppressed=1)
 
     if not _should_post(production_only):
         logger.debug(
@@ -848,6 +935,9 @@ MAX_OUTCOMES = 5
 
 CREATED = "created"
 UPDATED = "updated"
+
+#: The issue a run that ran out of time is counted under.
+STOPPED_EARLY = "stopped early"
 REMOVED = "removed"
 
 #: Render order and mark per operation. Deliberately the same three marks
@@ -999,7 +1089,12 @@ class RunReport:
     notices: Counter = field(default_factory=Counter)
     examples: dict[str, list[str]] = field(default_factory=dict)
     counters: dict[str, Any] = field(default_factory=dict)
+    counter_labels: dict[str, str] = field(default_factory=dict)
+    counter_sections: dict[str, str] = field(default_factory=dict)
     outcomes: list[Outcome] = field(default_factory=list)
+    #: Set when the run stopped because its time ran out (see
+    #: :func:`run_report`): the headline says so instead of "complete".
+    stopped_early: str | None = None
 
     _sent: bool = field(default=False, repr=False)
     _started_at: float = field(default_factory=lambda: _now(), repr=False)
@@ -1028,9 +1123,25 @@ class RunReport:
         self.notices[reason] += 1
         self._remember(reason, item)
 
-    def count(self, key: str, value: Any) -> None:
-        """Carry a domain counter that has no bearing on severity."""
+    def count(
+        self,
+        key: str,
+        value: Any,
+        *,
+        label: str | None = None,
+        section: str | None = None,
+    ) -> None:
+        """Carry a domain counter that has no bearing on severity.
+
+        ``label`` is what it is called, in words (``"tasks checked"``, or
+        ``"${} spent"`` to place the value); ``section`` is the labelled
+        section it goes under. See :func:`counter_line`.
+        """
         self.counters[key] = value
+        if label:
+            self.counter_labels[key] = label
+        if section:
+            self.counter_sections[key] = section
 
     def created(
         self, kind: str, item: str | None = None, *, link: str | None = None
@@ -1078,14 +1189,16 @@ class RunReport:
         end = _now() if self._ended_at is None else self._ended_at
         return max(0.0, end - self._started_at)
 
-    def outcome_lines(self) -> list[str]:
-        """One line per operation and kind, in a fixed order.
+    def outcome_sections(self) -> list[tuple[str, list[str]]]:
+        """One section per operation and kind, one item a line, in a fixed
+        order.
 
-        Grouped rather than one line per thing: twelve tasks created is a
-        fact about the run, and twelve consecutive identical-looking lines
-        is how the problem underneath them ends up below the fold.
+        A section is headed by what happened (``task moved to Ready``) and
+        lists what it happened to, so twelve tasks read as one fact with
+        twelve names under it. Past :data:`MAX_OUTCOMES` the rest are a
+        count; things recorded with no name are a count alone.
         """
-        lines: list[str] = []
+        sections: list[tuple[str, list[str]]] = []
         for op, mark in _OUTCOME_MARKS:
             by_kind: dict[str, list[Outcome]] = {}
             for outcome in self.outcomes:
@@ -1095,60 +1208,84 @@ class RunReport:
                 rows = by_kind[kind]
                 named = [r.label() for r in rows if r.item]
                 shown = named[:MAX_OUTCOMES]
-                if not shown:
-                    lines.append(f"{mark} {kind} x{len(rows)}")
-                    continue
+                lines = [f"{mark} {item}" for item in shown]
                 more = len(rows) - len(shown)
-                suffix = f", +{more} more" if more > 0 else ""
-                lines.append(f"{mark} {kind}: {', '.join(shown)}{suffix}")
-        return lines
+                if more and shown:
+                    lines.append(f"{mark} {more} more")
+                elif more:
+                    lines.append(f"{mark} {more}")
+                sections.append((kind, lines))
+        return sections
 
-    def tally(self) -> str:
-        """The one-line count, in a fixed order so two runs compare."""
-        parts: list[str] = []
-        if self.processed:
-            parts.append(f"processed={self.processed}")
-        for reason, n in sorted(self.issues.items()):
-            parts.append(f"{reason}={n}")
-        for reason, n in sorted(self.notices.items()):
-            parts.append(f"{reason}={n}")
-        for reason, n in sorted(self.notes.items()):
-            parts.append(f"{reason}={n}")
-        return ", ".join(parts)
+    def outcome_lines(self) -> list[str]:
+        """The outcome sections as lines, for a caller composing its own."""
+        rendered = render_sections(self.outcome_sections())
+        return rendered.split("\n") if rendered else []
 
-    def text(self) -> str:
-        """The message body: the tally, what the run did, then what it flagged.
-
-        Outcomes come before problems because a clean run has only
-        outcomes, and that is the whole message on a good day.
-
-        Only notices and flagged reasons name names, notices first. An
-        ordinary skip is counted and left at that — naming every
-        already-processed file is how the interesting line ends up below
-        the fold.
-        """
-        tally = self.tally()
-        took = f"Run complete in {format_duration(self.duration)}"
-        if tally:
-            body = f"{took} — {tally}."
-        elif self.outcomes:
-            # Work recorded only as outcomes is still work: the lines below
-            # say what it was, so the headline must not call it nothing.
-            body = f"{took}."
-        else:
-            body = f"{took} — nothing to do."
-
-        lines = [body]
-        lines.extend(self.outcome_lines())
+    def problem_sections(self) -> list[tuple[str, list[str]]]:
+        """Notices, then issues, one section per reason naming what it hit,
+        then ordinary skips as counts under one section."""
+        sections: list[tuple[str, list[str]]] = []
         for counted in (self.notices, self.issues):
             for reason in sorted(counted):
+                if reason == STOPPED_EARLY and self.stopped_early is not None:
+                    continue  # the headline says it
                 named = self.examples.get(reason) or []
-                if not named:
-                    continue
                 more = counted[reason] - len(named)
-                suffix = f", +{more} more" if more > 0 else ""
-                lines.append(f"{reason}: {', '.join(named)}{suffix}")
-        return "\n".join(lines)
+                lines = list(named)
+                if more and named:
+                    lines.append(f"{more} more")
+                elif more:
+                    lines.append(str(more))
+                sections.append((reason, lines))
+        if self.notes:
+            sections.append(
+                (
+                    "Skipped",
+                    [f"{n} {reason}" for reason, n in sorted(self.notes.items())],
+                )
+            )
+        return sections
+
+    def tally(self) -> str:
+        """What the headline counts: handled, and problems, in words."""
+        parts: list[str] = []
+        if self.processed:
+            parts.append(f"{self.processed} processed")
+        problems = sum(self.issues.values())
+        if problems:
+            parts.append(f"{problems} to look at")
+        return ", ".join(parts)
+
+    def headline(self) -> str:
+        """The first line: how the run ended, how long it took, and its
+        counts."""
+        took = format_duration(self.duration)
+        if self.stopped_early is not None:
+            return (
+                f"Stopped early after {took}: out of time ({self.stopped_early}); "
+                "the next run picks up the rest."
+            )
+        tally = self.tally()
+        if tally:
+            return f"Run complete in {took} — {tally}."
+        if self.outcomes or self.notices or self.notes or self.counters:
+            # Work recorded only below is still work: the sections say what
+            # it was, so the headline must not call it nothing.
+            return f"Run complete in {took}."
+        return f"Run complete in {took} — nothing to do."
+
+    def text(self) -> str:
+        """The message body: the headline, what the run did, then what it
+        flagged, as labelled sections with one item a line.
+
+        Outcomes come before problems because a clean run has only
+        outcomes, and that is the whole message on a good day. Counters are
+        added below these when the report is sent (:func:`post_run_finding`).
+        """
+        sections = [*self.outcome_sections(), *self.problem_sections()]
+        rendered = render_sections(sections)
+        return f"{self.headline()}\n\n{rendered}" if rendered else self.headline()
 
     # -- delivery ----------------------------------------------------------
 
@@ -1184,8 +1321,19 @@ class RunReport:
             notable=notable or bool(self.outcomes) or bool(self.notices),
             run_id=self.run_id,
             version=self.version,
+            counter_labels=self.counter_labels,
+            counter_sections=self.counter_sections,
             **self.counters,
         )
+
+
+def _out_of_time(exc: BaseException) -> bool:
+    """Whether ``exc`` is the worker's planned stop before its timeout.
+
+    Matched by name: importing the worker module here would make every
+    report depend on it.
+    """
+    return type(exc).__name__ == "RunOutOfTime"
 
 
 @contextmanager
@@ -1223,7 +1371,12 @@ def run_report(
     try:
         yield report
     except BaseException as exc:
-        report.issue("unhandled_exception", type(exc).__name__, detail=str(exc))
+        if _out_of_time(exc):
+            # A planned stop, not a crash: WARN, said once in the headline.
+            report.stopped_early = str(exc) or "the function's timeout was near"
+            report.issues[STOPPED_EARLY] += 1
+        else:
+            report.issue("unhandled_exception", type(exc).__name__, detail=str(exc))
         report.send(notable=True, source=source)
         raise
     report.send(notable=notable, source=source)
@@ -1231,6 +1384,7 @@ def run_report(
 
 __all__ = [
     "CREATED",
+    "DEFAULT_COUNTER_SECTION",
     "DEFAULT_DIMENSION",
     "MAX_EXAMPLES",
     "MAX_OUTCOMES",
@@ -1242,11 +1396,14 @@ __all__ = [
     "Outcome",
     "RunReport",
     "Severity",
+    "counter_line",
+    "counter_sections",
     "format_duration",
     "get_prefect_logger",
     "get_run_id",
     "post_findings",
     "post_run_finding",
+    "render_sections",
     "run_report",
     "stamp_version",
 ]

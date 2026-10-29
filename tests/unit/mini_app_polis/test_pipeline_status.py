@@ -200,10 +200,8 @@ def test_rendered_embed_shape(monkeypatch) -> None:
     assert embed["description"] == "it broke"
     assert embed["color"] == ps._SEVERITY_COLORS["ERROR"]
     assert embed["fields"][0]["value"] == "look at the logs"
-    footer = embed["footer"]["text"]
-    assert "ERROR" in footer
-    assert "flow_inline" in footer
-    assert "run-77" in footer
+    # Severity first, for the API's cog-run detector; then a short run id.
+    assert embed["footer"]["text"] == "ERROR · run run-77"
 
 
 def test_build_message_marks_non_production(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -366,7 +364,7 @@ def test_nonzero_extras_appended_to_text(monkeypatch) -> None:
         ps.post_run_finding(
             "f", "WARN", text="Issues", repo="my-cog", ingest_attempted=1
         )
-    assert _built(cap)["text"] == "Issues ingest_attempted=1"
+    assert _built(cap)["text"] == "Issues\n\nCounts\n  1 ingest attempted"
 
 
 def test_zero_extras_omitted_from_text(monkeypatch) -> None:
@@ -378,13 +376,47 @@ def test_zero_extras_omitted_from_text(monkeypatch) -> None:
     assert _built(cap)["text"] == "Issues"
 
 
-def test_multiple_extras_sorted_alphabetically(monkeypatch) -> None:
+def test_extras_keep_their_order_and_take_labels_and_sections(monkeypatch) -> None:
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
     with captured() as cap:
         ps.post_run_finding(
-            "f", "WARN", text="Issues", repo="my-cog", zebra=3, alpha=1, mid=2
+            "f",
+            "WARN",
+            text="Issues",
+            repo="my-cog",
+            counter_labels={"checked": "tasks checked", "spend": "${} spent"},
+            counter_sections={"checked": "Board", "spend": "Agent"},
+            checked=42,
+            spend="0.10",
+            other=3,
         )
-    assert _built(cap)["text"] == "Issues alpha=1; mid=2; zebra=3"
+    assert _built(cap)["text"] == (
+        "Issues\n\nBoard\n  42 tasks checked\n\nAgent\n  $0.10 spent"
+        "\n\nCounts\n  3 other"
+    )
+
+
+def test_a_long_run_id_is_cut_to_eight_in_the_footer(monkeypatch) -> None:
+    message = ps._build_message(
+        repo="c",
+        flow_name="f",
+        run_id="4e1672d4-f6c8-4f61-90c7-4b0d64ce4dbd",
+        severity="SUCCESS",
+        text="x",
+        source="flow_inline",
+        dimension="pipeline_consistency",
+        suggestion=None,
+    )
+    assert message["embeds"][0]["footer"]["text"] == "SUCCESS · run 4e1672d4"
+
+
+def test_nothing_is_posted_outside_production(monkeypatch) -> None:
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("KAIANO_API_BASE_URL_DEV", "https://dev-api.example")
+    with captured() as cap:
+        result = ps.post_run_finding("f", "ERROR", text="x", repo="my-cog")
+    cap.deliver.assert_not_called()
+    assert result.suppressed == 1
 
 
 # ---------------------------------------------------------------------------
@@ -700,6 +732,12 @@ def test_stamp_version_renders_the_callers_version() -> None:
     assert ps.stamp_version("Run degraded.", "1.2.3") == "Run degraded. (version=1.2.3)"
 
 
+def test_stamp_version_goes_on_the_headline() -> None:
+    assert ps.stamp_version("Run complete.\n\nCounts\n  3 sets", "1.2.3") == (
+        "Run complete. (version=1.2.3)\n\nCounts\n  3 sets"
+    )
+
+
 def test_stamp_version_without_a_version_leaves_text_alone() -> None:
     assert ps.stamp_version("Run degraded.", None) == "Run degraded."
     assert ps.stamp_version("Run degraded.", "") == "Run degraded."
@@ -730,7 +768,7 @@ def test_run_report_carries_its_version(monkeypatch) -> None:
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
     with captured() as cap, ps.run_report("f", repo="my-cog", version="1.2.3") as r:
         r.issue("broken", "x")
-    assert _built(cap)["text"].endswith("(version=1.2.3)")
+    assert _built(cap)["text"].splitlines()[0].endswith("(version=1.2.3)")
 
 
 def test_version_applied_to_every_finding_row(monkeypatch) -> None:

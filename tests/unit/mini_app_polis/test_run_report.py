@@ -96,17 +96,20 @@ def test_a_run_with_only_outcomes_is_not_called_empty():
     r.updated("grooming proposal", "MINI-129")
     assert r.text().splitlines() == [
         "Run complete in 0.40s.",
-        "~ grooming proposal: MINI-129",
+        "",
+        "grooming proposal",
+        "  ~ MINI-129",
     ]
 
 
-def test_tally_is_ordered_issues_before_notes():
+def test_the_tally_counts_in_words_never_name_equals_value():
     r = ps.RunReport(flow_name="f", repo="c")
     r.ok(12)
     r.note("already_processed")
     r.issue("invalid_filename")
     r.issue("invalid_filename")
-    assert r.tally() == "processed=12, invalid_filename=2, already_processed=1"
+    assert r.tally() == "12 processed, 2 to look at"
+    assert "=" not in r.text()
 
 
 def test_only_flagged_reasons_name_names():
@@ -114,8 +117,9 @@ def test_only_flagged_reasons_name_names():
     r.note("already_processed", "boring.txt")
     r.issue("invalid_filename", "bad.txt")
     text = r.text()
-    assert "invalid_filename: bad.txt" in text
+    assert "invalid_filename\n  bad.txt" in text
     assert "boring.txt" not in text
+    assert "Skipped\n  1 already_processed" in text
 
 
 def test_a_notice_names_its_items_before_the_issues():
@@ -124,9 +128,14 @@ def test_a_notice_names_its_items_before_the_issues():
     r.notice("task newly held", "MINI-2")
     r.notice("task newly held", "MINI-3")
     assert r.text().splitlines() == [
-        "Run complete in 0.40s — invalid_filename=1, task newly held=2.",
-        "task newly held: MINI-2, MINI-3",
-        "invalid_filename: bad.txt",
+        "Run complete in 0.40s — 1 to look at.",
+        "",
+        "task newly held",
+        "  MINI-2",
+        "  MINI-3",
+        "",
+        "invalid_filename",
+        "  bad.txt",
     ]
 
 
@@ -134,8 +143,13 @@ def test_examples_are_capped_and_the_rest_counted():
     r = ps.RunReport(flow_name="f", repo="c")
     for i in range(7):
         r.issue("bad", f"f{i}.txt")
-    line = [ln for ln in r.text().splitlines() if ln.startswith("bad:")][0]
-    assert line == "bad: f0.txt, f1.txt, f2.txt, +4 more"
+    assert r.text().split("\n\n")[1].splitlines() == [
+        "bad",
+        "  f0.txt",
+        "  f1.txt",
+        "  f2.txt",
+        "  4 more",
+    ]
 
 
 def test_detail_is_carried_with_the_item():
@@ -157,13 +171,13 @@ def test_what_the_run_made_is_in_the_message():
     r = ps.RunReport(flow_name="voicenotes-ingest", repo="transcription-cog")
     r.ok(1)
     r.created("asana task", "Fix the DJ set importer")
-    assert "+ asana task: Fix the DJ set importer" in r.text()
+    assert "asana task\n  + Fix the DJ set importer" in r.text()
 
 
 def test_a_link_makes_the_item_clickable():
     r = ps.RunReport(flow_name="f", repo="c")
     r.created("asana task", "Fix it", link="https://app.asana.com/0/0/1")
-    assert "+ asana task: [Fix it](https://app.asana.com/0/0/1)" in r.text()
+    assert "  + [Fix it](https://app.asana.com/0/0/1)" in r.text()
 
 
 def test_operations_render_in_a_fixed_order_whatever_order_they_happened():
@@ -171,7 +185,7 @@ def test_operations_render_in_a_fixed_order_whatever_order_they_happened():
     r.removed("page", "gone")
     r.updated("page", "changed")
     r.created("page", "new")
-    marks = [line[0] for line in r.outcome_lines()]
+    marks = [line.strip()[0] for line in r.outcome_lines() if line.startswith("  ")]
     assert marks == ["+", "~", "-"]
 
 
@@ -179,24 +193,27 @@ def test_outcomes_come_before_problems():
     r = ps.RunReport(flow_name="f", repo="c")
     r.issue("bad_row", "row 9")
     r.created("dj set", "2026-01-02 Venue")
-    lines = r.text().splitlines()
-    assert lines[1].startswith("+ dj set")
-    assert lines[2].startswith("bad_row")
+    sections = r.text().split("\n\n")
+    assert sections[1] == "dj set\n  + 2026-01-02 Venue"
+    assert sections[2] == "bad_row\n  row 9"
 
 
-def test_same_kind_groups_onto_one_line_and_caps():
+def test_same_kind_groups_under_one_label_one_item_a_line_and_caps():
     r = ps.RunReport(flow_name="f", repo="c")
     for i in range(8):
         r.created("wiki page", f"page-{i}")
-    line = r.outcome_lines()[0]
-    assert line == ("+ wiki page: page-0, page-1, page-2, page-3, page-4, +3 more")
+    assert r.outcome_lines() == [
+        "wiki page",
+        *(f"  + page-{i}" for i in range(5)),
+        "  + 3 more",
+    ]
 
 
 def test_kinds_are_separate_lines_and_sorted():
     r = ps.RunReport(flow_name="f", repo="c")
     r.created("wiki page", "a")
     r.created("asana task", "b")
-    assert r.outcome_lines() == ["+ asana task: b", "+ wiki page: a"]
+    assert r.outcome_lines() == ["asana task", "  + b", "", "wiki page", "  + a"]
 
 
 def test_an_unnamed_outcome_still_counts():
@@ -204,7 +221,7 @@ def test_an_unnamed_outcome_still_counts():
     r = ps.RunReport(flow_name="f", repo="c")
     for _ in range(4):
         r.created("sheet row")
-    assert r.outcome_lines() == ["+ sheet row x4"]
+    assert r.outcome_lines() == ["sheet row", "  + 4"]
 
 
 # ── Duration ────────────────────────────────────────────────────────────
@@ -213,7 +230,7 @@ def test_an_unnamed_outcome_still_counts():
 def test_the_headline_says_how_long_it_took():
     r = ps.RunReport(flow_name="f", repo="c", duration_sec=12.43)
     r.ok(1)
-    assert _headline(r) == "Run complete in 12.4s — processed=1."
+    assert _headline(r) == "Run complete in 12.4s — 1 processed."
 
 
 def test_a_supplied_duration_wins_over_the_measured_one():
@@ -275,7 +292,7 @@ def test_send_composes_the_call(sent):
     assert call["repo"] == "deejay-cog"
     assert call["tracks"] == 412
     assert call["notable"] is True
-    assert "empty_sheet: Jan 3" in call["text"]
+    assert "empty_sheet\n  Jan 3" in call["text"]
 
 
 def test_send_is_idempotent(sent):
@@ -352,10 +369,50 @@ def test_exception_is_reported_with_what_the_run_had_done_and_re_raised(sent):
     call = sent[0]
     assert call["severity"] == "WARN"
     assert call["notable"] is True
-    assert "processed=4" in call["text"]
+    assert "4 processed" in call["text"]
     assert "bad_row" in call["text"]
     assert "unhandled_exception" in call["text"]
     assert "ValueError" in call["text"]
+
+
+def test_running_out_of_time_is_a_planned_stop_said_once(sent):
+    class RunOutOfTime(BaseException):  # noqa: N818 — the worker's name
+        pass
+
+    with (
+        pytest.raises(RunOutOfTime),
+        ps.run_report("groom-sweep", repo="task-manager-cog") as r,
+    ):
+        r.ok(3)
+        r.duration_sec = 97
+        raise RunOutOfTime("stopped 20s before the function timeout")
+
+    (call,) = sent
+    assert call["severity"] == "WARN"
+    assert call["text"].splitlines()[0] == (
+        "Stopped early after 1m 37s: out of time (stopped 20s before the "
+        "function timeout); the next run picks up the rest."
+    )
+    assert "unhandled_exception" not in call["text"]
+    assert ps.STOPPED_EARLY not in call["text"]
+
+
+def test_counters_carry_their_labels_and_sections(sent):
+    r = ps.RunReport(flow_name="f", repo="c")
+    r.count("tasks_checked", 42, label="tasks checked", section="Board")
+    r.count("agent_spend_usd", "0.10", label="${} spent", section="Agent")
+    r.count("plain", 3)
+    r.send()
+    (call,) = sent
+    assert call["counter_labels"] == {
+        "tasks_checked": "tasks checked",
+        "agent_spend_usd": "${} spent",
+    }
+    assert call["counter_sections"] == {
+        "tasks_checked": "Board",
+        "agent_spend_usd": "Agent",
+    }
+    assert call["tasks_checked"] == 42
 
 
 def test_production_only_is_passed_through(sent):
