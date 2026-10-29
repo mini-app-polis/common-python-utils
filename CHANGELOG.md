@@ -1,3 +1,15 @@
+# [7.1.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.0.0...v7.1.0) (2026-10-29)
+
+
+### Bug Fixes
+
+* **contract:** skip the return-rate probe until the development API serves it ([6755e89](https://github.com/mini-app-polis/common-python-utils/commit/6755e898dffa888fad5148b22e161ba276a6aa09))
+
+
+### Features
+
+* **contract:** a read of how often a task moved to Ready came back out ([6798528](https://github.com/mini-app-polis/common-python-utils/commit/6798528b08925792209ea0365d8579bc340dd8a1))
+
 # [7.0.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.36.0...v7.0.0) (2026-10-29)
 
 
