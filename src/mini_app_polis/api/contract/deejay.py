@@ -1,7 +1,8 @@
 """Contract for the catalog calls deejay-cog makes.
 
 ``POST /v1/ingest``, ``POST /v1/live-plays`` and ``POST /v1/spotify/playlists``,
-and ``GET /v1/sets`` to see which sets the API already holds.
+``GET /v1/sets`` to see which sets the API already holds, and
+``POST /v1/catalog/lookup`` to find the catalog entries tracks belong to.
 """
 
 from __future__ import annotations
@@ -147,3 +148,40 @@ class SetListItem(BaseModel):
         default=None, description="Source file the set was ingested from."
     )
     track_count: int = Field(default=0, description="Number of tracks in the set.")
+
+
+#: The most tracks one catalog lookup takes.
+CATALOG_LOOKUP_MAX_TRACKS = 200
+
+
+class CatalogLookupRequest(BaseModel):
+    """Tracks to find in the caller's catalog, as a set import sends them.
+
+    Each track is resolved the way a play of it is when its set is
+    ingested, so a file and its plays name the same catalog entry. Nothing
+    is recorded: no play, no new entry.
+    """
+
+    tracks: list[IngestTrack] = Field(
+        ...,
+        min_length=1,
+        max_length=CATALOG_LOOKUP_MAX_TRACKS,
+        description="The tracks to look up, in the order the answers come back.",
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class CatalogMatch(BaseModel):
+    """The catalog entry a track belongs to, with the fields a tag carries."""
+
+    id: uuid.UUID = Field(..., description="The catalog entry's id.")
+    title: str = Field(..., description="The song's title, as the catalog names it.")
+    remix: str | None = Field(
+        default=None, description="The version (remix, live, acoustic), if any."
+    )
+    artist: str = Field(..., description="The artist, as the catalog spells it.")
+    label: str | None = Field(default=None, description="The record label.")
+    genre: str | None = Field(default=None, description="The genre.")
+    bpm: float | None = Field(default=None, description="Beats per minute.")
+    release_year: int | None = Field(default=None, description="The release year.")

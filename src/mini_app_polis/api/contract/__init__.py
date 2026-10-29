@@ -22,6 +22,9 @@ from .agent_runs import (
     AgentSpend,
 )
 from .deejay import (
+    CATALOG_LOOKUP_MAX_TRACKS,
+    CatalogLookupRequest,
+    CatalogMatch,
     IngestResponseData,
     IngestSet,
     IngestTrack,
@@ -283,6 +286,9 @@ __all__ = [
     "SecretChange",
     "SecretChangeKind",
     "SetListItem",
+    "CATALOG_LOOKUP_MAX_TRACKS",
+    "CatalogLookupRequest",
+    "CatalogMatch",
     "SpotifyPlaylistIngest",
     "SpotifyPlaylistsIngest",
     "SpotifyPlaylistsIngestResponse",

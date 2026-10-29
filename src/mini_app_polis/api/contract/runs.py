@@ -43,7 +43,7 @@ class DeejayRunRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    mode: Literal["process-new-files", "ingest-live-history"] = Field(
+    mode: Literal["process-new-files", "ingest-live-history", "retag-music"] = Field(
         ...,
         description=(
             "Which deejay-cog flow to run. The cog refuses a mode it does "

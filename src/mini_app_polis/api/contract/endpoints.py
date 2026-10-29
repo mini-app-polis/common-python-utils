@@ -25,6 +25,8 @@ from .agent_runs import (
     AgentSpend,
 )
 from .deejay import (
+    CatalogLookupRequest,
+    CatalogMatch,
     IngestResponseData,
     IngestSet,
     LivePlaysIngest,
@@ -122,6 +124,16 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         path="/v1/ingest",
         request=IngestSet,
         response=IngestResponseData,
+        scope="catalog.sets.write",
+    ),
+    # A read, under the scope that writes the catalog: the machine that
+    # ingests a set's plays is the one that looks up where a file belongs.
+    Endpoint(
+        name="lookup_catalog",
+        method="POST",
+        path="/v1/catalog/lookup",
+        request=CatalogLookupRequest,
+        response=list[CatalogMatch | None],
         scope="catalog.sets.write",
     ),
     Endpoint(
