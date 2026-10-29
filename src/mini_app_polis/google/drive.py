@@ -278,6 +278,74 @@ class DriveFacade:
 
         return ShareResult(shared=shared, failed=failed)
 
+    def remove_permission(
+        self, file_id: str, email: str, *, role: str | None = None
+    ) -> int:
+        """Remove every permission ``email`` holds directly on a file or folder.
+
+        Lists the file's permissions (every page) and deletes each ``user``
+        permission whose address matches ``email``, compared trimmed and
+        lowercased as :meth:`share_with_readers` stores them. With ``role``,
+        only permissions of that role are removed; other roles, other people
+        and non-user permissions are left alone. Returns how many were
+        deleted. A file with no match deletes nothing and returns 0, so the
+        call is safe to repeat. Drive errors propagate after the facade's
+        retry.
+        """
+
+        wanted = email.strip().lower()
+
+        def _list(page_token: str | None):
+            return (
+                self._service.permissions()
+                .list(
+                    fileId=file_id,
+                    fields="nextPageToken, permissions(id, type, role, emailAddress)",
+                    supportsAllDrives=True,
+                    pageToken=page_token,
+                )
+                .execute()
+            )
+
+        def _delete(permission_id: str):
+            return (
+                self._service.permissions()
+                .delete(
+                    fileId=file_id,
+                    permissionId=permission_id,
+                    supportsAllDrives=True,
+                )
+                .execute()
+            )
+
+        ids: list[str] = []
+        page_token: str | None = None
+        while True:
+            page = execute_with_retry(
+                partial(_list, page_token),
+                context=f"listing permissions on {file_id}",
+                retry=self._retry,
+            )
+            ids.extend(
+                p["id"]
+                for p in page.get("permissions") or []
+                if p.get("id")
+                and p.get("type") == "user"
+                and (role is None or p.get("role") == role)
+                and str(p.get("emailAddress") or "").strip().lower() == wanted
+            )
+            page_token = page.get("nextPageToken")
+            if not page_token:
+                break
+
+        for permission_id in ids:
+            execute_with_retry(
+                partial(_delete, permission_id),
+                context=f"removing permission {permission_id} from {file_id}",
+                retry=self._retry,
+            )
+        return len(ids)
+
     def list_files(
         self,
         parent_id: str,
