@@ -99,3 +99,10 @@ class AsanaTaskRecord:
 
     section_name: str | None
     tag_names: tuple[str, ...] = ()
+    assignee_gid: str | None = None
+    """The assignee's user gid, or None when the task is unassigned."""
+
+    html_notes: str = ""
+    """The body as Asana rich text, wrapped in ``<body>``. A caller that
+    rewrites part of a body edits this rather than ``notes``, so the
+    task's formatting survives."""

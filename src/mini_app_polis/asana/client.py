@@ -337,17 +337,28 @@ class AsanaClient:
         *,
         name: str | None = None,
         html_notes: str | None = None,
+        assignee: str | None = None,
+        unassign: bool = False,
     ) -> None:
-        """Change a task's name, body or both. Unset arguments are left alone.
+        """Change a task's name, body, assignee or any of them. Unset
+        arguments are left alone.
 
         ``html_notes`` replaces the whole body; build it with
         :func:`~mini_app_polis.asana.rich_text.rich_text_body`.
+        ``assignee`` is a user gid, an email or ``"me"``; ``unassign=True``
+        clears the assignee instead. Passing both is an error.
         """
+        if assignee is not None and unassign:
+            raise ValueError("update_task: pass assignee or unassign, not both")
         data: dict[str, Any] = {}
         if name is not None:
             data["name"] = name
         if html_notes is not None:
             data["html_notes"] = html_notes
+        if assignee is not None:
+            data["assignee"] = assignee
+        elif unassign:
+            data["assignee"] = None
         if not data:
             return
         self._request(
@@ -530,6 +541,8 @@ _TASK_FIELDS = ",".join(
     (
         "name",
         "notes",
+        "html_notes",
+        "assignee.gid",
         "completed",
         "tags.name",
         "memberships.project.gid",
@@ -551,6 +564,9 @@ def _task_record(record: dict[str, Any], project_gid: str) -> AsanaTaskRecord | 
         if isinstance(tag, dict) and isinstance(tag.get("name"), str)
     )
     notes = record.get("notes")
+    html_notes = record.get("html_notes")
+    assignee = record.get("assignee")
+    assignee_gid = assignee.get("gid") if isinstance(assignee, dict) else None
     return AsanaTaskRecord(
         gid=gid,
         name=name,
@@ -559,6 +575,8 @@ def _task_record(record: dict[str, Any], project_gid: str) -> AsanaTaskRecord | 
         section_gid=section_gid,
         section_name=section_name,
         tag_names=tags,
+        assignee_gid=assignee_gid if isinstance(assignee_gid, str) else None,
+        html_notes=html_notes if isinstance(html_notes, str) else "",
     )
 
 

@@ -501,6 +501,72 @@ def test_get_task_reads_one_task_as_the_listing_does() -> None:
     )
 
 
+def test_a_task_record_carries_its_assignee_and_rich_body() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        fields = request.url.params["opt_fields"].split(",")
+        assert "assignee.gid" in fields
+        assert "html_notes" in fields
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "gid": "t1",
+                    "name": "MINI-1 · one",
+                    "notes": "Done when: it works",
+                    "html_notes": "<body>Done when: <strong>it works</strong></body>",
+                    "assignee": {"gid": "u1"},
+                    "completed": False,
+                    "memberships": [],
+                }
+            },
+        )
+
+    task = _client(handler).get_task("t1", "proj-1")
+
+    assert task is not None
+    assert task.assignee_gid == "u1"
+    assert task.html_notes == "<body>Done when: <strong>it works</strong></body>"
+
+
+def test_an_unassigned_task_has_no_assignee_gid() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"data": {"gid": "t1", "name": "one", "assignee": None}},
+        )
+
+    task = _client(handler).get_task("t1", "proj-1")
+
+    assert task is not None
+    assert task.assignee_gid is None
+    assert task.html_notes == ""
+
+
+def test_update_task_assigns_and_unassigns() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"data": {}})
+
+    client = _client(handler)
+    client.update_task("t1", assignee="me")
+    client.update_task("t1", unassign=True)
+    client.update_task("t1", name="MINI-1 · one")
+
+    assert json.loads(seen[0].content) == {"data": {"assignee": "me"}}
+    assert json.loads(seen[1].content) == {"data": {"assignee": None}}
+    assert json.loads(seen[2].content) == {"data": {"name": "MINI-1 · one"}}
+
+
+def test_update_task_refuses_assignee_and_unassign_together() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+        raise AssertionError("no request expected")
+
+    with pytest.raises(ValueError, match="assignee or unassign"):
+        _client(handler).update_task("t1", assignee="me", unassign=True)
+
+
 def test_get_task_of_a_deleted_task_is_none() -> None:
     assert _client(lambda _request: httpx.Response(404)).get_task("t1", "p") is None
 
