@@ -33,6 +33,9 @@ dependencies = [
 [project.scripts]
 # Run from a repo root: lists the .env.example names Doppler dev lacks.
 check-doppler-keys = "mini_app_polis.doppler:check_keys_main"
+# Run under doppler run with CLAUDE_SESSION_API_KEY: files one task through
+# POST /v1/tasks as the claude-session machine.
+file-task = "mini_app_polis.api.file_task:cli"
 
 [project.optional-dependencies]
 # Upper bounds are load-bearing, not ceremony: these were unbounded, so
