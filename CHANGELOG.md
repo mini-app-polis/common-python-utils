@@ -1,3 +1,22 @@
+# [7.0.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.36.0...v7.0.0) (2026-10-29)
+
+
+* docs(readme)!: install examples for 7.x ([3cb4c7f](https://github.com/mini-app-polis/common-python-utils/commit/3cb4c7f3bc76b29ea318535f0f36fc89a9c84924))
+
+
+### Features
+
+* **activity:** group bursts, spell changes out, name people, and post nothing from development ([64c0eeb](https://github.com/mini-app-polis/common-python-utils/commit/64c0eebc34b78826e31908b599af46f5dd1a0e04))
+* **api:** a catalog lookup by ingest track, the retag-music run mode, and a caller's own User-Agent ([a389643](https://github.com/mini-app-polis/common-python-utils/commit/a3896435b07846c44d6b1a22d933949edfe04f31))
+* **api:** file-task, a command that files a manual task through POST /v1/tasks ([0975c26](https://github.com/mini-app-polis/common-python-utils/commit/0975c26d0a13975cfaa76eb425373e0ae9b0f3b1))
+* **contract:** a manual task source, for tasks filed by hand from a working session ([22434d0](https://github.com/mini-app-polis/common-python-utils/commit/22434d062d8576e69f3296270625341ce4711aea))
+* **pipeline_status:** run reports in labelled sections with counters in words, a short footer, and none from development ([caf0935](https://github.com/mini-app-polis/common-python-utils/commit/caf0935473cb5b6a2ed4886b0b2b952d53f2f07b))
+
+
+### BREAKING CHANGES
+
+* run report text is now labelled sections, one item a line, with counters in words instead of name=value, and a footer of the severity and a short run id; activity change messages are grouped per caller and route and spell changes out; nothing (run reports, changes, faults, announcements) is posted outside production.
+
 # [6.36.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.35.0...v6.36.0) (2026-10-29)
 
 
