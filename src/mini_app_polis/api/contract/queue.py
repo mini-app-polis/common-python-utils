@@ -24,7 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .agent_runs import AgentRun
 from .groomings import GroomingJobRequest, GroomingProposal
-from .secret_rotations import RotationConfig, RotationRequest
+from .secret_rotations import _INCIDENT_ID, RotationConfig, RotationRequest
 from .tasks import TaskCreateRequest, TaskUpdateRequest
 from .wcs_wiki import WcsWikiJob
 
@@ -218,6 +218,22 @@ class RotationSweepMessage(QueueMessage[RotationSweepPayload]):
     type: Literal["rotation.sweep"] = "rotation.sweep"
 
 
+class RotationIncidentPayload(BaseModel):
+    """An incident to expand: every inventory secret, compromised."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    incident_id: str = Field(..., pattern=_INCIDENT_ID)
+
+
+class RotationIncidentMessage(QueueMessage[RotationIncidentPayload]):
+    """``rotation.incident`` on rotator-cog's queue, from the API: register
+    the incident's entries, queue a compromised ``rotation.job`` for each
+    secret the rotator rotates, and ask for a task for every other."""
+
+    type: Literal["rotation.incident"] = "rotation.incident"
+
+
 #: Every message kind, discriminated on ``type``.
 JobMessage = Annotated[
     TranscriptionRunMessage
@@ -232,7 +248,8 @@ JobMessage = Annotated[
     | TaskAgentResultMessage
     | TaskSweepMessage
     | RotationJobMessage
-    | RotationSweepMessage,
+    | RotationSweepMessage
+    | RotationIncidentMessage,
     Field(discriminator="type"),
 ]
 
@@ -246,6 +263,8 @@ __all__ = [
     "EvaluationRepositoryPayload",
     "JobMessage",
     "QueueMessage",
+    "RotationIncidentMessage",
+    "RotationIncidentPayload",
     "RotationJobMessage",
     "RotationSweepMessage",
     "RotationSweepPayload",

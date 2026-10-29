@@ -64,6 +64,12 @@ from .runs import (
 from .secret_rotations import (
     RotationEvent,
     RotationEventCreate,
+    RotationIncident,
+    RotationIncidentAccepted,
+    RotationIncidentEntryStatus,
+    RotationIncidentRegistration,
+    RotationIncidentRequest,
+    RotationIncidentTaskRequested,
     RotationRequest,
     RotationRequestAccepted,
     SecretChange,
@@ -97,7 +103,8 @@ class Endpoint:
 
     ``response`` is the type of the envelope's ``data``, not the envelope.
     ``scope`` is what the API requires of the caller; ``None`` means the
-    route checks no scope.
+    route checks no scope. A ``{name}`` in ``path`` is filled from the
+    client method's arguments.
     """
 
     name: str
@@ -435,6 +442,41 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=RotationRequest,
         response=RotationRequestAccepted,
         scope="secrets.rotations.create",
+    ),
+    # An incident: every secret rotated, compromised, under one id. Starting
+    # one shares request_rotation's scope; the rotator registers and marks
+    # entries and reads the incident with scopes of its own.
+    Endpoint(
+        name="start_rotation_incident",
+        method="POST",
+        path="/v1/secrets/rotation-incidents",
+        request=RotationIncidentRequest,
+        response=RotationIncidentAccepted,
+        scope="secrets.rotations.create",
+    ),
+    Endpoint(
+        name="register_rotation_incident",
+        method="POST",
+        path="/v1/secrets/rotation-incidents/{incident_id}/entries",
+        request=RotationIncidentRegistration,
+        response=RotationIncident,
+        scope="secrets.rotation-incidents.write",
+    ),
+    Endpoint(
+        name="mark_rotation_incident_task_requested",
+        method="POST",
+        path="/v1/secrets/rotation-incidents/{incident_id}/task-requested",
+        request=RotationIncidentTaskRequested,
+        response=RotationIncidentEntryStatus,
+        scope="secrets.rotation-incidents.write",
+    ),
+    Endpoint(
+        name="get_rotation_incident",
+        method="GET",
+        path="/v1/secrets/rotation-incidents/{incident_id}",
+        request=None,
+        response=RotationIncident,
+        scope="secrets.rotation-incidents.read",
     ),
     Endpoint(
         name="list_secret_changes",

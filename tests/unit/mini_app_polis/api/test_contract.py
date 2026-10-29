@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 import types
 import typing
 import uuid
@@ -281,18 +282,26 @@ def test_each_typed_method_calls_its_own_catalog_entry(
 ) -> None:
     seen: list[str] = []
     sentinel = object()
+    # Each {name} in the path is a positional argument, before the body.
+    names = re.findall(r"{(\w+)}", endpoint.path)
+    path_params = {name: f"{name}-value" for name in names}
 
-    def fake_call(self, endpoint_name, body=None, params=None):  # noqa: ARG001
+    def fake_call(self, endpoint_name, body=None, params=None, path_params=None):  # noqa: ARG001
         seen.append(endpoint_name)
         if body is not None:
             assert body is sentinel
+        assert (path_params or {}) == expected_path_params
         return sentinel
 
+    expected_path_params = path_params
     monkeypatch.setattr(KaianoApiClient, "_call", fake_call)
     client = KaianoApiClient(base_url="https://example.com", api_key="k")
     method = getattr(client, endpoint.name)
+    args: list[Any] = list(path_params.values())
+    if endpoint.request is not None:
+        args.append(sentinel)
 
-    out = method(sentinel) if endpoint.request is not None else method()
+    out = method(*args)
 
     assert seen == [endpoint.name]
     assert out is sentinel
