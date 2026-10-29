@@ -158,6 +158,7 @@ NOT_EXERCISED: dict[str, str] = {
 #: and exercise it in test_contract.py.
 NOT_DEPLOYED: dict[str, str] = {
     "lookup_catalog": "the development API does not serve it yet",
+    "grooming_return_rate": "the development API does not serve it yet",
 }
 
 
