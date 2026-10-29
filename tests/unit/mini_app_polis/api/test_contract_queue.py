@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -14,6 +15,7 @@ from mini_app_polis.api.contract import (
     EvaluationRepositoryMessage,
     JobMessage,
     QueueMessage,
+    RotationIncidentMessage,
     RotationJobMessage,
     RotationSweepMessage,
     TaskAgentResultMessage,
@@ -25,6 +27,7 @@ from mini_app_polis.api.contract import (
     TranscriptionRunMessage,
     WikiJobMessage,
 )
+from mini_app_polis.lambda_worker import parse_message
 
 ADAPTER: TypeAdapter[Any] = TypeAdapter(JobMessage)
 
@@ -42,6 +45,7 @@ KINDS = [
     (TaskSweepMessage, "task.sweep"),
     (RotationJobMessage, "rotation.job"),
     (RotationSweepMessage, "rotation.sweep"),
+    (RotationIncidentMessage, "rotation.incident"),
 ]
 
 
@@ -251,3 +255,61 @@ def test_a_rotation_job_refuses_a_payload_out_of_shape(
 def test_a_rotation_sweep_refuses_a_body_out_of_shape(body: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):
         ADAPTER.validate_python(body)
+
+
+_INCIDENT = "7c2d4e1a-9b3f-4a6c-8d5e-1f2a3b4c5d6e"
+
+
+def test_an_incident_round_trips_through_the_union() -> None:
+    body = {
+        "type": "rotation.incident",
+        "version": 1,
+        "payload": {"incident_id": _INCIDENT},
+    }
+    message = ADAPTER.validate_python(body)
+    assert isinstance(message, RotationIncidentMessage)
+    assert message.payload.incident_id == _INCIDENT
+    assert message.model_dump(mode="json") == body
+
+
+def test_an_incident_parses_through_parse_message() -> None:
+    body = json.dumps(
+        {
+            "type": "rotation.incident",
+            "version": 1,
+            "payload": {"incident_id": _INCIDENT},
+        }
+    )
+    message = parse_message(
+        body, RotationJobMessage, RotationSweepMessage, RotationIncidentMessage
+    )
+    assert isinstance(message, RotationIncidentMessage)
+
+
+@pytest.mark.parametrize(
+    "payload", [{}, {"incident_id": "incident-1"}, {"incident_id": _INCIDENT, "x": 1}]
+)
+def test_an_incident_refuses_a_payload_out_of_shape(payload: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        ADAPTER.validate_python(
+            {"type": "rotation.incident", "version": 1, "payload": payload}
+        )
+
+
+def test_an_incident_job_carries_its_id_and_a_plain_job_does_not() -> None:
+    incident_job = RotationJobMessage(
+        payload={  # type: ignore[arg-type]
+            "name": "TICK_SECRET",
+            "config": "prd",
+            "mode": "compromised",
+            "incident_id": _INCIDENT,
+        }
+    )
+    plain = RotationJobMessage(
+        payload={"name": "TICK_SECRET", "config": "prd", "mode": "routine"}  # type: ignore[arg-type]
+    )
+    assert incident_job.model_dump(mode="json")["payload"]["incident_id"] == _INCIDENT
+    # A consumer on a release from before incidents forbids the field, so a
+    # job with none must not send it, not even as null.
+    assert "incident_id" not in plain.model_dump(mode="json")["payload"]
+    assert "incident_id" not in json.loads(plain.model_dump_json())["payload"]

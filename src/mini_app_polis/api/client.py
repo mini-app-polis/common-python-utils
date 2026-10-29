@@ -50,6 +50,7 @@ import random
 import time
 from functools import cache
 from typing import Any, cast
+from urllib.parse import quote
 
 import httpx
 from pydantic import BaseModel, TypeAdapter
@@ -93,6 +94,12 @@ from .contract import (
     RotationConfig,
     RotationEvent,
     RotationEventCreate,
+    RotationIncident,
+    RotationIncidentAccepted,
+    RotationIncidentEntryStatus,
+    RotationIncidentRegistration,
+    RotationIncidentRequest,
+    RotationIncidentTaskRequested,
     RotationRequest,
     RotationRequestAccepted,
     SecretChange,
@@ -455,22 +462,28 @@ class KaianoApiClient:
         endpoint_name: str,
         body: BaseModel | None = None,
         params: dict[str, Any] | None = None,
+        path_params: dict[str, str] | None = None,
     ) -> Any:
         endpoint = ENDPOINTS_BY_NAME[endpoint_name]
+        path = endpoint.path
+        if path_params:
+            path = path.format(
+                **{key: quote(value, safe="") for key, value in path_params.items()}
+            )
         if endpoint.method == "POST":
             if body is None:
                 raise TypeError(f"{endpoint_name} needs a request body")
             raw = self.post(
-                endpoint.path,
+                path,
                 body.model_dump(mode="json", exclude_unset=True, by_alias=True),
             )
         elif endpoint_name in _CONDITIONAL_READS:
             body_bytes = self._conditional_get(
-                endpoint.path, params, _CONDITIONAL_READS[endpoint_name]
+                path, params, _CONDITIONAL_READS[endpoint_name]
             )
             return _envelope_adapter(endpoint_name).validate_json(body_bytes).data
         else:
-            raw = self.get(endpoint.path, params)
+            raw = self.get(path, params)
         return _envelope_adapter(endpoint_name).validate_python(raw).data
 
     def _conditional_get(
@@ -816,19 +829,21 @@ class KaianoApiClient:
         latest: bool | None = None,
         limit: int | None = None,
         offset: int | None = None,
+        incident_id: str | None = None,
     ) -> list[RotationEvent]:
         """``GET /v1/secrets/rotation-events`` — events, newest minted first.
 
-        ``name`` and ``config`` narrow the list. ``latest=True`` returns only
-        the newest event for each name and config, which is what the daily
-        sweep reads. Unset filters are not sent, so the API's own defaults
-        apply.
+        ``name``, ``config`` and ``incident_id`` (sent as ``incident``)
+        narrow the list. ``latest=True`` returns only the newest event for
+        each name and config, which is what the daily sweep reads. Unset
+        filters are not sent, so the API's own defaults apply.
         """
         params = {
             key: value
             for key, value in {
                 "name": name,
                 "config": config,
+                "incident": incident_id,
                 "latest": "true" if latest else None,
                 "limit": limit,
                 "offset": offset,
@@ -871,6 +886,61 @@ class KaianoApiClient:
         recorded as an event once it has run.
         """
         return cast(RotationRequestAccepted, self._call("request_rotation", payload))
+
+    def start_rotation_incident(
+        self, payload: RotationIncidentRequest
+    ) -> RotationIncidentAccepted:
+        """``POST /v1/secrets/rotation-incidents`` — rotate every secret now.
+
+        Mints an incident, or resumes the one ``payload.incident_id`` names,
+        and queues it for the rotator. The answer carries the incident id
+        every job, event and task of it will carry.
+        """
+        return cast(
+            RotationIncidentAccepted, self._call("start_rotation_incident", payload)
+        )
+
+    def register_rotation_incident(
+        self, incident_id: str, payload: RotationIncidentRegistration
+    ) -> RotationIncident:
+        """``POST /v1/secrets/rotation-incidents/{id}/entries`` — the
+        incident's entries, as the rotator built them from its inventory.
+
+        Registering again keeps what is already recorded for an entry.
+        Returns the incident as it now stands.
+        """
+        return cast(
+            RotationIncident,
+            self._call(
+                "register_rotation_incident",
+                payload,
+                path_params={"incident_id": incident_id},
+            ),
+        )
+
+    def mark_rotation_incident_task_requested(
+        self, incident_id: str, payload: RotationIncidentTaskRequested
+    ) -> RotationIncidentEntryStatus:
+        """``POST /v1/secrets/rotation-incidents/{id}/task-requested`` — the
+        board task for one entry has been asked for."""
+        return cast(
+            RotationIncidentEntryStatus,
+            self._call(
+                "mark_rotation_incident_task_requested",
+                payload,
+                path_params={"incident_id": incident_id},
+            ),
+        )
+
+    def get_rotation_incident(self, incident_id: str) -> RotationIncident:
+        """``GET /v1/secrets/rotation-incidents/{id}`` — each entry's state,
+        and what is still outstanding."""
+        return cast(
+            RotationIncident,
+            self._call(
+                "get_rotation_incident", path_params={"incident_id": incident_id}
+            ),
+        )
 
     def send_notification(self, payload: NotifyRequest) -> NotificationResult:
         """``POST /v1/notify`` — one Discord message, typed.

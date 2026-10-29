@@ -127,6 +127,19 @@ NOT_EXERCISED: dict[str, str] = {
         "the contract-suite machine holds no secrets.rotation-events scope"
     ),
     "list_secret_changes": "the contract-suite machine holds no secrets.changes scope",
+    "start_rotation_incident": (
+        "development has no queues: the rotator's queue is not provisioned, "
+        "and an incident that reached it would rotate every real secret"
+    ),
+    "register_rotation_incident": (
+        "the contract-suite machine holds no secrets.rotation-incidents scope"
+    ),
+    "mark_rotation_incident_task_requested": (
+        "the contract-suite machine holds no secrets.rotation-incidents scope"
+    ),
+    "get_rotation_incident": (
+        "the contract-suite machine holds no secrets.rotation-incidents scope"
+    ),
     "create_wcs_source": (
         "a source cannot be deleted and every source is in the unfiltered "
         "wiki export, so a fixture would stay in dev's wiki for good"
@@ -140,7 +153,14 @@ NOT_EXERCISED: dict[str, str] = {
 #: 404, not the 401 the access check expects. Listed here, an endpoint is
 #: neither probed nor exercised; take it off once the development API has it,
 #: and exercise it in test_contract.py.
-NOT_DEPLOYED: dict[str, str] = {}
+NOT_DEPLOYED: dict[str, str] = {
+    "start_rotation_incident": "the incident routes are not deployed yet",
+    "register_rotation_incident": "the incident routes are not deployed yet",
+    "mark_rotation_incident_task_requested": (
+        "the incident routes are not deployed yet"
+    ),
+    "get_rotation_incident": "the incident routes are not deployed yet",
+}
 
 
 class ContractConfigError(RuntimeError):

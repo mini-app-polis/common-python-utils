@@ -16,6 +16,13 @@ from mini_app_polis.api.contract import (
     ENDPOINTS_BY_NAME,
     RotationEvent,
     RotationEventCreate,
+    RotationIncident,
+    RotationIncidentAccepted,
+    RotationIncidentEntry,
+    RotationIncidentEntryStatus,
+    RotationIncidentRegistration,
+    RotationIncidentRequest,
+    RotationIncidentTaskRequested,
     RotationRequest,
     RotationRequestAccepted,
     SecretChange,
@@ -25,6 +32,7 @@ from mini_app_polis.api.contract import (
 _META = {"count": 1, "total": 1, "version": "test"}
 _MINTED = datetime(2026, 10, 25, 9, 0, tzinfo=UTC)
 _EVENT_ID = "0b6f1c9e-5d1a-4c1e-9a43-2f7f3f1d8e21"
+_INCIDENT = "7c2d4e1a-9b3f-4a6c-8d5e-1f2a3b4c5d6e"
 
 
 def _event(**overrides: Any) -> dict[str, Any]:
@@ -68,6 +76,10 @@ def test_the_routes_and_their_scopes() -> None:
             "list_rotation_events",
             "request_rotation",
             "list_secret_changes",
+            "start_rotation_incident",
+            "register_rotation_incident",
+            "mark_rotation_incident_task_requested",
+            "get_rotation_incident",
         )
         for e in [ENDPOINTS_BY_NAME[name]]
     }
@@ -95,6 +107,30 @@ def test_the_routes_and_their_scopes() -> None:
             "/v1/secrets/changes",
             None,
             "secrets.changes.read",
+        ),
+        "start_rotation_incident": (
+            "POST",
+            "/v1/secrets/rotation-incidents",
+            RotationIncidentRequest,
+            "secrets.rotations.create",
+        ),
+        "register_rotation_incident": (
+            "POST",
+            "/v1/secrets/rotation-incidents/{incident_id}/entries",
+            RotationIncidentRegistration,
+            "secrets.rotation-incidents.write",
+        ),
+        "mark_rotation_incident_task_requested": (
+            "POST",
+            "/v1/secrets/rotation-incidents/{incident_id}/task-requested",
+            RotationIncidentTaskRequested,
+            "secrets.rotation-incidents.write",
+        ),
+        "get_rotation_incident": (
+            "GET",
+            "/v1/secrets/rotation-incidents/{incident_id}",
+            None,
+            "secrets.rotation-incidents.read",
         ),
     }
 
@@ -238,6 +274,7 @@ def test_listing_events_sends_only_the_filters_given(
     client.list_rotation_events(
         name="DEEJAY_COG_API_KEY", config="prd", latest=True, limit=10, offset=20
     )
+    client.list_rotation_events(incident_id=_INCIDENT)
     assert calls == [
         ("GET", "/v1/secrets/rotation-events", None),
         ("GET", "/v1/secrets/rotation-events", None),
@@ -252,6 +289,7 @@ def test_listing_events_sends_only_the_filters_given(
                 "offset": 20,
             },
         ),
+        ("GET", "/v1/secrets/rotation-events", {"incident": _INCIDENT}),
     ]
 
 
@@ -282,6 +320,232 @@ def test_requesting_a_rotation_posts_name_config_and_mode(
     ]
     assert isinstance(out, RotationRequestAccepted)
     assert out.message_id == "m-1"
+
+
+def test_a_job_may_name_its_incident() -> None:
+    job = RotationRequest(
+        name="TICK_SECRET", config="prd", mode="compromised", incident_id=_INCIDENT
+    )
+    assert job.incident_id == _INCIDENT
+    # A request without one is the same request it always was.
+    assert "incident_id" not in RotationRequest(
+        name="TICK_SECRET", config="prd", mode="routine"
+    ).model_dump(exclude_unset=True)
+
+
+def test_an_event_may_name_its_incident() -> None:
+    event = RotationEventCreate.model_validate(
+        _event(mode="compromised", incident_id=_INCIDENT)
+    )
+    assert event.incident_id == _INCIDENT
+    assert RotationEventCreate.model_validate(_event()).incident_id is None
+
+
+@pytest.mark.parametrize("incident", ["incident-1", _INCIDENT.upper(), ""])
+def test_an_incident_id_is_a_lowercase_uuid(incident: str) -> None:
+    with pytest.raises(ValidationError):
+        RotationEventCreate.model_validate(_event(incident_id=incident))
+    with pytest.raises(ValidationError):
+        RotationIncidentRequest(mode="compromised", incident_id=incident)
+
+
+# ── Incidents ─────────────────────────────────────────────────────────────
+
+
+def _entry(**overrides: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "name": "DEEJAY_COG_API_KEY",
+        "config": "prd",
+        "tier": 1,
+        "handling": "worker",
+    }
+    base.update(overrides)
+    return base
+
+
+def _status(**overrides: Any) -> dict[str, Any]:
+    return {**_entry(), "task_requested": False, "state": "outstanding", **overrides}
+
+
+def _incident(**overrides: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "incident_id": _INCIDENT,
+        "started_at": _MINTED.isoformat(),
+        "entries": [_status()],
+        "outstanding": [_status()],
+    }
+    base.update(overrides)
+    return base
+
+
+def test_an_incident_is_compromised_only() -> None:
+    assert RotationIncidentRequest(mode="compromised").incident_id is None
+    with pytest.raises(ValidationError):
+        RotationIncidentRequest.model_validate({"mode": "routine"})
+    with pytest.raises(ValidationError):
+        RotationIncidentRequest.model_validate({})
+
+
+def test_an_incident_request_names_no_secret_and_no_person() -> None:
+    for extra in ({"name": "TICK_SECRET"}, {"actor": "owner@example.com"}):
+        with pytest.raises(ValidationError):
+            RotationIncidentRequest.model_validate({"mode": "compromised", **extra})
+
+
+def test_starting_an_incident_posts_it_and_returns_the_minted_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    accepted = {
+        "accepted": True,
+        "message_id": "m-1",
+        "incident_id": _INCIDENT,
+        "started_at": _MINTED.isoformat(),
+    }
+    client, calls = _client(monkeypatch, {"data": accepted, "meta": _META})
+
+    out = client.start_rotation_incident(RotationIncidentRequest(mode="compromised"))
+
+    assert calls == [
+        ("POST", "/v1/secrets/rotation-incidents", {"mode": "compromised"})
+    ]
+    assert isinstance(out, RotationIncidentAccepted)
+    assert (out.incident_id, out.started_at, out.resumed) == (
+        _INCIDENT,
+        _MINTED,
+        False,
+    )
+
+
+def test_resuming_an_incident_sends_its_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    accepted = {
+        "message_id": "m-2",
+        "incident_id": _INCIDENT,
+        "started_at": _MINTED.isoformat(),
+        "resumed": True,
+    }
+    client, calls = _client(monkeypatch, {"data": accepted, "meta": _META})
+
+    out = client.start_rotation_incident(
+        RotationIncidentRequest(mode="compromised", incident_id=_INCIDENT)
+    )
+
+    assert calls[0][2] == {"mode": "compromised", "incident_id": _INCIDENT}
+    assert out.resumed is True
+
+
+def test_an_entry_is_one_secret_in_one_config_with_its_tier_and_handling() -> None:
+    entry = RotationIncidentEntry.model_validate(_entry(handling="task", tier=0))
+    assert (entry.tier, entry.handling) == (0, "task")
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("tier", 4), ("tier", -1), ("handling", "skip"), ("config", "stg")],
+)
+def test_an_entry_refuses_what_is_not_its_shape(field: str, value: Any) -> None:
+    with pytest.raises(ValidationError):
+        RotationIncidentEntry.model_validate(_entry(**{field: value}))
+
+
+def test_a_registration_names_each_secret_and_config_once() -> None:
+    RotationIncidentRegistration.model_validate(
+        {"entries": [_entry(), _entry(config="dev")]}
+    )
+    with pytest.raises(ValidationError, match="once per name and config"):
+        RotationIncidentRegistration.model_validate({"entries": [_entry(), _entry()]})
+    with pytest.raises(ValidationError):
+        RotationIncidentRegistration.model_validate({"entries": []})
+
+
+def test_registering_an_incident_posts_its_entries_under_its_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, calls = _client(monkeypatch, {"data": _incident(), "meta": _META})
+
+    out = client.register_rotation_incident(
+        _INCIDENT,
+        RotationIncidentRegistration.model_validate({"entries": [_entry()]}),
+    )
+
+    assert calls == [
+        (
+            "POST",
+            f"/v1/secrets/rotation-incidents/{_INCIDENT}/entries",
+            {"entries": [_entry()]},
+        )
+    ]
+    assert isinstance(out, RotationIncident)
+    assert out.entries[0].state == "outstanding"
+
+
+def test_marking_a_task_requested_posts_the_entry_under_its_incident(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    answer = _status(handling="task", task_requested=True, state="task-opened")
+    client, calls = _client(monkeypatch, {"data": answer, "meta": _META})
+
+    out = client.mark_rotation_incident_task_requested(
+        _INCIDENT, RotationIncidentTaskRequested(name="TICK_SECRET", config="dev")
+    )
+
+    assert calls == [
+        (
+            "POST",
+            f"/v1/secrets/rotation-incidents/{_INCIDENT}/task-requested",
+            {"name": "TICK_SECRET", "config": "dev"},
+        )
+    ]
+    assert isinstance(out, RotationIncidentEntryStatus)
+    assert (out.task_requested, out.state) == (True, "task-opened")
+
+
+def test_reading_an_incident_returns_each_entry_and_what_is_outstanding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    failed = _status(name="TICK_SECRET", tier=0, state="failed")
+    rotated = _status(config="dev", state="rotated")
+    body = _incident(entries=[failed, rotated], outstanding=[failed])
+    client, calls = _client(monkeypatch, {"data": body, "meta": _META})
+
+    out = client.get_rotation_incident(_INCIDENT)
+
+    assert calls == [("GET", f"/v1/secrets/rotation-incidents/{_INCIDENT}", None)]
+    assert [e.state for e in out.entries] == ["failed", "rotated"]
+    assert [e.name for e in out.outstanding] == ["TICK_SECRET"]
+
+
+def test_an_incident_id_in_a_path_is_escaped(monkeypatch: pytest.MonkeyPatch) -> None:
+    client, calls = _client(monkeypatch, {"data": _incident(), "meta": _META})
+    client.get_rotation_incident("a/b?c")
+    assert calls[0][1] == "/v1/secrets/rotation-incidents/a%2Fb%3Fc"
+
+
+@pytest.mark.parametrize("state", ["rotated", "failed", "task-opened", "outstanding"])
+def test_each_state_an_entry_can_be_in(state: str) -> None:
+    assert RotationIncidentEntryStatus.model_validate(_status(state=state)).state == (
+        state
+    )
+
+
+def test_an_entry_state_refuses_one_it_does_not_know() -> None:
+    with pytest.raises(ValidationError):
+        RotationIncidentEntryStatus.model_validate(_status(state="pending"))
+
+
+def test_incident_reads_tolerate_fields_a_newer_api_adds() -> None:
+    incident = RotationIncident.model_validate(
+        _incident(declared_by="owner@example.com", entries=[_status(later=1)])
+    )
+    assert incident.incident_id == _INCIDENT
+    accepted = RotationIncidentAccepted.model_validate(
+        {
+            "message_id": "m-1",
+            "incident_id": _INCIDENT,
+            "started_at": _MINTED.isoformat(),
+            "later": "x",
+        }
+    )
+    assert accepted.accepted is True
 
 
 # ── Secret changes ────────────────────────────────────────────────────────
@@ -388,7 +652,27 @@ _MODELS: list[type[BaseModel]] = [
     and not obj.__name__.startswith("_")
 ]
 
-_REQUEST_MODELS = [RotationEventCreate, RotationRequest]
+_REQUEST_MODELS = [
+    RotationEventCreate,
+    RotationRequest,
+    RotationIncidentRequest,
+    RotationIncidentEntry,
+    RotationIncidentRegistration,
+    RotationIncidentTaskRequested,
+]
+
+#: A valid body for each request model.
+_REQUEST_BODIES: dict[type[BaseModel], dict[str, Any]] = {
+    RotationEventCreate: _event(),
+    RotationRequest: {"name": "TICK_SECRET", "config": "prd", "mode": "routine"},
+    RotationIncidentRequest: {"mode": "compromised"},
+    RotationIncidentEntry: _entry(),
+    RotationIncidentRegistration: {"entries": [_entry()]},
+    RotationIncidentTaskRequested: {"name": "TICK_SECRET", "config": "prd"},
+}
+
+#: Lists, each of a model in this contract, which is checked in its own right.
+_NESTED = {"entries", "outstanding"}
 
 _VALUE_LIKE = re.compile(
     r"value|secret|token|key|password|passwd|credential|private|cipher", re.I
@@ -401,7 +685,7 @@ _NAMED_LIKE_A_VALUE = {"aws_key_last4"}  # four characters of a public key id
 _FREE_TEXT = {"verification_reason": 500, "message_id": 100}
 
 #: Strings whose pattern fixes their length.
-_FIXED_LENGTH = {"aws_key_last4", "id"}
+_FIXED_LENGTH = {"aws_key_last4", "id", "incident_id"}
 
 #: Shapes of real secrets in the fleet, none of which a patterned field accepts.
 _SECRET_SHAPES = [
@@ -430,6 +714,13 @@ def test_the_models_checked_are_every_model_in_the_contract() -> None:
     assert set(_MODELS) == {
         RotationEvent,
         RotationEventCreate,
+        RotationIncident,
+        RotationIncidentAccepted,
+        RotationIncidentEntry,
+        RotationIncidentEntryStatus,
+        RotationIncidentRegistration,
+        RotationIncidentRequest,
+        RotationIncidentTaskRequested,
         RotationRequest,
         RotationRequestAccepted,
         SecretChange,
@@ -456,6 +747,10 @@ def test_a_request_refuses_a_field_it_does_not_declare(
 def test_every_string_is_a_choice_a_time_or_bounded(model: type[BaseModel]) -> None:
     for name, schema in _properties(model).items():
         where = f"{model.__name__}.{name}"
+        if name in _NESTED:
+            assert schema.get("type") == "array", where
+            assert "$ref" in schema["items"], f"{where} is not a list of a model"
+            continue
         assert schema.get("type") in {"string", "boolean"} or "enum" in schema, (
             f"{where} is not a string, a choice or a flag: {schema}"
         )
@@ -482,21 +777,17 @@ def test_a_secret_shaped_string_fits_no_patterned_field(value: str) -> None:
         )
     with pytest.raises(ValidationError):
         RotationRequest(name=value, config="prd", mode="routine")
+    with pytest.raises(ValidationError):
+        RotationIncidentEntry.model_validate(_entry(name=value))
+    with pytest.raises(ValidationError):
+        RotationIncidentRequest(mode="compromised", incident_id=value)
 
 
 @pytest.mark.parametrize("model", _REQUEST_MODELS, ids=lambda m: m.__name__)
 def test_a_value_sent_under_any_undeclared_name_is_refused(
     model: type[BaseModel],
 ) -> None:
-    body = (
-        _event()
-        if model is RotationEventCreate
-        else {
-            "name": "TICK_SECRET",
-            "config": "prd",
-            "mode": "routine",
-        }
-    )
+    body = _REQUEST_BODIES[model]
     model.model_validate(body)
     for extra in ("value", "secret", "new_value", "previous"):
         with pytest.raises(ValidationError):
