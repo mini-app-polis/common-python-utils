@@ -100,6 +100,26 @@ def test_a_due_secret_rotation_is_a_minted_source() -> None:
         )
 
 
+def test_a_task_filed_by_hand_is_a_minted_manual_source() -> None:
+    request = TaskCreateRequest.model_validate(
+        _request(source="manual", external_id="manual.split-the-vault")
+    )
+    assert request.source == "manual"
+    assert request.id is None
+    with pytest.raises(ValidationError, match="minted"):
+        TaskCreateRequest.model_validate(
+            _request(source="manual", external_id="manual.x", id="MINI-1")
+        )
+    with pytest.raises(ValidationError, match=r"must start with manual\."):
+        TaskCreateRequest.model_validate(
+            _request(source="manual", external_id="voicenote.x")
+        )
+    with pytest.raises(ValidationError, match=r"must start with voicenote\."):
+        TaskCreateRequest.model_validate(
+            _request(source="voicenote", external_id="manual.x")
+        )
+
+
 def test_template_fields_are_optional_and_blank_by_default() -> None:
     draft = TaskDraft(title="t")
     assert (draft.done_when, draft.constraints, draft.effort) == (None, None, None)
