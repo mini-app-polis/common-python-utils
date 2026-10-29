@@ -136,9 +136,9 @@ class AnthropicLLM(LLMClient):
         # ``output_config`` is the nearest surviving control and takes an
         # ``effort`` level (low … max) rather than a sampling
         # temperature, so it is not a rename and nothing is mapped onto
-        # it here. Sampling therefore uses the API default rather than
-        # the 0.2 this used to request; set output_config deliberately if
-        # a specific effort level turns out to matter.
+        # it here. Sampling therefore uses the API default; set
+        # output_config deliberately if a specific effort level turns out
+        # to matter.
         create_kwargs: dict[str, Any] = {
             "model": self._cfg.model,
             "max_tokens": self._cfg.max_tokens,

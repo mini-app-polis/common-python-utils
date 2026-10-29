@@ -82,7 +82,7 @@ class _GroomingFields(BaseModel):
     """What the task manager remembers about one task."""
 
     task_gid: str = Field(..., min_length=1, max_length=64, pattern=r"^\d+$")
-    #: The task's id on the board (``MINI-12``), when it has one.
+    #: The task's id on the board (a prefix and a number), when it has one.
     task_id: str | None = Field(default=None, max_length=64)
     #: sha256 of the content judged: name, body and tags. Not the column, so
     #: moving a task is not a change to its content.
@@ -168,7 +168,7 @@ class GroomingReturnRate(BaseModel):
 
     ``moved_to_ready`` counts the moves to Ready in the window,
     ``returned`` the tasks sent back out of Ready in it (by a person, or by
-    the sweep finding the task no longer ready), and ``ratio`` is
+    the sweep finding the task not ready), and ``ratio`` is
     ``returned / moved_to_ready``: None when nothing moved to Ready. The
     counts come from events recorded as the grooming records change, so a
     window reaching back before the first of them counts only from

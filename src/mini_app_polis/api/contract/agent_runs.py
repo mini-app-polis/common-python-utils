@@ -54,7 +54,7 @@ class AgentRunCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     task_gid: str = Field(..., min_length=1, max_length=64, pattern=_GID)
-    #: The task's id on the board (``MINI-12``), when it has one.
+    #: The task's id on the board (a prefix and a number), when it has one.
     task_id: str | None = Field(default=None, max_length=64)
     #: The repository the run works in, by name within the organisation.
     repository: str = Field(..., min_length=1, max_length=100, pattern=_REPOSITORY)

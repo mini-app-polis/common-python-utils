@@ -15,9 +15,8 @@ class LLMConfig:
     api_key_env: str
     #: Per-request timeout, in seconds, for both providers. The OpenAI
     #: client passes it on each call; the Anthropic client gives it to the
-    #: SDK client, which applies it per request — it used to be declared
-    #: here and ignored, leaving Anthropic on the SDK's 600-second default.
-    #: A caller whose generation legitimately runs long sets it rather than
+    #: SDK client, which applies it per request, so Anthropic is not left on
+    #: the SDK's 600-second default. A caller whose generation legitimately runs long sets it rather than
     #: inheriting this.
     timeout_s: float = 60.0
     #: Attempts after the first, inside the SDK. ``None`` leaves each SDK's

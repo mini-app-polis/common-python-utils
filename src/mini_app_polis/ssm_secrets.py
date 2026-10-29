@@ -1,11 +1,11 @@
 """Load a Lambda worker's secrets from SSM Parameter Store into ``os.environ``.
 
-Why this exists. The Lambda cogs used to receive their secrets as Terraform
-variables, which put every one of them in plaintext Terraform state and in
-every plan. Now each worker has a Doppler config of its own, synced into
-Parameter Store under a prefix of its own, Terraform declares *which*
-parameters the worker may read — names only, never values — and the worker
-loads them itself at cold start. Nothing secret passes through Terraform.
+Why this exists. Secrets passed as Terraform variables would sit in
+plaintext Terraform state and in every plan. Instead each worker has a
+Doppler config of its own, synced into Parameter Store under a prefix of
+its own, Terraform declares *which* parameters the worker may read — names
+only, never values — and the worker loads them itself at cold start.
+Nothing secret passes through Terraform.
 
 The worker's environment, set by Terraform, says what to load:
 

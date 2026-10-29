@@ -431,10 +431,10 @@ class SpotifyAPI:
         Reads the current tracks, then removes them in batches of 100. A
         playlist that is already empty is left alone.
 
-        Raises when Spotify does. It used to log and return, so a caller
-        that cleared and then refilled a playlist reported success while
-        appending to the old contents — the playlist doubled and nobody
-        was told.
+        Raises when Spotify does, rather than logging and returning: a
+        caller that clears and then refills a playlist would otherwise
+        report success while appending to the old contents — the playlist
+        doubled and nobody told.
         """
         uris = self.playlist_track_uris(playlist_id)
         if not uris:
@@ -455,11 +455,12 @@ class SpotifyAPI:
     def find_playlist_by_name(self, name: str):
         """Find a user playlist by exact name: ``{"id", "data"}``, or None.
 
-        Pages through every playlist on the account. It used to read only
-        the first 50, so once the account held more, a playlist that existed
-        was reported missing and the caller created a second one under the
-        same name. Raises when Spotify does, for the same reason: "could not
-        look" answered as "not there" also ends in a duplicate.
+        Pages through every playlist on the account, not only the first 50:
+        once the account holds more, reading one page would report a
+        playlist that exists as missing, and the caller would create a
+        second one under the same name. Raises when Spotify does, for the
+        same reason: "could not look" answered as "not there" also ends in
+        a duplicate.
         """
         sp = (
             self._client_from_refresh() if config.SPOTIPY_REFRESH_TOKEN else self.client

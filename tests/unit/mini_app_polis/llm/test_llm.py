@@ -180,7 +180,7 @@ class TestAnthropicLLM:
     def test_the_sdk_client_is_given_the_configured_timeout(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """It used to be declared and ignored, leaving the SDK's 600s default."""
+        """Not left on the SDK's 600s default."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
         mock_anthropic = MagicMock()
         cfg = LLMConfig(

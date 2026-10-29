@@ -1,11 +1,10 @@
 """One way for a service to start Sentry, and to say so when it can't.
 
-Every Python service used to initialise Sentry itself, and each one either
-passed an empty DSN to ``sentry_sdk.init`` (a documented no-op) or guarded
-it with ``if not dsn: return`` (the same no-op written out). Either way the
-service ran with every exception going nowhere and nothing recording that
-Layer 3 was off. That is how db-ops ran its crons without Sentry until the
-names were audited by hand (ecosystem-standards CD-038).
+A service that initialises Sentry itself either passes an empty DSN to
+``sentry_sdk.init`` (a documented no-op) or guards it with
+``if not dsn: return`` (the same no-op written out). Either way the service
+runs with every exception going nowhere and nothing recording that Layer 3
+is off (ecosystem-standards CD-038).
 
 :func:`init_sentry` owns that branch for the fleet:
 

@@ -36,8 +36,7 @@ class DriveFileRef(BaseModel):
 class DeejayRunRequest(BaseModel):
     """Ask deejay-cog to run one of its router modes.
 
-    The body is what watcher-cog used to pass to Prefect as flow-run
-    parameters, unchanged. An unknown mode is a 422 here rather than a
+    The body carries the cog's run parameters. An unknown mode is a 422 here rather than a
     message the cog would dead-letter seventeen minutes later.
     """
 
@@ -94,9 +93,9 @@ class DeejayRunAccepted(BaseModel):
 class TranscriptionRunRequest(BaseModel):
     """Ask transcription-cog to process one Drive file.
 
-    ``mode`` is what watcher-cog used to pass to Prefect as a flow-run
-    parameter, unchanged. ``drive_file_id`` is new: watcher names each file
-    it saw change, because one file is what fits in one Lambda invocation.
+    ``mode`` selects what the cog does. With ``drive_file_id``, watcher
+    names each file it saw change, because one file is what fits in one
+    Lambda invocation.
     The retention sweep, ``voicenotes-cleanup``, works on the archive and
     names no file. Either mistake is a 422 here rather than a message the
     cog would dead-letter an hour later.
