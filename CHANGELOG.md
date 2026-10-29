@@ -1,3 +1,10 @@
+# [6.35.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.34.0...v6.35.0) (2026-10-29)
+
+
+### Features
+
+* **drive:** DriveFacade.remove_permission removes a user's permissions on a file ([eccef8c](https://github.com/mini-app-polis/common-python-utils/commit/eccef8c5728fcbc1085264f33134c2c37d0afe99))
+
 # [6.34.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.33.0...v6.34.0) (2026-10-29)
 
 
