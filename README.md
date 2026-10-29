@@ -19,7 +19,7 @@ the exact pin:
 ```toml
 [project]
 dependencies = [
-  "miniapppolis-common-utils>=6.0,<7",
+  "miniapppolis-common-utils>=7.0,<8",
 ]
 ```
 
@@ -30,7 +30,7 @@ To use the LLM module, add the `llm` extra:
 
 ```toml
 dependencies = [
-  "miniapppolis-common-utils[llm]>=6.0,<7",
+  "miniapppolis-common-utils[llm]>=7.0,<8",
 ]
 ```
 
@@ -81,6 +81,34 @@ from mini_app_polis.api import KaianoApiClient
 client = KaianoApiClient.from_env("deejay-cog")
 result = client.post("/sets", {"name": "My Set"})
 ```
+
+A caller with a key of its own, rather than one read from the environment,
+passes it as `api_key`, and names itself in every request with `user_agent`:
+
+```python
+client = KaianoApiClient(api_key=key, user_agent="mini-app-polis-rotate/1")
+```
+
+### Filing a task from a working session
+
+`file-task` puts one task on the board through `POST /v1/tasks`, as the
+`claude-session` machine, so the task manager stays the one writer to the
+board and mints the id. Run it under Doppler with a config that holds
+`CLAUDE_SESSION_API_KEY`:
+
+```bash
+doppler run --config prd -- uv run file-task --key split-the-vault \
+  --title "Split the Doppler vault" --where infra --effort M \
+  --executor cowork --body "Why it matters, and links."
+```
+
+`--key` is required and becomes `manual.<key>`: choose a short slug that
+names the intent, so running it again files nothing new. `--json PATH`
+(or `--json -`) takes the whole draft as a `TaskDraft` instead of flags.
+`--executor` (`agent`, `cowork`, `person`; default `agent`) is what the
+task's `Executor:` line will say. The command prints the key and the API's
+answer, never the API key, and exits non-zero with one line saying why
+when the draft or the request is refused.
 
 For the endpoints in `mini_app_polis.api.contract.ENDPOINTS`, use the typed
 methods. They take the request model the API validates against and return the
@@ -279,18 +307,18 @@ suffix). See the module docstring for the rest.
 ### Activity feed (requires `activity` extra)
 
 Committed data changes to `activity`, faults to `errors`, for a FastAPI
-service on SQLAlchemy 2. Needs the `activity` extra; every 6.x release has
+service on SQLAlchemy 2. Needs the `activity` extra; every 7.x release has
 these modules:
 
 ```toml
-dependencies = ["miniapppolis-common-utils[activity]>=6.0,<7"]
+dependencies = ["miniapppolis-common-utils[activity]>=7.0,<8"]
 ```
 
 ```python
 from mini_app_polis import activity, discord
 
 config = activity.ActivityConfig(
-    service="api-deejaytools",                 # shown in every footer
+    service="api-deejaytools",  # shown in every footer
     suppressed_tables={"identity_audit_events"},
     excluded_paths=("/health", "/version"),
     # is_machine=lambda request: request.state.caller_kind == "machine",
@@ -300,13 +328,16 @@ app.middleware("http")(activity.activity_middleware(config))
 ```
 
 Importing the module registers the session listeners. One message per
-request that committed something (rolled-back work reports nothing; bulk
-statements are counted as statements), and one per 5xx, unhandled
-exception, or — when `is_machine` is given — 4xx to a machine caller. The
-actor is `request.state.caller` unless `caller=` says otherwise. A fault
-names the exception's type and Sentry id, never its message. Titles carry
-the environment prefix only with `ActivityConfig(label=True)` (and
-`report_fault(..., label=True)`); the footer always names the environment. A handler, or
+caller and route for what they committed within `group_seconds` (a minute by
+default; `0` posts each request at once), each table on one line with its
+changes in words (`songs · 1 deleted`; rolled-back work reports nothing; a
+bulk statement is `1 bulk write`), and one per 5xx, unhandled exception, or —
+when `is_machine` is given — 4xx to a machine caller. Call
+`await activity.flush_changes()` on shutdown so a burst still gathering is
+posted. The actor is `request.state.caller` unless `caller=` says otherwise;
+`display_name=` (sync or async) turns a person's id into a name. A fault
+names the exception's type and Sentry id, never its message. Nothing is
+posted outside production. A handler, or
 a pure ASGI error middleware holding only the scope, can attach a reason
 with `activity.record_fault_detail(request_or_scope, "...")`.
 
@@ -403,6 +434,38 @@ A run report carries the cog's build when the cog passes its own version:
 `run_report(..., version=__version__)` stamps `(version=X.Y.Z)` on the text.
 The version comes from the cog's `_version.py`, never from installed package
 metadata, which a Lambda deploy strips.
+
+### Run reports
+
+A run report reads as a headline and labelled sections, one item a line,
+never `name=value`:
+
+```python
+with run_report("groom-sweep", repo="task-manager-cog", run_id=run_id) as report:
+    report.updated("task moved to Ready", "MINI-431 · …", link=url)
+    report.count("tasks_checked", 42, label="tasks checked", section="Board")
+    report.count("agent_spend_usd", "0.10", label="${} spent", section="Agent")
+```
+
+```
+Run complete in 13.2s.
+
+task moved to Ready
+  ~ MINI-431 · …
+
+Board
+  42 tasks checked
+
+Agent
+  $0.10 spent
+```
+
+A counter's `label` is what it is called (with `{}` to place the value); one
+with no label is read from its name. A counter with no `section` goes under
+`Counts`. A run stopped by `RunOutOfTime` is headed `Stopped early …; the next
+run picks up the rest` and reported once, as WARN. The footer is the severity
+and the first 8 characters of the run id. Nothing is posted outside
+production.
 
 ### Logger
 

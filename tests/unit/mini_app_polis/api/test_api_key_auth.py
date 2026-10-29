@@ -14,6 +14,43 @@ def test_api_key_is_sent_directly(monkeypatch: pytest.MonkeyPatch) -> None:
     assert c._headers()["Authorization"] == "Bearer k_deejay"
 
 
+def test_a_caller_names_itself_in_the_user_agent() -> None:
+    c = KaianoApiClient(
+        base_url="https://x", api_key="k", user_agent="mini-app-polis-rotator/1"
+    )
+    assert c._headers()["User-Agent"] == "mini-app-polis-rotator/1"
+
+
+def test_without_a_user_agent_the_librarys_default_is_sent() -> None:
+    assert (
+        "User-Agent"
+        not in KaianoApiClient(base_url="https://x", api_key="k")._headers()
+    )
+    blank = KaianoApiClient(base_url="https://x", api_key="k", user_agent="  ")
+    assert "User-Agent" not in blank._headers()
+
+
+def test_the_user_agent_reaches_the_request() -> None:
+    import httpx
+
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"ok": True})
+
+    real_client = httpx.Client
+
+    def fake_client(*args, **kwargs):
+        return real_client(*args, transport=httpx.MockTransport(handler), **kwargs)
+
+    c = KaianoApiClient(base_url="https://x", api_key="k", user_agent="me-test/1")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(httpx, "Client", fake_client)
+        c.post("/v1/thing", {})
+    assert seen[0].headers["User-Agent"] == "me-test/1"
+
+
 def test_key_falls_back_to_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("KAIANO_API_KEY", "k_from_env")
     c = KaianoApiClient(base_url="https://x")

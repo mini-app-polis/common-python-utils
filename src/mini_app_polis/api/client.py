@@ -65,6 +65,8 @@ from .contract import (
     AgentRunFailure,
     AgentRunResult,
     AgentSpend,
+    CatalogLookupRequest,
+    CatalogMatch,
     DeejayRunAccepted,
     DeejayRunRequest,
     Envelope,
@@ -239,12 +241,17 @@ class KaianoApiClient:
         max_retries: int = 3,
         api_key: str | None = None,
         machine_name: str | None = None,
+        user_agent: str | None = None,
     ):
+        """``user_agent`` names the caller in every request's User-Agent
+        header (``mini-app-polis-rotator/1``); without it the HTTP library's
+        default is sent."""
         self.base_url = (base_url or api_base_url()).rstrip("/")
         self.machine_name = machine_name or os.environ.get("KAIANO_API_MACHINE_NAME")
         self.api_key = api_key or _key_for(self.machine_name)
         self.timeout = timeout
         self.max_retries = max_retries
+        self.user_agent = (user_agent or "").strip() or None
 
     @classmethod
     def from_env(cls, machine_name: str | None = None) -> KaianoApiClient:
@@ -271,10 +278,13 @@ class KaianoApiClient:
                 ),
                 path="",
             )
-        return {
+        headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}",
         }
+        if self.user_agent:
+            headers["User-Agent"] = self.user_agent
+        return headers
 
     def post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         """
@@ -518,6 +528,17 @@ class KaianoApiClient:
         else:
             _ETAG_CACHE.pop(key, None)
         return body
+
+    def lookup_catalog(
+        self, payload: CatalogLookupRequest
+    ) -> list[CatalogMatch | None]:
+        """``POST /v1/catalog/lookup`` — the catalog entry each track belongs to.
+
+        One answer per track, in order: the entry, or None when the catalog
+        has no song it is a play of. Tracks are matched as a set import
+        matches its plays, and nothing is recorded.
+        """
+        return cast(list[CatalogMatch | None], self._call("lookup_catalog", payload))
 
     def ingest(self, payload: IngestSet) -> IngestResponseData:
         """``POST /v1/ingest`` — one set and its tracks."""
