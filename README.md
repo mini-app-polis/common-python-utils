@@ -19,7 +19,7 @@ the exact pin:
 ```toml
 [project]
 dependencies = [
-  "miniapppolis-common-utils>=6.0,<7",
+  "miniapppolis-common-utils>=7.0,<8",
 ]
 ```
 
@@ -30,7 +30,7 @@ To use the LLM module, add the `llm` extra:
 
 ```toml
 dependencies = [
-  "miniapppolis-common-utils[llm]>=6.0,<7",
+  "miniapppolis-common-utils[llm]>=7.0,<8",
 ]
 ```
 
@@ -307,11 +307,11 @@ suffix). See the module docstring for the rest.
 ### Activity feed (requires `activity` extra)
 
 Committed data changes to `activity`, faults to `errors`, for a FastAPI
-service on SQLAlchemy 2. Needs the `activity` extra; every 6.x release has
+service on SQLAlchemy 2. Needs the `activity` extra; every 7.x release has
 these modules:
 
 ```toml
-dependencies = ["miniapppolis-common-utils[activity]>=6.0,<7"]
+dependencies = ["miniapppolis-common-utils[activity]>=7.0,<8"]
 ```
 
 ```python
