@@ -132,6 +132,12 @@ def run_request(
     return asyncio.run(scenario())
 
 
+async def _run(config: Any, handler: Any, *, caller: str | None = None) -> Any:
+    """Run one request through the middleware, leaving deliveries in flight."""
+    state = {"caller": caller} if caller else {}
+    return await activity.activity_middleware(config)(make_request(**state), handler)
+
+
 def responds(status: int, *, before: Any = None):
     async def call_next(request: Any) -> Any:
         if before is not None:
@@ -170,7 +176,7 @@ def test_summary_renders_marks_per_table():
     rec.record(None, activity.CREATED)
     rec.promote()
 
-    assert rec.summary(set()) == "`sets` -1\n`tracks` +2 ~1"
+    assert rec.summary(set()) == "sets · 1 deleted\ntracks · 2 created, 1 updated"
 
 
 def test_uncommitted_work_is_not_reported():
@@ -198,7 +204,7 @@ def test_bulk_statements_are_counted_as_statements():
     rec = activity.Recorder()
     rec.record("wcs_source_extractions", activity.BULK)
     rec.promote()
-    assert rec.summary(set()) == "`wcs_source_extractions` *1"
+    assert rec.summary(set()) == "wcs_source_extractions · 1 bulk write"
     assert rec.has_bulk() is True
 
 
@@ -245,7 +251,9 @@ def test_flush_then_commit_is_tallied():
     finally:
         activity._recorder.reset(token)
 
-    assert rec.summary(set()) == "`tracks` +2 ~1 -1 *1"
+    assert (
+        rec.summary(set()) == "tracks · 2 created, 1 updated, 1 deleted, 1 bulk write"
+    )
 
 
 def test_rollback_reports_nothing():
@@ -371,7 +379,7 @@ def test_committed_change_is_reported_and_the_audit_row_is_silent(config, sent):
     assert [c for c, _, _ in sent.messages] == [discord.CHANNEL_ACTIVITY]
     (embed,) = sent.embeds()
     assert embed["title"] == "data changed"
-    assert embed["description"] == "`tracks` +1"
+    assert embed["description"] == "tracks · 1 created"
     assert embed["footer"]["text"] == "POST /v1/things · deejay-cog · production"
     assert "identity_audit_events" not in sent.text()
 
@@ -391,15 +399,15 @@ def test_suppressed_tables_alone_say_nothing(config, sent):
     assert sent.messages == []
 
 
-def test_bulk_statement_adds_the_legend(config, sent):
+def test_a_bulk_statement_says_so_with_no_key_under_it(config, sent):
     def before(_request: Any) -> None:
         activity._capture_bulk(bulk("update"))
         FakeSession().commit()
 
     run_request(config, responds(200, before=before))
     (embed,) = sent.embeds()
-    assert embed["description"] == "`tracks` *1"
-    assert "bulk statement (rows not counted)" in embed["footer"]["text"]
+    assert embed["description"] == "tracks · 1 bulk write"
+    assert "rows not counted" not in embed["footer"]["text"]
 
 
 def test_excluded_path_is_not_recorded_at_all(config, sent):
@@ -512,7 +520,7 @@ def test_config_is_read_per_request_and_service_shows_in_footers(sent):
     def config() -> activity.ActivityConfig:
         built.append(1)
         return activity.ActivityConfig(
-            service="api-deejaytools", environment="development", send=sent
+            service="api-deejaytools", environment="production", send=sent
         )
 
     run_request(config, responds(500, before=_writes(Track())))
@@ -521,34 +529,134 @@ def test_config_is_read_per_request_and_service_shows_in_footers(sent):
     assert len(built) == 2
     footers = sorted(e["footer"]["text"] for e in sent.embeds())
     assert footers == [
-        "POST /v1/things · anonymous · api-deejaytools · development",
-        "anonymous · api-deejaytools · development",
+        "POST /v1/things · anonymous · api-deejaytools · production",
+        "anonymous · api-deejaytools · production",
     ]
 
 
 def test_environment_defaults_to_the_resolver(sent, monkeypatch):
-    monkeypatch.setenv("ENVIRONMENT", "dev")
+    monkeypatch.setenv("ENVIRONMENT", "prd")
     config = activity.ActivityConfig(send=sent)
     run_request(config, responds(500))
-    assert sent.embeds()[0]["footer"]["text"] == "anonymous · development"
+    assert sent.embeds()[0]["footer"]["text"] == "anonymous · production"
 
 
-def test_titles_are_labelled_only_when_asked(sent, monkeypatch):
-    """Unlabelled by default (api-kaianolevine-com's messages, unchanged);
-    with ``label`` a development fault cannot pass for production's."""
-    monkeypatch.setenv("ENVIRONMENT", "development")
-    plain = activity.ActivityConfig(send=sent)
-    labelled = activity.ActivityConfig(send=sent, label=True)
-    run_request(plain, responds(500, before=_writes(Track())))
-    run_request(labelled, responds(500, before=_writes(Track())))
+@pytest.mark.parametrize("environment", ["development", "local"])
+def test_nothing_is_posted_outside_production(sent, monkeypatch, environment):
+    """The channels are production's record: changes, faults, background
+    faults and announcements from anywhere else stay in the logs."""
+    monkeypatch.setenv("ENVIRONMENT", environment)
+    config = activity.ActivityConfig(send=sent, label=True, group_seconds=0)
+    run_request(config, responds(500, before=_writes(Track())))
+    sync = FakeSession()
 
-    titles = [e["title"] for e in sent.embeds()]
-    assert sorted(titles) == [
-        "[DEVELOPMENT] data changed",
-        "[DEVELOPMENT] fault · 500",
-        "data changed",
-        "fault · 500",
+    async def background() -> None:
+        await activity.report_fault("a", detail="d", send=sent)
+        activity.announce_on_commit(sync, "runs", content="built", send=sent)
+        sync.commit()
+        await activity.wait_for_deliveries()
+
+    asyncio.run(background())
+    assert sent.messages == []
+
+
+def test_an_explicit_development_environment_is_not_posted_either(sent):
+    config = activity.ActivityConfig(send=sent, environment="development")
+    run_request(config, responds(500, before=_writes(Track())))
+    assert sent.messages == []
+
+
+def test_writes_from_one_caller_to_one_route_are_one_message(sent):
+    config = activity.ActivityConfig(send=sent, environment="production")
+
+    async def scenario() -> None:
+        for _ in range(25):
+            await _run(config, responds(200, before=_writes(Track())))
+        await activity.wait_for_deliveries()
+
+    asyncio.run(scenario())
+    (embed,) = sent.embeds()
+    assert embed["title"] == "data changed · 25 writes"
+    assert embed["description"] == "tracks · 25 created"
+
+
+def test_two_callers_are_two_messages(sent):
+    config = activity.ActivityConfig(send=sent, environment="production")
+
+    async def scenario() -> None:
+        for who in ("a", "b", "a"):
+            await _run(config, responds(200, before=_writes(Track())), caller=who)
+        await activity.wait_for_deliveries()
+
+    asyncio.run(scenario())
+    footers = sorted(e["footer"]["text"] for e in sent.embeds())
+    assert footers == [
+        "POST /v1/things · a · production",
+        "POST /v1/things · b · production",
     ]
+    titles = sorted(e["title"] for e in sent.embeds())
+    assert titles == ["data changed", "data changed · 2 writes"]
+
+
+def test_a_burst_posts_when_its_window_closes(sent):
+    config = activity.ActivityConfig(
+        send=sent, environment="production", group_seconds=0.01
+    )
+
+    async def scenario() -> None:
+        await _run(config, responds(200, before=_writes(Track())))
+        await asyncio.sleep(0.05)
+        assert len(sent.embeds()) == 1
+        await _run(config, responds(200, before=_writes(Track())))
+        await activity.wait_for_deliveries()
+
+    asyncio.run(scenario())
+    assert [e["title"] for e in sent.embeds()] == ["data changed", "data changed"]
+
+
+def test_a_person_is_named_and_a_machine_is_not(sent):
+    async def name(caller: str) -> str | None:
+        return {"user_1": "Kaiano Levine"}.get(caller)
+
+    def config(machine: bool) -> activity.ActivityConfig:
+        return activity.ActivityConfig(
+            send=sent,
+            environment="production",
+            group_seconds=0,
+            is_machine=lambda _request: machine,
+            display_name=name,
+        )
+
+    async def scenario() -> None:
+        await _run(
+            config(False), responds(200, before=_writes(Track())), caller="user_1"
+        )
+        await _run(
+            config(False), responds(200, before=_writes(Track())), caller="user_2"
+        )
+        await _run(
+            config(True), responds(200, before=_writes(Track())), caller="user_1"
+        )
+        await activity.wait_for_deliveries()
+
+    asyncio.run(scenario())
+    whos = sorted(e["footer"]["text"].split(" · ")[1] for e in sent.embeds())
+    assert whos == ["Kaiano Levine", "user_1", "user_2"]
+
+
+def test_a_failing_name_lookup_shows_the_id(sent):
+    def broken(_caller: str) -> str:
+        raise RuntimeError("db down")
+
+    config = activity.ActivityConfig(
+        send=sent,
+        environment="production",
+        group_seconds=0,
+        caller=lambda _request: "user_9",
+        display_name=broken,
+    )
+    run_request(config, responds(200, before=_writes(Track())))
+    assert sent.embeds()[0]["footer"]["text"] == "POST /v1/things · user_9 · production"
 
 
 def test_labelled_titles_are_unmarked_in_production(sent, monkeypatch):
@@ -704,7 +812,6 @@ def test_nested_transaction_end_keeps_announcements(sent):
 
 
 def test_async_session_announcements_live_on_its_sync_session(sent, monkeypatch):
-    monkeypatch.setenv("ENVIRONMENT", "development")
     sync = FakeSession()
     async_session = SimpleNamespace(sync_session=sync)
 
@@ -714,7 +821,7 @@ def test_async_session_announcements_live_on_its_sync_session(sent, monkeypatch)
         await activity.wait_for_deliveries()
 
     asyncio.run(job())
-    assert sent.messages[0][1]["content"] == "[DEVELOPMENT] built"
+    assert sent.messages[0][1]["content"] == "built"
 
 
 def test_announcement_default_sender_posts_through_discord(monkeypatch):
@@ -894,9 +1001,7 @@ def test_background_fault_with_a_chosen_detail_and_no_exception(sent):
     assert "queue not draining" in sent.embeds()[0]["description"]
 
 
-def test_background_fault_is_labelled_only_when_asked(sent, monkeypatch):
-    monkeypatch.setenv("ENVIRONMENT", "development")
-
+def test_background_fault_in_production_is_posted_unlabelled(sent):
     async def scenario() -> None:
         await activity.report_fault("a", detail="d", send=sent)
         await activity.report_fault("b", detail="d", send=sent, label=True)
@@ -904,7 +1009,7 @@ def test_background_fault_is_labelled_only_when_asked(sent, monkeypatch):
     asyncio.run(scenario())
     assert [e["title"] for e in sent.embeds()] == [
         "fault · background",
-        "[DEVELOPMENT] fault · background",
+        "fault · background",
     ]
 
 

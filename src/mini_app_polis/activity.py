@@ -62,6 +62,20 @@ pending tally, so a request that recovers from a savepoint under-reports
 rather than over-reports; an announcement registered inside a rolled-back
 savepoint still goes out when the outer transaction commits.
 
+**What a change message says.** One line a table, each change in words
+(``songs · 1 deleted``; a bulk statement is ``1 bulk write``, its rows not
+counted), with no key to decode. Changes from one caller to one route
+within ``ActivityConfig.group_seconds`` (a minute by default) are one
+message, titled with how many writes it gathers: a curator run that writes
+25 pages is one message, not 25. A burst still gathering when the process
+stops is lost unless the service calls :func:`flush_changes` on shutdown.
+A person is shown by the name ``ActivityConfig.display_name`` gives their
+id; a machine by its own name.
+
+**Production only.** Nothing is posted from any other environment —
+changes, faults, background faults or announcements. The channels are
+production's record; a development process says what it did in its logs.
+
 Delivery is fire-and-forget. Nothing is retried and nothing here claims a
 success it did not get; ``mini_app_polis.discord`` owns what happens to a
 failed delivery. Tasks are held in a set until they finish, because a
@@ -100,6 +114,7 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from collections import Counter
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
@@ -111,7 +126,7 @@ from sqlalchemy import event
 from sqlalchemy.orm import Session
 
 from . import _sentry, discord
-from .environment import current_environment
+from .environment import Environment, current_environment
 from .logger import LOG_WARNING, with_log_prefix
 
 #: A child of the package logger, not ``get_logger()``'s instance, so
@@ -130,16 +145,20 @@ UPDATED = "updated"
 DELETED = "deleted"
 BULK = "bulk"
 
-#: Render order and mark for each operation. Fixed order so two messages
-#: about the same table are comparable at a glance.
-_MARKS: tuple[tuple[str, str], ...] = (
-    (CREATED, "+"),
-    (UPDATED, "~"),
-    (DELETED, "-"),
-    (BULK, "*"),
+#: Render order and words for each operation. Fixed order so two messages
+#: about the same table are comparable at a glance. A bulk statement's rows
+#: are not counted (see the module docstring), so it is a "write", not rows.
+_WORDS: tuple[tuple[str, str, str], ...] = (
+    (CREATED, "created", "created"),
+    (UPDATED, "updated", "updated"),
+    (DELETED, "deleted", "deleted"),
+    (BULK, "bulk write", "bulk writes"),
 )
 
-_LEGEND = "+ created · ~ updated · - deleted · * bulk statement (rows not counted)"
+#: How long writes from one caller to one route are gathered into one
+#: message, in seconds. A curator run that writes 25 pages one request at
+#: a time is one message, not 25.
+DEFAULT_GROUP_SECONDS = 60.0
 
 #: Discord's code fence, built rather than written literally so this module's
 #: own source can be pasted inside one.
@@ -150,6 +169,9 @@ _DETAIL_LIMIT = 1500
 
 #: Where ``announce_on_commit`` keeps a session's pending announcements.
 _ANNOUNCEMENTS_KEY = "mini_app_polis.activity.announcements"
+
+#: ``caller id -> display name``, or None when there is none. May be async.
+NameResolver = Callable[[str], "str | None | Awaitable[str | None]"]
 
 #: ``(channel, payload, context) -> accepted``. The default posts through
 #: ``discord.send_payload`` with webhooks read from the environment; a
@@ -197,19 +219,42 @@ class Recorder:
         only suppressed tables is indistinguishable from one that changed
         nothing, and neither is worth a message.
         """
-        lines: list[str] = []
-        for table in sorted(self.committed):
-            if table in suppressed:
-                continue
-            ops = self.committed[table]
-            marks = " ".join(f"{mark}{ops[op]}" for op, mark in _MARKS if ops.get(op))
-            if marks:
-                lines.append(f"`{table}` {marks}")
-        return "\n".join(lines)
+        return summarise(self.committed, suppressed)
 
     def has_bulk(self) -> bool:
         """Whether anything in the tally is a statement rather than a row."""
         return any(ops.get(BULK) for ops in self.committed.values())
+
+
+def summarise(tally: Mapping[str, Counter[str]], suppressed: Collection[str]) -> str:
+    """One line a table, each change spelled out: ``songs · 1 deleted``.
+
+    No marks to decode and no key to print under every message: the words
+    say what happened, and a bulk statement says it is one.
+    """
+    lines: list[str] = []
+    for table in sorted(tally):
+        if table in suppressed:
+            continue
+        ops = tally[table]
+        parts = [
+            f"{ops[op]} {one if ops[op] == 1 else many}"
+            for op, one, many in _WORDS
+            if ops.get(op)
+        ]
+        if parts:
+            lines.append(f"{table} · {', '.join(parts)}")
+    return "\n".join(lines)
+
+
+def _in_production(environment: str | None) -> bool:
+    """Whether messages are posted here: production only.
+
+    The channels are production's record. A development or local process
+    says what it changed and what broke in its own logs.
+    """
+    env = environment or current_environment().value
+    return env.lower() == Environment.PRODUCTION.value
 
 
 def _labelled(title: str, label: bool) -> str:
@@ -241,6 +286,15 @@ class ActivityConfig:
     fault in a channel production shares is not read as production's; off
     by default because the footer already carries the environment, and a
     service whose readers rely on that need not change.
+
+    ``display_name`` turns a person's caller id into a name to show (a
+    Clerk user id into the user's name), sync or async; it is not asked
+    about machines, and an id it cannot name, or a lookup that fails, is
+    shown as the id. ``group_seconds`` is how long changes from one caller
+    to one route are gathered into one message; 0 posts each request's at
+    once.
+
+    Nothing is posted outside production, whatever ``environment`` says.
     """
 
     service: str | None = None
@@ -254,6 +308,8 @@ class ActivityConfig:
     capture: Callable[[BaseException], str | None] = _sentry.capture_exception
     send: Sender | None = None
     label: bool = False
+    display_name: NameResolver | None = None
+    group_seconds: float = DEFAULT_GROUP_SECONDS
 
     def _title(self, title: str) -> str:
         return _labelled(title, self.label)
@@ -343,6 +399,9 @@ def _capture_commit(session: Session) -> None:
     if session.in_nested_transaction():
         return
     pending = session.info.pop(_ANNOUNCEMENTS_KEY, None)
+    if pending and not _in_production(None):
+        logger.info("activity: %d announcement(s) not posted", len(pending))
+        return
     for channel, payload, context, sender in pending or ():
         dispatch(_send(sender, channel, payload, context))
 
@@ -397,6 +456,7 @@ async def wait_for_deliveries() -> None:
     For tests, and for a shutdown that wants its last messages out. Loops
     because a delivery can dispatch another.
     """
+    await flush_changes()
     while _in_flight:
         await asyncio.gather(*list(_in_flight), return_exceptions=True)
     await asyncio.sleep(0)
@@ -414,6 +474,20 @@ async def _send(
         return False
 
 
+async def _display(config: ActivityConfig, actor: str, machine: bool) -> str:
+    """The name to show for ``actor``: the resolver's, or the id itself."""
+    if machine or config.display_name is None:
+        return actor
+    try:
+        name = config.display_name(actor)
+        if inspect.isawaitable(name):
+            name = await name
+    except Exception:
+        logger.exception("activity: could not name the caller")
+        return actor
+    return str(name) if name else actor
+
+
 async def emit_change(
     config: ActivityConfig,
     *,
@@ -421,19 +495,30 @@ async def emit_change(
     path: str,
     actor: str,
     summary: str,
-    legend: bool,
+    legend: bool = False,
+    requests: int = 1,
+    machine: bool = False,
 ) -> bool:
-    """Post one message summarising what a request committed."""
-    footer = config._footer(f"{method} {path}", actor)
-    if legend:
-        footer = f"{footer}\n{_LEGEND}"
+    """Post one message summarising what one or more requests committed.
+
+    ``requests`` is how many requests the summary gathers; more than one
+    is said in the title. ``legend`` is accepted for callers written before
+    changes were spelled out, and ignored.
+    """
+    del legend
+    if not _in_production(config.environment):
+        logger.info("activity: %s %s not posted outside production", method, path)
+        return False
+    who = await _display(config, actor, machine)
+    footer = config._footer(f"{method} {path}", who)
+    title = "data changed" if requests == 1 else f"data changed · {requests} writes"
     return await _send(
         config.send,
         discord.CHANNEL_ACTIVITY,
         {
             "embeds": [
                 {
-                    "title": config._title("data changed"),
+                    "title": config._title(title),
                     "color": _CHANGE_COLOR,
                     "description": summary,
                     "footer": {"text": footer},
@@ -470,6 +555,9 @@ async def emit_fault(
     detail: str | None,
 ) -> bool:
     """Post one message about a request that failed on this side of the line."""
+    if not _in_production(config.environment):
+        logger.info("activity: fault %s on %s %s not posted", status_code, method, path)
+        return False
     return await _send(
         config.send,
         discord.CHANNEL_ERRORS,
@@ -567,25 +655,109 @@ def _recorded_fault_detail(request: Any) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _report_changes(
-    config: ActivityConfig, recorder: Recorder, method: str, path: str, actor: str
-) -> None:
-    """Post the change summary, if the request committed anything worth saying."""
-    if not config.report_changes:
+@dataclass
+class _Burst:
+    """Changes from one caller to one route, gathered for one message."""
+
+    config: ActivityConfig
+    machine: bool
+    tally: dict[str, Counter[str]] = field(default_factory=dict)
+    requests: int = 0
+
+    def add(self, committed: Mapping[str, Counter[str]]) -> None:
+        for table, ops in committed.items():
+            self.tally.setdefault(table, Counter()).update(ops)
+        self.requests += 1
+
+
+#: Bursts still gathering, by (method, path, caller), and the timer that
+#: posts each when its window closes.
+_bursts: dict[tuple[str, str, str], _Burst] = {}
+_timers: dict[tuple[str, str, str], asyncio.Task[Any]] = {}
+
+
+async def _post_burst(key: tuple[str, str, str]) -> None:
+    """Post a burst's message, once; a burst already posted is gone."""
+    _timers.pop(key, None)
+    burst = _bursts.pop(key, None)
+    if burst is None:
         return
-    summary = recorder.summary(set(config.suppressed_tables))
+    summary = summarise(burst.tally, set(burst.config.suppressed_tables))
     if not summary:
         return
-    dispatch(
-        emit_change(
-            config,
-            method=method,
-            path=path,
-            actor=actor,
-            summary=summary,
-            legend=recorder.has_bulk(),
-        )
+    method, path, actor = key
+    await emit_change(
+        burst.config,
+        method=method,
+        path=path,
+        actor=actor,
+        summary=summary,
+        requests=burst.requests,
+        machine=burst.machine,
     )
+
+
+async def _post_burst_later(key: tuple[str, str, str], delay: float) -> None:
+    await asyncio.sleep(delay)
+    await _post_burst(key)
+
+
+async def flush_changes() -> None:
+    """Post every burst still gathering, now.
+
+    Call it when the service shuts down (a FastAPI lifespan's exit), so
+    the last minute's changes are not lost with the process.
+    """
+    for key in list(_bursts):
+        timer = _timers.pop(key, None)
+        if timer is not None and timer is not asyncio.current_task():
+            timer.cancel()
+        await _post_burst(key)
+
+
+def _report_changes(
+    config: ActivityConfig,
+    recorder: Recorder,
+    method: str,
+    path: str,
+    actor: str,
+    machine: bool = False,
+) -> None:
+    """Post the change summary, if the request committed anything worth saying.
+
+    Changes from the same caller to the same route within
+    ``config.group_seconds`` of the first are gathered into one message.
+    """
+    if not config.report_changes:
+        return
+    if not recorder.summary(set(config.suppressed_tables)):
+        return
+    if config.group_seconds <= 0:
+        dispatch(
+            emit_change(
+                config,
+                method=method,
+                path=path,
+                actor=actor,
+                summary=recorder.summary(set(config.suppressed_tables)),
+                machine=machine,
+            )
+        )
+        return
+    key = (method, path, actor)
+    burst = _bursts.get(key)
+    if burst is None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # no running loop: nothing could post it later
+            dispatch(_post_burst_later(key, config.group_seconds))
+            return
+        burst = _bursts[key] = _Burst(config=config, machine=machine)
+        timer = loop.create_task(_post_burst_later(key, config.group_seconds))
+        _timers[key] = timer
+        _in_flight.add(timer)
+        timer.add_done_callback(_in_flight.discard)
+    burst.add(recorder.committed)
 
 
 def _actor(config: ActivityConfig, request: Any) -> str:
@@ -634,7 +806,9 @@ def activity_middleware(
                 response = await call_next(request)
             except Exception as exc:
                 actor = _actor(cfg, request)
-                _report_changes(cfg, recorder, method, path, actor)
+                _report_changes(
+                    cfg, recorder, method, path, actor, _machine(cfg, request)
+                )
                 if cfg.report_faults:
                     dispatch(
                         emit_fault(
@@ -649,7 +823,7 @@ def activity_middleware(
                 raise
 
             actor = _actor(cfg, request)
-            _report_changes(cfg, recorder, method, path, actor)
+            _report_changes(cfg, recorder, method, path, actor, _machine(cfg, request))
             if is_notifiable_fault(
                 response.status_code,
                 machine=_machine(cfg, request),
@@ -747,6 +921,9 @@ async def report_fault(
         text = detail
         if text is None and exc is not None:
             text = fault_detail(exc, event_id=event_id, capture=capture)
+        if not _in_production(environment):
+            logger.info("activity: background fault in %s not posted", where)
+            return False
         footer = ActivityConfig(service=service, environment=environment)._footer()
         payload = _fault_payload(
             _labelled("fault · background", label), where, text, footer
