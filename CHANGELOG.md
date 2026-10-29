@@ -1,3 +1,10 @@
+# [6.36.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.35.0...v6.36.0) (2026-10-29)
+
+
+### Features
+
+* **asana:** read a task's assignee and rich body, and set or clear its assignee ([080219c](https://github.com/mini-app-polis/common-python-utils/commit/080219ce79249928c65bceb0daf2a67f0cdabe86))
+
 # [6.35.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.34.0...v6.35.0) (2026-10-29)
 
 
