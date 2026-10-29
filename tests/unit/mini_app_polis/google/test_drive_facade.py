@@ -54,6 +54,40 @@ class FakeDriveService:
         self._created_folders = {}
         self._parents = {"fileX": ["oldParent"]}
         self._copied_ids = []
+        # file id -> its permissions; list pages them permissions_page_size
+        # at a time, delete removes one by id.
+        self.permissions_by_file: dict[str, list[dict]] = {}
+        self.permissions_page_size = 100
+
+    def permissions(self):
+        svc = self
+
+        class _Permissions:
+            def list(self, **params):
+                svc.calls.append(("permissions.list", params))
+
+                def run():
+                    perms = svc.permissions_by_file.get(params["fileId"], [])
+                    start = int(params.get("pageToken") or 0)
+                    end = start + svc.permissions_page_size
+                    page = {"permissions": [dict(p) for p in perms[start:end]]}
+                    if end < len(perms):
+                        page["nextPageToken"] = str(end)
+                    return page
+
+                return _Exec(run)
+
+            def delete(self, **params):
+                svc.calls.append(("permissions.delete", params))
+
+                def run():
+                    perms = svc.permissions_by_file.get(params["fileId"], [])
+                    perms[:] = [p for p in perms if p["id"] != params["permissionId"]]
+                    return {}
+
+                return _Exec(run)
+
+        return _Permissions()
 
     def files(self):
         svc = self
@@ -1385,3 +1419,99 @@ def test_copy_file_stops_waiting_for_visibility_at_the_run_deadline(
     with run_deadline(1), pytest.raises(type(err)):
         DriveFacade(svc).copy_file("abc", name="new", max_retries=5)
     assert sleeps == []
+
+
+# remove_permission ----------------------------------------------------------
+
+
+def _perm(pid: str, email: str, role: str = "reader", type_: str = "user") -> dict:
+    return {"id": pid, "type": type_, "role": role, "emailAddress": email}
+
+
+def _remove_drive(perms: list[dict], page_size: int = 100):
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = FakeDriveService()
+    svc.permissions_by_file["f"] = list(perms)
+    svc.permissions_page_size = page_size
+    return DriveFacade(svc), svc
+
+
+def test_remove_permission_removes_the_match_and_leaves_others():
+    drive, svc = _remove_drive(
+        [
+            _perm("p1", "dj@example.com"),
+            _perm("p2", "other@example.com"),
+            _perm("p3", "dj@example.com", type_="group"),
+        ]
+    )
+
+    assert drive.remove_permission("f", "dj@example.com") == 1
+    assert [p["id"] for p in svc.permissions_by_file["f"]] == ["p2", "p3"]
+    deletes = [c[1] for c in svc.calls if c[0] == "permissions.delete"]
+    assert deletes == [{"fileId": "f", "permissionId": "p1", "supportsAllDrives": True}]
+    lists = [c[1] for c in svc.calls if c[0] == "permissions.list"]
+    assert lists[0]["supportsAllDrives"] is True
+    assert "emailAddress" in lists[0]["fields"]
+
+
+def test_remove_permission_without_a_role_removes_every_role():
+    drive, svc = _remove_drive(
+        [_perm("p1", "dj@example.com"), _perm("p2", "dj@example.com", "writer")]
+    )
+
+    assert drive.remove_permission("f", "dj@example.com") == 2
+    assert svc.permissions_by_file["f"] == []
+
+
+def test_remove_permission_with_a_role_leaves_other_roles():
+    drive, svc = _remove_drive(
+        [_perm("p1", "dj@example.com"), _perm("p2", "dj@example.com", "writer")]
+    )
+
+    assert drive.remove_permission("f", "dj@example.com", role="reader") == 1
+    assert [p["id"] for p in svc.permissions_by_file["f"]] == ["p2"]
+
+
+def test_remove_permission_reads_every_page():
+    perms = [_perm(f"o{i}", f"other{i}@example.com") for i in range(5)]
+    perms.append(_perm("p1", "dj@example.com"))
+    drive, svc = _remove_drive(perms, page_size=2)
+
+    assert drive.remove_permission("f", "dj@example.com") == 1
+    tokens = [c[1].get("pageToken") for c in svc.calls if c[0] == "permissions.list"]
+    assert tokens == [None, "2", "4"]
+    assert "p1" not in [p["id"] for p in svc.permissions_by_file["f"]]
+
+
+def test_remove_permission_compares_the_address_trimmed_and_lowercased():
+    drive, svc = _remove_drive([_perm("p1", " DJ@Example.com ")])
+
+    assert drive.remove_permission("f", "  dj@EXAMPLE.com") == 1
+    assert svc.permissions_by_file["f"] == []
+
+
+def test_remove_permission_with_no_match_deletes_nothing():
+    drive, svc = _remove_drive([_perm("p1", "other@example.com")])
+
+    assert drive.remove_permission("f", "dj@example.com") == 0
+    assert drive.remove_permission("no-perms", "dj@example.com") == 0
+    assert not [c for c in svc.calls if c[0] == "permissions.delete"]
+
+
+def test_remove_permission_lets_a_drive_error_propagate(monkeypatch, as_http_error):
+    from mini_app_polis.google._retry import RetryConfig
+    from mini_app_polis.google.drive import DriveFacade
+
+    monkeypatch.setattr("mini_app_polis.google._retry.time.sleep", lambda _s: None)
+    svc = MagicMock()
+    svc.permissions.return_value.list.return_value.execute.side_effect = as_http_error(
+        status=403, message="forbidden"
+    )
+    drive = DriveFacade(
+        svc, retry=RetryConfig(max_retries=1, base_delay_s=0.0, max_delay_s=0.0)
+    )
+
+    with pytest.raises(Exception, match="forbidden"):
+        drive.remove_permission("f", "dj@example.com")
+    svc.permissions.return_value.delete.assert_not_called()
