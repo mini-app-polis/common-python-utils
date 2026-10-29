@@ -101,6 +101,9 @@ NOT_EXERCISED: dict[str, str] = {
         "fixture run would count toward the groomer's spend"
     ),
     "grooming_spend": "the contract-suite machine holds no tasks.groomings scope",
+    "grooming_return_rate": (
+        "the contract-suite machine holds no tasks.groomings scope"
+    ),
     "claim_grooming": (
         "the contract-suite machine holds no tasks.groomings scope, and a "
         "fixture claim would hold a task away from the groomer"
@@ -155,6 +158,7 @@ NOT_EXERCISED: dict[str, str] = {
 #: and exercise it in test_contract.py.
 NOT_DEPLOYED: dict[str, str] = {
     "lookup_catalog": "the development API does not serve it yet",
+    "grooming_return_rate": "the development API does not serve it yet",
 }
 
 

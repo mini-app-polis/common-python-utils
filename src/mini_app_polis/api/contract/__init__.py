@@ -54,6 +54,8 @@ from .evaluations import (
 )
 from .groomings import (
     GROOMING_MAX_CHILDREN,
+    RETURN_RATE_DEFAULT_DAYS,
+    RETURN_RATE_MAX_DAYS,
     GroomingBudgetSpentMarked,
     GroomingBudgetSpentRequest,
     GroomingChild,
@@ -69,6 +71,7 @@ from .groomings import (
     GroomingProposalAccepted,
     GroomingRecord,
     GroomingRecordWrite,
+    GroomingReturnRate,
     GroomingRunCreate,
     GroomingRunRecorded,
     GroomingSpend,
@@ -226,6 +229,8 @@ __all__ = [
     "EvaluationRepositoryPayload",
     "GIVEN_ID_SOURCES",
     "GROOMING_MAX_CHILDREN",
+    "RETURN_RATE_DEFAULT_DAYS",
+    "RETURN_RATE_MAX_DAYS",
     "GroomingBudgetSpentMarked",
     "GroomingBudgetSpentRequest",
     "GroomingChild",
@@ -243,6 +248,7 @@ __all__ = [
     "GroomingRecordWrite",
     "GroomingRunCreate",
     "GroomingRunRecorded",
+    "GroomingReturnRate",
     "GroomingSpend",
     "GroomingTask",
     "IngestResponseData",
