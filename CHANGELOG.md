@@ -1,3 +1,10 @@
+# [6.34.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.33.0...v6.34.0) (2026-10-29)
+
+
+### Features
+
+* **contract:** rotation-incident contract, rotation.incident message and incident client methods ([6432b96](https://github.com/mini-app-polis/common-python-utils/commit/6432b9613ebecfc47aae53caa11472f1484b8cea))
+
 # [6.33.0](https://github.com/mini-app-polis/common-python-utils/compare/v6.32.0...v6.33.0) (2026-10-28)
 
 
