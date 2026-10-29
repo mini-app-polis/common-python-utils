@@ -30,6 +30,7 @@ import pytest
 
 from mini_app_polis.api.contract import (
     ENDPOINTS,
+    CatalogLookupRequest,
     Envelope,
     ErrorEnvelope,
     IngestSet,
@@ -164,6 +165,19 @@ def test_lists_the_ingested_set_by_source_file(api: LedgerClient) -> None:
     listed = api.list_sets(date_from=FIXTURE_DATE, date_to=FIXTURE_DATE, limit=200)
 
     assert f"{FIXTURE}.csv" in {item.source_file for item in listed}
+
+
+def test_looks_up_the_ingested_track_in_the_catalog(api: LedgerClient) -> None:
+    """deejay-cog asks where a file belongs; nothing is recorded by asking."""
+    known = IngestTrack(play_order=1, title=FIXTURE, artist="Contract Suite")
+    unknown = IngestTrack(
+        play_order=2, title=f"{FIXTURE}-{uuid.uuid4().hex}", artist="Contract Suite"
+    )
+
+    found, missing = api.lookup_catalog(CatalogLookupRequest(tracks=[known, unknown]))
+
+    assert found is not None
+    assert missing is None
 
 
 def test_live_plays_skip_a_play_already_recorded(api: LedgerClient) -> None:
