@@ -1,3 +1,10 @@
+# [7.3.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.2.0...v7.3.0) (2026-10-30)
+
+
+### Features
+
+* **contract:** NotifyRequest can mark a message as the contract suite's result ([e92700d](https://github.com/mini-app-polis/common-python-utils/commit/e92700d130ebd99b910d81c03de67b85cf75af7b))
+
 # [7.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.1.1...v7.2.0) (2026-10-30)
 
 
