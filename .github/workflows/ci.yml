@@ -96,12 +96,11 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: "22"
+      # VER-006: semantic-release and its plugins from the fleet's shared lockfile.
       - name: Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          npm install --no-save semantic-release @semantic-release/commit-analyzer @semantic-release/release-notes-generator @semantic-release/changelog @semantic-release/exec @semantic-release/git @semantic-release/github
-          npx semantic-release
+        uses: mini-app-polis/.github/.github/actions/semantic-release@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # semantic-release tags the release commit it leaves at HEAD, and the
       # step above succeeds only once `uv publish` has. A tag here therefore
