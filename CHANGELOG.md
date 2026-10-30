@@ -1,3 +1,10 @@
+# [7.4.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.3.0...v7.4.0) (2026-10-30)
+
+
+### Features
+
+* **notify:** treat a queued notify result as accepted ([61a0e60](https://github.com/mini-app-polis/common-python-utils/commit/61a0e60702b9e39abc2942a537039eaa3334c7f0))
+
 # [7.3.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.2.0...v7.3.0) (2026-10-30)
 
 
