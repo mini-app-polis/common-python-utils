@@ -180,19 +180,32 @@ class TaskAgentResultMessage(QueueMessage[AgentRun]):
 
 
 class TaskSweepPayload(BaseModel):
-    """A scheduled sweep of the board carries nothing."""
+    """What a sweep was asked to do beyond its schedule.
+
+    A scheduled sweep carries nothing, so both flags are false. A sweep asked
+    for on demand (:class:`~.tasks.TaskSweepRequest`) may set ``groom`` to
+    count as the one for ``GROOM_TIMES`` and ``agents`` as the one for
+    ``AGENT_TIMES``. Neither turns on what is off or raises a cap.
+    """
+
+    groom: bool = Field(default=False, description="Groom whatever the time.")
+    agents: bool = Field(
+        default=False, description="Dispatch agents whatever the time."
+    )
 
 
 class TaskSweepMessage(QueueMessage[TaskSweepPayload]):
-    """``task.sweep`` on task-manager-cog's queue, from its own schedule.
+    """``task.sweep`` on task-manager-cog's queue, from its own schedule or
+    asked for through the API.
 
     The schedule sends ``{type, version}`` with no payload, so the payload is
-    optional here: a kind with nothing to carry may leave it out.
+    optional here: a sweep with no flags may leave it out.
     """
 
     type: Literal["task.sweep"] = "task.sweep"
     payload: TaskSweepPayload = Field(
-        default_factory=TaskSweepPayload, description="Nothing; may be omitted."
+        default_factory=TaskSweepPayload,
+        description="The flags the sweep was asked for; may be omitted.",
     )
 
 

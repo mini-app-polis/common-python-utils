@@ -111,6 +111,8 @@ from .contract import (
     SpotifyPlaylistsIngestResponse,
     TaskCreateAccepted,
     TaskCreateRequest,
+    TaskSweepAccepted,
+    TaskSweepRequest,
     TranscriptionRunAccepted,
     TranscriptionRunRequest,
     WcsSourceCreate,
@@ -687,6 +689,15 @@ class KaianoApiClient:
         Asking twice for one ``external_id`` makes one task.
         """
         return cast(TaskCreateAccepted, self._call("request_task", payload))
+
+    def request_sweep(self, payload: TaskSweepRequest) -> TaskSweepAccepted:
+        """``POST /v1/tasks/sweeps`` — ask the task manager for a sweep now.
+
+        Answered 202 once the sweep is queued. ``groom`` and ``agents`` make
+        it count as the sweep for those times of day; every switch and cap
+        still applies. Asking twice runs two sweeps.
+        """
+        return cast(TaskSweepAccepted, self._call("request_sweep", payload))
 
     def list_groomings(self) -> list[GroomingRecord]:
         """``GET /v1/tasks/groomings`` — every task's grooming record."""

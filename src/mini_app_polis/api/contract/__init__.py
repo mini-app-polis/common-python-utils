@@ -148,6 +148,8 @@ from .tasks import (
     TaskLink,
     TaskSection,
     TaskSource,
+    TaskSweepAccepted,
+    TaskSweepRequest,
     TaskUpdateRequest,
 )
 from .wcs import (
@@ -315,8 +317,10 @@ __all__ = [
     "TaskLink",
     "TaskSection",
     "TaskSource",
+    "TaskSweepAccepted",
     "TaskSweepMessage",
     "TaskSweepPayload",
+    "TaskSweepRequest",
     "TaskUpdateMessage",
     "TaskUpdateRequest",
     "TranscriptionRunAccepted",

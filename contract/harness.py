@@ -64,6 +64,10 @@ NOT_EXERCISED: dict[str, str] = {
         "development has no queues: task-manager-dev-jobs.fifo is not "
         "provisioned, so the API cannot enqueue the job"
     ),
+    "request_sweep": (
+        "development has no queues: task-manager-dev-jobs.fifo is not "
+        "provisioned, so the API cannot enqueue the sweep"
+    ),
     "enqueue_wcs_wiki_jobs": (
         "development has no queues: wiki-curator-dev-jobs is not provisioned, "
         "so the API cannot enqueue the job"
