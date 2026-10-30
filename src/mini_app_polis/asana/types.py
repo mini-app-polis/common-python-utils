@@ -8,15 +8,15 @@ The only hook a source gets is ``external_id``, an opaque string the
 caller namespaces however it likes (``voicenote.<drive_file_id>``,
 ``discord.<message_id>``).
 
-``AsanaSection`` and ``AsanaTaskRecord`` are what the read methods return:
-a board's columns, and its tasks as a caller that grooms them needs to see
-them.
+``AsanaSection``, ``AsanaTaskRecord`` and ``AsanaStory`` are what the read
+methods return: a board's columns, its tasks as a caller that grooms them
+needs to see them, and a task's history.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 
 @dataclass(frozen=True)
@@ -106,3 +106,32 @@ class AsanaTaskRecord:
     """The body as Asana rich text, wrapped in ``<body>``. A caller that
     rewrites part of a body edits this rather than ``notes``, so the
     task's formatting survives."""
+
+    external_id: str | None = None
+    """The caller-owned key the task was created with
+    (:attr:`AsanaTaskInput.external_id`), or None when it has none."""
+
+    created_at: datetime | None = None
+    """When the task was created, timezone-aware (UTC)."""
+
+
+@dataclass(frozen=True)
+class AsanaStory:
+    """One entry in a task's history: a comment, a column change, or
+    anything else Asana records."""
+
+    gid: str
+    kind: str
+    """Asana's ``resource_subtype`` as it is: ``comment_added`` for a
+    comment, ``section_changed`` for a move between columns, and so on."""
+
+    created_at: datetime | None = None
+    """When it happened, timezone-aware (UTC)."""
+
+    text: str | None = None
+    """A comment's text. None for every other kind."""
+
+    section_gid: str | None = None
+    """For ``section_changed``, the column the task moved to."""
+
+    section_name: str | None = None

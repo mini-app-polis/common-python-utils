@@ -19,7 +19,9 @@ tasks with today, no more:
   - ``get_task`` — GET /tasks/<gid>, as ``list_project_tasks`` reads one
   - ``update_task`` — PUT /tasks/<gid>, name and body
   - ``add_tag`` / ``remove_tag`` — POST /tasks/<gid>/addTag and removeTag
+  - ``complete_task`` — PUT /tasks/<gid>, completed
   - ``add_comment`` / ``list_comments`` — POST and GET /tasks/<gid>/stories
+  - ``list_stories`` — GET /tasks/<gid>/stories, the whole history
 
 Anything else is absent until a caller needs it: a method with no caller
 is a method nothing keeps honest.
@@ -43,13 +45,14 @@ from __future__ import annotations
 
 import logging as _logging
 import os
+from datetime import datetime
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 
 from .errors import AsanaAPIError, AsanaAuthError
-from .types import AsanaSection, AsanaTaskInput, AsanaTaskRecord
+from .types import AsanaSection, AsanaStory, AsanaTaskInput, AsanaTaskRecord
 
 _log = _logging.getLogger(__name__)
 
@@ -365,6 +368,14 @@ class AsanaClient:
             "PUT", f"/tasks/{quote(task_gid, safe='')}", json_payload={"data": data}
         )
 
+    def complete_task(self, task_gid: str) -> None:
+        """Mark a task complete. Completing a complete task is a no-op."""
+        self._request(
+            "PUT",
+            f"/tasks/{quote(task_gid, safe='')}",
+            json_payload={"data": {"completed": True}},
+        )
+
     def add_tag(self, task_gid: str, tag_name: str) -> None:
         """Put a tag on a task, by the tag's name. Adding one it has is a no-op."""
         tag_gid = self.find_or_create_tag(tag_name)
@@ -404,6 +415,39 @@ class AsanaClient:
             if record.get("resource_subtype") == "comment_added"
             and isinstance(record.get("text"), str)
         ]
+
+    def list_stories(self, task_gid: str) -> list[AsanaStory]:
+        """A task's whole history, oldest first: comments, column changes
+        and the rest, each with when it happened.
+
+        A comment carries its text, and a column change the column the task
+        moved to; read ``kind`` to tell them apart.
+        """
+        path = f"/tasks/{quote(task_gid, safe='')}/stories"
+        stories: list[AsanaStory] = []
+        for record in self._paged(path, _STORY_FIELDS):
+            gid, kind = record.get("gid"), record.get("resource_subtype")
+            if not isinstance(gid, str) or not isinstance(kind, str):
+                continue
+            text = record.get("text")
+            section = record.get("new_section")
+            section_gid = section.get("gid") if isinstance(section, dict) else None
+            section_name = section.get("name") if isinstance(section, dict) else None
+            stories.append(
+                AsanaStory(
+                    gid=gid,
+                    kind=kind,
+                    created_at=_timestamp(record.get("created_at")),
+                    text=text
+                    if kind == "comment_added" and isinstance(text, str)
+                    else None,
+                    section_gid=section_gid if isinstance(section_gid, str) else None,
+                    section_name=section_name
+                    if isinstance(section_name, str)
+                    else None,
+                )
+            )
+        return stories
 
     def _paged(self, path: str, opt_fields: str) -> list[dict[str, Any]]:
         """Every record of a paged list endpoint, as dicts."""
@@ -548,8 +592,23 @@ _TASK_FIELDS = ",".join(
         "memberships.project.gid",
         "memberships.section.gid",
         "memberships.section.name",
+        "external.gid",
+        "created_at",
     )
 )
+
+#: What a story listing reads of each story.
+_STORY_FIELDS = "created_at,resource_subtype,text,new_section.gid,new_section.name"
+
+
+def _timestamp(value: Any) -> datetime | None:
+    """An Asana timestamp (``2026-10-30T01:31:43.169Z``) as a datetime, or None."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 def _task_record(record: dict[str, Any], project_gid: str) -> AsanaTaskRecord | None:
@@ -567,6 +626,8 @@ def _task_record(record: dict[str, Any], project_gid: str) -> AsanaTaskRecord | 
     html_notes = record.get("html_notes")
     assignee = record.get("assignee")
     assignee_gid = assignee.get("gid") if isinstance(assignee, dict) else None
+    external = record.get("external")
+    external_id = external.get("gid") if isinstance(external, dict) else None
     return AsanaTaskRecord(
         gid=gid,
         name=name,
@@ -577,6 +638,8 @@ def _task_record(record: dict[str, Any], project_gid: str) -> AsanaTaskRecord | 
         tag_names=tags,
         assignee_gid=assignee_gid if isinstance(assignee_gid, str) else None,
         html_notes=html_notes if isinstance(html_notes, str) else "",
+        external_id=external_id if isinstance(external_id, str) else None,
+        created_at=_timestamp(record.get("created_at")),
     )
 
 
