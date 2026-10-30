@@ -557,6 +557,218 @@ def test_reset_cooldowns_unmutes(channels, fake, clock) -> None:
     assert run(lambda: _send(discord.CHANNEL_RUNS)) is True
 
 
+# ── Outcomes ────────────────────────────────────────────────────────────
+
+
+async def _outcome(channel: str = "runs", **kwargs: Any) -> discord.SendOutcome:
+    return await discord.send_payload_outcome(channel, {"content": "x"}, **kwargs)
+
+
+def test_outcome_sent_carries_the_status(channels, fake) -> None:
+    assert run(_outcome) == discord.SendOutcome(discord.OutcomeKind.SENT, status=204)
+
+
+@pytest.mark.parametrize("status", [400, 403, 404])
+def test_outcome_refused_for_a_4xx_with_its_status(
+    channels, fake, sentry, status: int
+) -> None:
+    fake.answer(RUNS_URL, httpx.Response(status, json={"message": "no"}))
+    outcome = run(_outcome)
+    assert outcome == discord.SendOutcome(discord.OutcomeKind.REFUSED, status=status)
+    assert len(fake.calls(RUNS_URL)) == 1
+    assert sentry["messages"] == [
+        f"Discord rejected notification (notify) channel=runs: {status}"
+    ]
+
+
+def test_outcome_failed_for_a_5xx_with_its_status(channels, fake, sentry) -> None:
+    fake.answer(RUNS_URL, httpx.Response(502))
+    outcome = run(_outcome)
+    assert outcome == discord.SendOutcome(discord.OutcomeKind.FAILED, status=502)
+    assert len(sentry["messages"]) == 1
+
+
+def test_outcome_failed_for_a_transport_exception(channels, fake, sentry) -> None:
+    fake.answer(RUNS_URL, httpx.ConnectError("refused"))
+    assert run(_outcome) == discord.SendOutcome(discord.OutcomeKind.FAILED)
+    assert len(sentry["exceptions"]) == 1
+
+
+def test_outcome_no_webhook(fake, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
+    monkeypatch.delenv("DISCORD_WEBHOOK_URL_RUNS", raising=False)
+    assert run(_outcome) == discord.SendOutcome(discord.OutcomeKind.NO_WEBHOOK)
+    assert fake.requests == []
+
+
+def test_outcome_failed_for_a_broken_source(fake) -> None:
+    class Broken(dict):
+        def get(self, *_: Any, **__: Any) -> Any:
+            raise RuntimeError("settings exploded")
+
+    outcome = run(lambda: _outcome(source=Broken()))
+    assert outcome == discord.SendOutcome(discord.OutcomeKind.FAILED)
+    assert fake.requests == []
+
+
+def test_outcome_held_for_a_1015_with_its_hold(channels, fake, clock, sentry) -> None:
+    fake.answer(RUNS_URL, httpx.Response(429, text=CLOUDFLARE_1015))
+    outcome = run(_outcome)
+    assert outcome.kind is discord.OutcomeKind.HELD
+    assert outcome.status == 429
+    assert outcome.retry_after == discord._DEFAULT_COOLDOWN_SECS
+    assert len(sentry["messages"]) == 1
+
+
+def test_outcome_held_for_a_cooldown_past_max_wait(channels, fake, clock) -> None:
+    fake.answer(RUNS_URL, _limited(3), httpx.Response(204))
+    outcome = run(lambda: _outcome(max_wait=1))
+    assert outcome == discord.SendOutcome(
+        discord.OutcomeKind.HELD, status=429, retry_after=3
+    )
+    assert clock["slept"] == []
+
+
+def test_outcome_held_when_refused_every_attempt(channels, fake, clock) -> None:
+    fake.answer(RUNS_URL, _limited(0.5))
+    outcome = run(_outcome)
+    assert outcome.kind is discord.OutcomeKind.HELD
+    assert outcome.status == 429
+    assert len(fake.calls(RUNS_URL)) == discord._MAX_ATTEMPTS
+
+
+@pytest.mark.parametrize("report_drop", [True, False])
+def test_outcome_held_when_still_queued_at_the_deadline(
+    channels, fake, sentry, report_drop: bool
+) -> None:
+    async def scenario() -> discord.SendOutcome:
+        lock = discord._lock(RUNS_URL)
+        await lock.acquire()
+        try:
+            return await discord.post_webhook_outcome(
+                RUNS_URL,
+                json={"content": "x"},
+                channel="runs",
+                context="notify",
+                max_wait=0.01,
+                report_drop=report_drop,
+            )
+        finally:
+            lock.release()
+
+    assert run(scenario) == discord.SendOutcome(discord.OutcomeKind.HELD)
+    assert fake.requests == []
+    assert len(sentry["messages"]) == (1 if report_drop else 0)
+
+
+def test_report_drop_false_keeps_a_held_send_out_of_sentry(
+    channels, fake, clock, sentry, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A send its caller will queue is not a lost notification. The drop is
+    still logged, and the episode is left for the next reported drop."""
+    fake.answer(RUNS_URL, httpx.Response(429, text=CLOUDFLARE_1015))
+    with caplog.at_level("WARNING"):
+        outcome = run(lambda: _outcome(report_drop=False))
+    assert outcome.kind is discord.OutcomeKind.HELD
+    assert sentry["messages"] == []
+    assert "dropping" in " ".join(r.getMessage() for r in caplog.records)
+
+    assert run(lambda: _send(discord.CHANNEL_RUNS)) is False
+    assert len(sentry["messages"]) == 1
+
+
+def test_try_only_holds_at_once_during_a_cooldown(
+    channels, fake, clock, sentry, caplog: pytest.LogCaptureFixture
+) -> None:
+    fake.answer(RUNS_URL, httpx.Response(429, text=CLOUDFLARE_1015))
+    run(lambda: _send(discord.CHANNEL_RUNS))
+    sentry["messages"].clear()
+    clock["now"] += 10
+
+    caplog.clear()
+    with caplog.at_level("DEBUG", logger="mini_app_polis.discord"):
+        outcome = run(lambda: _outcome("activity", try_only=True))
+    assert outcome == discord.SendOutcome(
+        discord.OutcomeKind.HELD, retry_after=discord._DEFAULT_COOLDOWN_SECS - 10
+    )
+    assert fake.calls(ACTIVITY_URL) == []
+    assert clock["slept"] == []
+    assert caplog.records == []
+    assert sentry["messages"] == []
+
+
+def test_try_only_does_not_wait_even_a_short_hold(channels, fake, clock) -> None:
+    """Without try_only an emptied bucket is waited for; with it, held."""
+    fake.answer(ACTIVITY_URL, _ok(remaining=0, reset_after=1.5), _ok())
+    first = run(lambda: _outcome("activity", try_only=True))
+    second = run(lambda: _outcome("activity", try_only=True))
+    assert first.kind is discord.OutcomeKind.SENT
+    assert second == discord.SendOutcome(discord.OutcomeKind.HELD, retry_after=1.5)
+    assert len(fake.calls(ACTIVITY_URL)) == 1
+    assert clock["slept"] == []
+
+
+def test_try_only_holds_after_a_429_instead_of_waiting(
+    channels, fake, clock, sentry
+) -> None:
+    fake.answer(RUNS_URL, _limited(0.3), httpx.Response(204))
+    outcome = run(lambda: _outcome(try_only=True))
+    assert outcome.kind is discord.OutcomeKind.HELD
+    assert outcome.status == 429
+    assert outcome.retry_after == pytest.approx(0.3)
+    assert len(fake.calls(RUNS_URL)) == 1
+    assert clock["slept"] == []
+    assert sentry["messages"] == []
+
+
+def test_try_only_sends_when_nothing_holds(channels, fake, clock) -> None:
+    outcome = run(lambda: _outcome(try_only=True))
+    assert outcome.kind is discord.OutcomeKind.SENT
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        httpx.Response(204),
+        httpx.Response(400),
+        httpx.Response(500),
+        httpx.ConnectError("refused"),
+        httpx.Response(429, text=CLOUDFLARE_1015),
+    ],
+)
+def test_bool_wrappers_are_the_outcome_is_sent(
+    channels, fake, clock, answer: Any
+) -> None:
+    fake.answer(RUNS_URL, answer)
+    outcome = run(_outcome)
+    discord.reset_cooldowns()
+    sent = run(lambda: _send(discord.CHANNEL_RUNS))
+    discord.reset_cooldowns()
+    posted = run(
+        lambda: discord.post_webhook(
+            RUNS_URL, json={"content": "x"}, channel="runs", context="notify"
+        )
+    )
+    assert sent is posted is (outcome.kind is discord.OutcomeKind.SENT)
+
+
+def test_send_payload_still_posts_through_post_webhook(
+    channels, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Callers that capture posts by replacing ``post_webhook`` still see
+    every ``send_payload`` and ``send_message``."""
+    seen: list[str] = []
+
+    async def post_webhook(url: str, **kwargs: Any) -> bool:
+        seen.append(url)
+        return True
+
+    monkeypatch.setattr(discord, "post_webhook", post_webhook)
+    assert run(lambda: _send(discord.CHANNEL_RUNS)) is True
+    assert run(lambda: discord.send_message("runs", content="x")) is True
+    assert seen == [RUNS_URL, RUNS_URL]
+
+
 def test_post_webhook_forwards_raw_content_and_headers(channels, fake) -> None:
     """The lower level api-kaianolevine-com forwards GitHub events through."""
     url = f"{DEFAULT_URL}{discord.GITHUB_SUFFIX}"

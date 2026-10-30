@@ -72,11 +72,37 @@ someone typed into a form, and an ``@everyone`` in a routine name must not
 ping a channel. ``send_payload`` sends what it is given.
 
 **Failures are logged and reported to Sentry, never raised.** Every
-function returns whether Discord accepted the message. A dropped
+send function returns whether Discord accepted the message. A dropped
 notification is not a failed request or a failed job, and a caller that
 thinks otherwise can act on the boolean. Sentry is reported to only when
 ``sentry_sdk`` is installed and initialised; this library does not depend
 on it.
+
+**Outcomes, for a caller that keeps what it could not send.** A bool does
+not say whether a message was held for a rate limit, refused, or lost.
+``post_webhook_outcome`` and ``send_payload_outcome`` take the same
+arguments as ``post_webhook`` and ``send_payload`` and return a
+``SendOutcome`` whose ``kind`` says which:
+
+- ``SENT``: Discord accepted it.
+- ``HELD``: a rate limit kept it back — a 429 or 1015 not waited out, a
+  cooldown longer than ``max_wait``, or still queued at the deadline. Worth
+  sending again later; ``retry_after`` is the seconds until the hold ends,
+  when one is running.
+- ``REFUSED``: Discord answered with a 4xx other than 429 (``status`` says
+  which) — a malformed message or a deleted webhook. Sending it again will
+  not help.
+- ``FAILED``: the post raised, or Discord answered 5xx (with its
+  ``status``).
+- ``NO_WEBHOOK``: the channel resolved to no webhook (``send_payload_outcome``
+  only).
+
+``try_only=True`` answers ``HELD`` at once, without waiting, logging or
+reporting, while a cooldown runs for the webhook — before posting, and
+after a 429 instead of waiting it out. ``report_drop=False`` keeps a held
+send that did wait out of Sentry, for a caller that will queue it rather
+than lose it: the drop is still logged, and the episode is left for the
+next reported drop. The bool functions are these with ``report_drop`` on.
 
 httpx logs each request's URL at INFO, and a webhook URL carries its token
 in the path. ``mini_app_polis.logger`` redacts it from those lines; nothing
@@ -100,6 +126,8 @@ import time
 import weakref
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 import httpx
@@ -199,6 +227,30 @@ _locks: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, dict[str, asyncio.L
 _locks = weakref.WeakKeyDictionary()
 
 
+class OutcomeKind(StrEnum):
+    """What a send came to. See the module docstring for each."""
+
+    SENT = "sent"
+    HELD = "held"
+    REFUSED = "refused"
+    FAILED = "failed"
+    NO_WEBHOOK = "no_webhook"
+
+
+@dataclass(frozen=True)
+class SendOutcome:
+    """A send's outcome, with what is known of why.
+
+    ``status`` is the last HTTP status Discord answered with, when there was
+    one. ``retry_after`` is the seconds until a ``HELD`` send's webhook may
+    be posted to again, when a cooldown is running for it.
+    """
+
+    kind: OutcomeKind
+    status: int | None = None
+    retry_after: float | None = None
+
+
 def reset_cooldowns() -> None:
     """Forget every cooldown and episode. For tests: one test's 429 must not
     mute the next."""
@@ -281,22 +333,39 @@ def _note_bucket(url: str, resp: httpx.Response) -> None:
     _cooldowns[url] = max(_cooldowns.get(url, 0.0), _now() + secs)
 
 
-def _drop(url: str, channel: str, context: str, why: str) -> bool:
-    """Log a send given up on for a rate limit; report the episode once."""
+def _held(url: str, status: int | None = None) -> SendOutcome:
+    """``HELD``, with the seconds left on ``url``'s cooldown if one runs."""
+    wait = _cooldown_remaining(url)
+    return SendOutcome(
+        OutcomeKind.HELD, status=status, retry_after=wait if wait > 0 else None
+    )
+
+
+def _drop(
+    url: str,
+    channel: str,
+    context: str,
+    why: str,
+    *,
+    report: bool,
+    status: int | None = None,
+) -> SendOutcome:
+    """Log a send given up on for a rate limit; with ``report``, report the
+    episode once."""
     logger.warning(
         with_log_prefix(
             LOG_WARNING,
             f"discord rate-limited; dropping ({context}) channel={channel}: {why}",
         )
     )
-    if url not in _reported_drops:
+    if report and url not in _reported_drops:
         _reported_drops.add(url)
         _sentry.capture_message(
             f"Discord rate limit is dropping notifications ({context}) "
             f"channel={channel}: {why}",
             level="error",
         )
-    return False
+    return _held(url, status)
 
 
 def environment_prefix() -> str:
@@ -360,12 +429,54 @@ async def post_webhook(
     to which caller it was. ``max_wait`` bounds the time spent queued and
     waiting on limits, not the request itself (``timeout``). Never raises.
     """
+    outcome = await post_webhook_outcome(
+        url,
+        json=json,
+        content=content,
+        headers=headers,
+        channel=channel,
+        context=context,
+        timeout=timeout,
+        max_wait=max_wait,
+    )
+    return outcome.kind is OutcomeKind.SENT
+
+
+async def post_webhook_outcome(
+    url: str,
+    *,
+    json: dict[str, Any] | None = None,
+    content: bytes | None = None,
+    headers: dict[str, str] | None = None,
+    channel: str,
+    context: str,
+    timeout: float = DEFAULT_TIMEOUT_SECS,
+    max_wait: float = MAX_WAIT_SECS,
+    try_only: bool = False,
+    report_drop: bool = True,
+) -> SendOutcome:
+    """``post_webhook``, answering what the send came to rather than a bool.
+
+    ``try_only`` answers ``HELD`` at once, silently, while a cooldown runs
+    for ``url``. ``report_drop=False`` keeps a held send out of Sentry.
+    Never raises.
+    """
+    if try_only:
+        wait = _cooldown_remaining(url)
+        if wait > 0:
+            return SendOutcome(OutcomeKind.HELD, retry_after=wait)
     deadline = _now() + max_wait
     lock = _lock(url)
     try:
         await asyncio.wait_for(lock.acquire(), timeout=max(max_wait, 0.0))
     except TimeoutError:
-        return _drop(url, channel, context, f"still queued after {max_wait:.0f}s")
+        return _drop(
+            url,
+            channel,
+            context,
+            f"still queued after {max_wait:.0f}s",
+            report=report_drop,
+        )
     try:
         return await _post_in_turn(
             url,
@@ -376,6 +487,8 @@ async def post_webhook(
             context=context,
             timeout=timeout,
             deadline=deadline,
+            try_only=try_only,
+            report_drop=report_drop,
         )
     finally:
         lock.release()
@@ -391,13 +504,25 @@ async def _post_in_turn(
     context: str,
     timeout: float,
     deadline: float,
-) -> bool:
-    """``post_webhook`` once it holds the webhook's lock."""
+    try_only: bool,
+    report_drop: bool,
+) -> SendOutcome:
+    """``post_webhook_outcome`` once it holds the webhook's lock."""
+    status: int | None = None
     for _attempt in range(_MAX_ATTEMPTS):
         wait = _cooldown_remaining(url)
         if wait > 0:
+            if try_only:
+                return SendOutcome(OutcomeKind.HELD, status=status, retry_after=wait)
             if _now() + wait > deadline:
-                return _drop(url, channel, context, f"held for another {wait:.0f}s")
+                return _drop(
+                    url,
+                    channel,
+                    context,
+                    f"held for another {wait:.0f}s",
+                    report=report_drop,
+                    status=status,
+                )
             await _sleep(wait)
 
         try:
@@ -413,9 +538,10 @@ async def _post_in_turn(
                 )
             )
             _sentry.capture_exception(exc)
-            return False
+            return SendOutcome(OutcomeKind.FAILED)
 
         _note_bucket(url, resp)
+        status = resp.status_code
 
         if resp.is_success:
             _reported_drops.discard(url)
@@ -426,7 +552,7 @@ async def _post_in_turn(
                     f"status={resp.status_code}",
                 )
             )
-            return True
+            return SendOutcome(OutcomeKind.SENT, status=status)
 
         if resp.status_code == 429:
             secs, scope = _start_cooldown(url, resp)
@@ -461,9 +587,19 @@ async def _post_in_turn(
             f"{resp.status_code}",
             level="error",
         )
-        return False
+        # A 4xx is this message or this webhook; a 5xx is Discord.
+        if 400 <= status < 500:
+            return SendOutcome(OutcomeKind.REFUSED, status=status)
+        return SendOutcome(OutcomeKind.FAILED, status=status)
 
-    return _drop(url, channel, context, f"refused {_MAX_ATTEMPTS} times")
+    return _drop(
+        url,
+        channel,
+        context,
+        f"refused {_MAX_ATTEMPTS} times",
+        report=report_drop,
+        status=status,
+    )
 
 
 async def send_payload(
@@ -480,19 +616,8 @@ async def send_payload(
     ``payload`` is Discord's own shape (``content``, ``embeds``, …). Nothing
     is added to it, environment label included. Never raises.
     """
-    try:
-        base = webhook_url(channel, source=source)
-    except Exception:  # a misbehaving source is still not the caller's failure
-        logger.exception("discord webhook resolution failed (%s)", context)
-        return False
-    if base is None:
-        logger.warning(
-            with_log_prefix(
-                LOG_WARNING,
-                "no discord webhook resolved; dropping notification "
-                f"channel={channel} context={context}",
-            )
-        )
+    base = _resolve(channel, context, source)
+    if isinstance(base, SendOutcome):
         return False
     return await post_webhook(
         base,
@@ -502,6 +627,59 @@ async def send_payload(
         timeout=timeout,
         max_wait=max_wait,
     )
+
+
+async def send_payload_outcome(
+    channel: str,
+    payload: dict[str, Any],
+    *,
+    context: str = "notify",
+    source: Mapping[str, str | None] | None = None,
+    timeout: float = DEFAULT_TIMEOUT_SECS,
+    max_wait: float = MAX_WAIT_SECS,
+    try_only: bool = False,
+    report_drop: bool = True,
+) -> SendOutcome:
+    """``send_payload``, answering what the send came to rather than a bool.
+
+    ``NO_WEBHOOK`` when the channel resolves to none; ``FAILED`` when
+    ``source`` raises. ``try_only`` and ``report_drop`` are
+    ``post_webhook_outcome``'s. Never raises.
+    """
+    base = _resolve(channel, context, source)
+    if isinstance(base, SendOutcome):
+        return base
+    return await post_webhook_outcome(
+        base,
+        json=payload,
+        channel=channel,
+        context=context,
+        timeout=timeout,
+        max_wait=max_wait,
+        try_only=try_only,
+        report_drop=report_drop,
+    )
+
+
+def _resolve(
+    channel: str, context: str, source: Mapping[str, str | None] | None
+) -> str | SendOutcome:
+    """This channel's webhook URL, or the outcome of having none (logged)."""
+    try:
+        base = webhook_url(channel, source=source)
+    except Exception:  # a misbehaving source is still not the caller's failure
+        logger.exception("discord webhook resolution failed (%s)", context)
+        return SendOutcome(OutcomeKind.FAILED)
+    if base is None:
+        logger.warning(
+            with_log_prefix(
+                LOG_WARNING,
+                "no discord webhook resolved; dropping notification "
+                f"channel={channel} context={context}",
+            )
+        )
+        return SendOutcome(OutcomeKind.NO_WEBHOOK)
+    return base
 
 
 def build_message(
