@@ -17,7 +17,11 @@ import pytest
 from pydantic import ValidationError
 
 from mini_app_polis.api import KaianoApiClient, KaianoApiError
-from mini_app_polis.api.contract import NotifyRequest
+from mini_app_polis.api.contract import (
+    NOTIFY_QUEUED,
+    NotificationResult,
+    NotifyRequest,
+)
 
 from .harness import MACHINE_NAME, ContractConfigError, load_config
 
@@ -47,6 +51,19 @@ def result_message(host: str, api_sha: str, outcomes: Counter[str]) -> str:
     )
 
 
+def result_note(result: NotificationResult, content: str) -> str:
+    """The terminal line for the API's answer to the posted result.
+
+    Queued is accepted: the API will send it, so it is not reported as not
+    forwarded.
+    """
+    if result.forwarded:
+        return f"contract suite result posted: {content}"
+    if result.reason == NOTIFY_QUEUED:
+        return f"contract suite result queued for posting: {content}"
+    return f"contract suite result not forwarded ({result.reason}): {content}"
+
+
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     if session.config.option.collectonly or exitstatus not in (
         pytest.ExitCode.OK,
@@ -74,11 +91,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     except (KaianoApiError, httpx.HTTPError, ValidationError) as exc:
         note = f"contract suite result not posted: {exc}"
     else:
-        note = (
-            f"contract suite result posted: {content}"
-            if result.forwarded
-            else f"contract suite result not forwarded ({result.reason}): {content}"
-        )
+        note = result_note(result, content)
     if terminal is not None:
         terminal.ensure_newline()
         terminal.write_line(note)

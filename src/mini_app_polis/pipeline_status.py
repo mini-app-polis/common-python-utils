@@ -547,7 +547,7 @@ def _deliver(message: dict[str, Any], *, repo: str, logger: Any) -> bool:
     """
     try:
         from mini_app_polis.api import KaianoApiClient  # local import
-        from mini_app_polis.api.contract import NotifyRequest
+        from mini_app_polis.api.contract import NOTIFY_QUEUED, NotifyRequest
     except Exception as exc:
         with contextlib.suppress(Exception):
             logger.exception(
@@ -571,9 +571,17 @@ def _deliver(message: dict[str, Any], *, repo: str, logger: Any) -> bool:
         _capture(exc)
         return False
 
-    # The API answers 200 with forwarded=false when it decided not to post
-    # the message. That is not a delivery, and saying so is the point of
-    # returning a bool at all.
+    # The API answers 200 with forwarded=false when the message did not go
+    # out straight away. Queued is accepted: it is in the API's outbox and
+    # will be sent, so it counts as delivered. Any other reason is the API
+    # declining or Discord refusing, which is not a delivery, and saying so
+    # is the point of returning a bool at all.
+    if not result.forwarded and result.reason == NOTIFY_QUEUED:
+        with contextlib.suppress(Exception):
+            logger.info(
+                "pipeline_status: run report queued for delivery (repo=%s)", repo
+            )
+        return True
     if not result.forwarded:
         with contextlib.suppress(Exception):
             logger.warning(
