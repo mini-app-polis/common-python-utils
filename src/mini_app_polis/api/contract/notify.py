@@ -38,6 +38,9 @@ class NotifyRequest(BaseModel):
     it. A wrapper would have to grow a field every time a caller wanted one
     Discord already has, and the callers are all in this ecosystem — there is
     no second transport to stay portable for.
+
+    ``contract_suite_result`` is the one field that is not Discord's. It is
+    read by the API and never sent on to Discord.
     """
 
     content: str | None = Field(
@@ -54,6 +57,15 @@ class NotifyRequest(BaseModel):
         default=None,
         max_length=80,
         description="Override the webhook's display name for this message.",
+    )
+    contract_suite_result: bool = Field(
+        default=False,
+        description=(
+            "Marks the message as the contract suite's end-of-run result. The "
+            "development API forwards a message only when the contract-suite "
+            "machine sends it with this mark; everything else from development "
+            "is dropped."
+        ),
     )
 
     @model_validator(mode="after")

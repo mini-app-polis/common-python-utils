@@ -350,6 +350,49 @@ def test_notify_request_accepts_values_at_discords_limits() -> None:
     assert len(req.to_discord()["content"]) == 2000
 
 
+def test_notify_request_is_not_a_contract_suite_result_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Existing callers send exactly what they sent before the mark existed."""
+    req = NotifyRequest(content="deploy finished")
+    client, calls = _client(
+        monkeypatch,
+        {
+            "data": {"forwarded": True, "event": "notify", "reason": "sent"},
+            "meta": _META,
+        },
+    )
+
+    client.send_notification(req)
+
+    assert req.contract_suite_result is False
+    assert calls == [("POST", "/v1/notify", {"content": "deploy finished"})]
+
+
+def test_a_marked_notify_request_sends_the_mark_but_not_to_discord(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    req = NotifyRequest(content="contract suite passed", contract_suite_result=True)
+    client, calls = _client(
+        monkeypatch,
+        {
+            "data": {"forwarded": True, "event": "notify", "reason": "sent"},
+            "meta": _META,
+        },
+    )
+
+    client.send_notification(req)
+
+    assert calls == [
+        (
+            "POST",
+            "/v1/notify",
+            {"content": "contract suite passed", "contract_suite_result": True},
+        )
+    ]
+    assert req.to_discord() == {"content": "contract suite passed"}
+
+
 # ── Grooming records ──────────────────────────────────────────────────────
 
 
