@@ -4,9 +4,10 @@ The task goes through ``POST /v1/tasks`` like every other source, so the task
 manager stays the one writer to the board and mints the task's id. The caller
 never sends one.
 
-Run it under Doppler, with the config that holds ``CLAUDE_SESSION_API_KEY``::
+Run it under Doppler in the ``owner-session`` project, which holds
+``CLAUDE_SESSION_API_KEY``::
 
-    doppler run --project <the session's project> --config prd -- \\
+    doppler run --project owner-session --config prd -- \\
         file-task --key split-the-vault --title "Split the Doppler vault" \\
         --where infra --effort M --executor cowork --body "Why: …"
 

@@ -93,11 +93,11 @@ client = KaianoApiClient(api_key=key, user_agent="mini-app-polis-rotate/1")
 
 `file-task` puts one task on the board through `POST /v1/tasks`, as the
 `claude-session` machine, so the task manager stays the one writer to the
-board and mints the id. Run it under Doppler with a config that holds
-`CLAUDE_SESSION_API_KEY`:
+board and mints the id. Run it under Doppler in the `owner-session` project,
+which holds `CLAUDE_SESSION_API_KEY`:
 
 ```bash
-doppler run --config prd -- uv run file-task --key split-the-vault \
+doppler run --project owner-session --config prd -- uv run file-task --key split-the-vault \
   --title "Split the Doppler vault" --where infra --effort M \
   --executor cowork --body "Why it matters, and links."
 ```
