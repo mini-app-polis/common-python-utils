@@ -21,7 +21,6 @@ and the ledger check is last, so run the whole module rather than a subset.
 from __future__ import annotations
 
 import datetime as dt
-import os
 import uuid
 from collections.abc import Iterator
 
@@ -416,18 +415,18 @@ def test_evaluations_deduplicate_and_list_back(api: LedgerClient) -> None:
 # ── every cog, through pipeline_status ────────────────────────────────────
 
 
-def test_sends_a_notification(config: ContractConfig, api: LedgerClient) -> None:
-    api_sha = os.environ.get("CONTRACT_API_SHA", "").strip()
-    against = f"{config.host} at {api_sha[:7]}" if api_sha else config.host
+def test_sends_a_notification(api: LedgerClient) -> None:
+    """Development answers an unmarked message without posting it.
 
+    Only the suite's own result, which conftest.py sends after the run, is
+    marked to be forwarded.
+    """
     result = api.send_notification(
-        NotifyRequest(
-            content=f"Contract suite ran against {against}.",
-            username=MACHINE_NAME,
-        )
+        NotifyRequest(content="Contract suite notify check.", username=MACHINE_NAME)
     )
 
-    assert result.forwarded is True, result.reason
+    assert result.forwarded is False
+    assert result.reason == "development_not_reported"
 
 
 # ── The ledger. Last, so it sees every call above. ───────────────────────
