@@ -110,6 +110,22 @@ task's `Executor:` line will say. The command prints the key and the API's
 answer, never the API key, and exits non-zero with one line saying why
 when the draft or the request is refused.
 
+### Asking for a sweep from a working session
+
+`request-sweep` asks task-manager-cog for a sweep of the board now, through
+`POST /v1/tasks/sweeps`, as the same `claude-session` machine:
+
+```bash
+doppler run --project owner-session --config prd -- uv run request-sweep --groom --agents
+```
+
+With no flags it is the sweep the hourly schedule sends, which grooms and
+dispatches agents only at the times set for them. `--groom` makes it the
+sweep for `GROOM_TIMES` and `--agents` the one for `AGENT_TIMES`, whatever
+the time of day. Neither turns on what is off or raises a spending cap. It
+prints the API's answer, never the API key, and exits non-zero with one
+line saying why when the request is refused. Asking twice runs two sweeps.
+
 For the endpoints in `mini_app_polis.api.contract.ENDPOINTS`, use the typed
 methods. They take the request model the API validates against and return the
 envelope's `data` as the response model. `get()` and `post()` still work for

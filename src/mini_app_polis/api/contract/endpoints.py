@@ -77,7 +77,12 @@ from .secret_rotations import (
     RotationRequestAccepted,
     SecretChange,
 )
-from .tasks import TaskCreateAccepted, TaskCreateRequest
+from .tasks import (
+    TaskCreateAccepted,
+    TaskCreateRequest,
+    TaskSweepAccepted,
+    TaskSweepRequest,
+)
 from .wcs import (
     WcsSourceCreate,
     WcsSourceItem,
@@ -292,6 +297,14 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=TaskCreateRequest,
         response=TaskCreateAccepted,
         scope="tasks.requests.create",
+    ),
+    Endpoint(
+        name="request_sweep",
+        method="POST",
+        path="/v1/tasks/sweeps",
+        request=TaskSweepRequest,
+        response=TaskSweepAccepted,
+        scope="tasks.sweeps.create",
     ),
     Endpoint(
         name="list_groomings",

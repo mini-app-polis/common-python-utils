@@ -36,6 +36,9 @@ check-doppler-keys = "mini_app_polis.doppler:check_keys_main"
 # Run under doppler run with CLAUDE_SESSION_API_KEY: files one task through
 # POST /v1/tasks as the claude-session machine.
 file-task = "mini_app_polis.api.file_task:cli"
+# Run under doppler run with CLAUDE_SESSION_API_KEY: asks for a sweep of the
+# board now through POST /v1/tasks/sweeps as the claude-session machine.
+request-sweep = "mini_app_polis.api.request_sweep:cli"
 
 [project.optional-dependencies]
 # Upper bounds are load-bearing, not ceremony: these were unbounded, so

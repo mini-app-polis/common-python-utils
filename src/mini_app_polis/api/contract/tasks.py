@@ -11,6 +11,11 @@ the task.
 
 :class:`TaskUpdateRequest` changes a task made that way, naming it by the
 same key: a comment, and optionally a move to another column.
+
+:class:`TaskSweepRequest` asks for a sweep of the board now
+(``POST /v1/tasks/sweeps``). A flag makes that sweep count as the one for
+its time of day, grooming or agent dispatch, whatever the clock says; every
+switch and spending cap still applies.
 """
 
 from __future__ import annotations
@@ -199,3 +204,35 @@ class TaskCreateAccepted(BaseModel):
     )
     source: str = Field(..., description="The source the task came from.")
     external_id: str = Field(..., description="The source's key for the work.")
+
+
+class TaskSweepRequest(BaseModel):
+    """Ask for a sweep of the board now.
+
+    An empty request is the sweep the hourly schedule sends: grooming and
+    agent dispatch happen only if its time of day is one set for them.
+    ``groom`` makes this sweep the one for ``GROOM_TIMES``, ``agents`` the
+    one for ``AGENT_TIMES``. Neither turns on what is off or raises a cap.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    groom: bool = Field(
+        default=False,
+        description="Send tasks for grooming in this sweep, whatever the time.",
+    )
+    agents: bool = Field(
+        default=False,
+        description="Dispatch agents in this sweep, whatever the time.",
+    )
+
+
+class TaskSweepAccepted(BaseModel):
+    """The sweep is on the task manager's queue. Nothing has run yet."""
+
+    accepted: bool = Field(
+        default=True, description="Always true: the sweep was enqueued."
+    )
+    message_id: str = Field(
+        default="", description="Queue message id of the enqueued sweep."
+    )
