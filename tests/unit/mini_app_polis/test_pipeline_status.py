@@ -277,6 +277,40 @@ def test_a_report_the_api_did_not_forward_is_not_delivered() -> None:
     assert "webhook_missing" in logger.warning.call_args.args
 
 
+def test_a_report_the_api_queued_is_delivered() -> None:
+    """Queued is in the API's outbox and will be sent: accepted, not a failure."""
+    client = MagicMock()
+    client.send_notification.return_value = MagicMock(forwarded=False, reason="queued")
+    logger = MagicMock()
+    with patch("mini_app_polis.api.KaianoApiClient.from_env", return_value=client):
+        delivered = ps._deliver(
+            {"embeds": [{"title": "t"}], "username": "my-cog"},
+            repo="my-cog",
+            logger=logger,
+        )
+
+    assert delivered is True
+    logger.info.assert_called_once()
+    logger.warning.assert_not_called()
+
+
+def test_a_report_discord_refused_is_not_delivered() -> None:
+    client = MagicMock()
+    client.send_notification.return_value = MagicMock(
+        forwarded=False, reason="delivery_failed"
+    )
+    logger = MagicMock()
+    with patch("mini_app_polis.api.KaianoApiClient.from_env", return_value=client):
+        delivered = ps._deliver(
+            {"embeds": [{"title": "t"}], "username": "my-cog"},
+            repo="my-cog",
+            logger=logger,
+        )
+
+    assert delivered is False
+    assert "delivery_failed" in logger.warning.call_args.args
+
+
 def test_a_report_the_api_forwarded_is_delivered() -> None:
     client = MagicMock()
     client.send_notification.return_value = MagicMock(forwarded=True)

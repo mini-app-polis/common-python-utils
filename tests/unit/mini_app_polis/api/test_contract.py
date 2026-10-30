@@ -14,6 +14,9 @@ from mini_app_polis.api import KaianoApiClient
 from mini_app_polis.api.contract import (
     ENDPOINTS,
     ENDPOINTS_BY_NAME,
+    NOTIFY_DELIVERY_FAILED,
+    NOTIFY_FORWARDED,
+    NOTIFY_QUEUED,
     IngestSet,
     IngestTrack,
     NotificationResult,
@@ -119,6 +122,33 @@ def test_typed_post_sends_only_the_fields_set_and_returns_the_data(
     assert calls == [("POST", "/v1/notify", {"content": "deploy finished"})]
     assert isinstance(out, NotificationResult)
     assert out.forwarded is True
+
+
+@pytest.mark.parametrize("reason", ["queued", "delivery_failed", "a_later_token"])
+def test_notification_result_reads_any_reason_token(
+    monkeypatch: pytest.MonkeyPatch, reason: str
+) -> None:
+    """The reason stays a plain string: a token added later is read, not rejected."""
+    client, _ = _client(
+        monkeypatch,
+        {
+            "data": {"forwarded": False, "event": "notify", "reason": reason},
+            "meta": _META,
+        },
+    )
+
+    out = client.send_notification(NotifyRequest(content="x"))
+
+    assert out.forwarded is False
+    assert out.reason == reason
+
+
+def test_notify_reason_constants_name_the_api_tokens() -> None:
+    assert (NOTIFY_FORWARDED, NOTIFY_QUEUED, NOTIFY_DELIVERY_FAILED) == (
+        "forwarded",
+        "queued",
+        "delivery_failed",
+    )
 
 
 def test_typed_post_serialises_dates_as_json(

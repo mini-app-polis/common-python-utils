@@ -9,6 +9,20 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
+#: ``reason`` when the message went to Discord straight away (``forwarded``
+#: is true).
+NOTIFY_FORWARDED = "forwarded"
+
+#: ``reason`` when the message could not go out within the API's short wait
+#: and was accepted into its outbox instead. ``forwarded`` is false, but the
+#: message will be sent: a caller treats it as accepted, not as a failure.
+NOTIFY_QUEUED = "queued"
+
+#: ``reason`` when Discord refused the message outright (a 4xx other than a
+#: rate limit, such as a malformed embed). ``forwarded`` is false and the
+#: message is not retried.
+NOTIFY_DELIVERY_FAILED = "delivery_failed"
+
 
 class NotificationResult(BaseModel):
     """What the notification routes decided about one inbound event.
@@ -16,6 +30,14 @@ class NotificationResult(BaseModel):
     Returned for drops as well as sends. GitHub gets a 200 either way, so the
     body is the only place the reason is visible to whoever is reading a
     delivery in GitHub's UI.
+
+    ``POST /v1/notify`` answers 200 with this body for every outcome of a
+    Discord send; none of them is a 5xx. ``reason`` is one of
+    :data:`NOTIFY_FORWARDED`, :data:`NOTIFY_QUEUED` or
+    :data:`NOTIFY_DELIVERY_FAILED` in production, and
+    ``development_not_reported`` when the development API declines to post an
+    unmarked message. It stays a plain string so that a token the API adds
+    later is read rather than rejected.
     """
 
     forwarded: bool = Field(
@@ -27,7 +49,11 @@ class NotificationResult(BaseModel):
         description="Run conclusion or commit-status state, when the payload had one.",
     )
     reason: str = Field(
-        ..., description="Why it was forwarded or dropped, in one token."
+        ...,
+        description=(
+            "Why it was forwarded, queued or dropped, in one token. 'queued' "
+            "means accepted for later delivery, not a failure."
+        ),
     )
 
 

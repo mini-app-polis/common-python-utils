@@ -339,6 +339,15 @@ class KaianoApiClient:
         Build the client with ``machine_name`` so the API's audit trail names
         which cog sent the message rather than only that one did.
 
+        Returns the response body, a ``NotificationResult``. Every outcome of
+        the Discord send answers 200, never a 5xx: ``forwarded`` true with
+        reason ``forwarded`` when it went straight out; ``forwarded`` false
+        with reason ``queued`` when the API accepted it for later delivery,
+        which is not a failure; ``forwarded`` false with reason
+        ``delivery_failed`` when Discord refused it outright and it will not
+        be retried. Outside production an unmarked message answers
+        ``forwarded`` false with reason ``development_not_reported``.
+
         Raises :class:`KaianoApiError` like every other verb here — the caller
         decides whether a missed notification matters. Callers for which it
         does not should use :mod:`mini_app_polis.pipeline_status`, which is
@@ -978,5 +987,11 @@ class KaianoApiClient:
 
         :meth:`notify` is the same call taking keyword arguments and returning
         the raw body; it stays as it is for the callers that use it.
+
+        Every outcome of the Discord send answers 200 with a
+        :class:`NotificationResult`; see its docstring for the reasons. A
+        result with ``forwarded`` false and reason ``queued`` was accepted and
+        will be sent. A 5xx is not an expected answer for any Discord outcome,
+        and raises :class:`KaianoApiError` like any other.
         """
         return cast(NotificationResult, self._call("send_notification", payload))

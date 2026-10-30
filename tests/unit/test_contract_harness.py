@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from contract.conftest import result_note
 from contract.harness import (
     MACHINE_NAME,
     NOT_EXERCISED,
@@ -22,7 +23,7 @@ from contract.harness import (
 )
 
 from mini_app_polis.api import KaianoApiClient, KaianoApiError
-from mini_app_polis.api.contract import ENDPOINTS_BY_NAME
+from mini_app_polis.api.contract import ENDPOINTS_BY_NAME, NotificationResult
 
 DEV_URL = "https://dev-api.kaianolevine.com"
 DEV_KEY = "dev_abc123"
@@ -180,3 +181,29 @@ def test_ledger_client_records_only_calls_that_validated(
 
     assert ledger.hits == {"export_wcs_wiki"}
     assert client.machine_name == MACHINE_NAME
+
+
+# ── The posted result ─────────────────────────────────────────────────────
+
+
+def _result(*, forwarded: bool, reason: str) -> NotificationResult:
+    return NotificationResult(forwarded=forwarded, event="notify", reason=reason)
+
+
+def test_a_queued_result_reads_as_accepted() -> None:
+    note = result_note(_result(forwarded=False, reason="queued"), "passed")
+
+    assert note == "contract suite result queued for posting: passed"
+    assert "not forwarded" not in note
+
+
+def test_a_forwarded_result_reads_as_posted() -> None:
+    note = result_note(_result(forwarded=True, reason="forwarded"), "passed")
+
+    assert note == "contract suite result posted: passed"
+
+
+def test_a_refused_result_reads_as_not_forwarded_with_its_reason() -> None:
+    note = result_note(_result(forwarded=False, reason="delivery_failed"), "passed")
+
+    assert note == "contract suite result not forwarded (delivery_failed): passed"
