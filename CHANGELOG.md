@@ -1,3 +1,10 @@
+# [7.6.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.5.0...v7.6.0) (2026-10-30)
+
+
+### Features
+
+* **tasks:** request a sweep on demand with groom and agents flags ([18c2160](https://github.com/mini-app-polis/common-python-utils/commit/18c21602e257f3ac915dab187ff8efcc8bf7f338))
+
 # [7.5.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.4.0...v7.5.0) (2026-10-30)
 
 
