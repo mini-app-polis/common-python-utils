@@ -1,3 +1,10 @@
+# [7.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.1.1...v7.2.0) (2026-10-30)
+
+
+### Features
+
+* **asana:** AsanaClient reads a task's external id, creation time and history, and completes a task ([bb649da](https://github.com/mini-app-polis/common-python-utils/commit/bb649da0f9a4e4b7a0a9969b6bffc43d3aed8551))
+
 ## [7.1.1](https://github.com/mini-app-polis/common-python-utils/compare/v7.1.0...v7.1.1) (2026-10-29)
 
 
