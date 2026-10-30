@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import UTC, date, datetime
 
 import httpx
 import pytest
@@ -13,6 +13,7 @@ from mini_app_polis.asana import (
     AsanaAuthError,
     AsanaClient,
     AsanaSection,
+    AsanaStory,
     AsanaTaskInput,
     AsanaTaskRecord,
 )
@@ -644,6 +645,151 @@ def test_comments_are_posted_and_read_back_without_the_history() -> None:
     assert json.loads(seen[0].content) == {"data": {"text": "Grooming questions: why?"}}
     assert seen[0].url.path == "/api/1.0/tasks/t1/stories"
     assert client.list_comments("t1") == ["first", "second"]
+
+
+def test_a_task_record_carries_its_external_id_and_creation_time() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        fields = request.url.params["opt_fields"].split(",")
+        assert "external.gid" in fields
+        assert "created_at" in fields
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "gid": "t1",
+                    "name": "ROT-3 · rotate it",
+                    "external": {"gid": "secret-rotation.prd.API_KEY.2026-10"},
+                    "created_at": "2026-10-30T01:31:43.169Z",
+                }
+            },
+        )
+
+    task = _client(handler).get_task("t1", "proj-1")
+
+    assert task is not None
+    assert task.external_id == "secret-rotation.prd.API_KEY.2026-10"
+    assert task.created_at == datetime(2026, 10, 30, 1, 31, 43, 169000, tzinfo=UTC)
+
+
+def test_the_listing_reads_external_id_and_creation_time_too() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        fields = request.url.params["opt_fields"].split(",")
+        assert "external.gid" in fields
+        assert "created_at" in fields
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "gid": "t1",
+                        "name": "one",
+                        "external": {"gid": "manual.one"},
+                        "created_at": "2026-10-29T12:00:00.000Z",
+                    },
+                    {"gid": "t2", "name": "two", "external": None},
+                ]
+            },
+        )
+
+    first, second = _client(handler).list_project_tasks("proj-1")
+
+    assert first.external_id == "manual.one"
+    assert first.created_at == datetime(2026, 10, 29, 12, 0, tzinfo=UTC)
+    assert second.external_id is None
+    assert second.created_at is None
+
+
+def test_complete_task_puts_completed() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"data": {"gid": "t1"}})
+
+    _client(handler).complete_task("t1")
+
+    assert seen[0].method == "PUT"
+    assert seen[0].url.path == "/api/1.0/tasks/t1"
+    assert json.loads(seen[0].content) == {"data": {"completed": True}}
+
+
+def test_list_stories_reads_comments_and_column_changes_with_their_times() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "gid": "s1",
+                        "resource_subtype": "section_changed",
+                        "created_at": "2026-10-29T10:00:00.000Z",
+                        "text": "moved this from In progress to Review",
+                        "new_section": {"gid": "sec-review", "name": "Review"},
+                    },
+                    {
+                        "gid": "s2",
+                        "resource_subtype": "comment_added",
+                        "created_at": "2026-10-29T11:00:00.000Z",
+                        "text": "Landed: dev, green",
+                    },
+                    {
+                        "gid": "s3",
+                        "resource_subtype": "assigned",
+                        "created_at": "2026-10-29T12:00:00.000Z",
+                        "text": "assigned to you",
+                    },
+                    {"resource_subtype": "comment_added", "text": "no gid"},
+                ]
+            },
+        )
+
+    stories = _client(handler).list_stories("t1")
+
+    assert seen[0].url.path == "/api/1.0/tasks/t1/stories"
+    fields = seen[0].url.params["opt_fields"].split(",")
+    for field in ("created_at", "resource_subtype", "text", "new_section.name"):
+        assert field in fields
+    assert stories == [
+        AsanaStory(
+            gid="s1",
+            kind="section_changed",
+            created_at=datetime(2026, 10, 29, 10, 0, tzinfo=UTC),
+            section_gid="sec-review",
+            section_name="Review",
+        ),
+        AsanaStory(
+            gid="s2",
+            kind="comment_added",
+            created_at=datetime(2026, 10, 29, 11, 0, tzinfo=UTC),
+            text="Landed: dev, green",
+        ),
+        AsanaStory(
+            gid="s3",
+            kind="assigned",
+            created_at=datetime(2026, 10, 29, 12, 0, tzinfo=UTC),
+        ),
+    ]
+
+
+def test_list_stories_follows_pagination() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params.get("offset") == "next":
+            return httpx.Response(
+                200,
+                json={"data": [{"gid": "s2", "resource_subtype": "comment_added"}]},
+            )
+        return httpx.Response(
+            200,
+            json={
+                "data": [{"gid": "s1", "resource_subtype": "comment_added"}],
+                "next_page": {"offset": "next"},
+            },
+        )
+
+    assert [s.gid for s in _client(handler).list_stories("t1")] == ["s1", "s2"]
 
 
 # ---------------------------------------------------------------------------
