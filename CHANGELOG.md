@@ -1,3 +1,10 @@
+# [7.5.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.4.0...v7.5.0) (2026-10-30)
+
+
+### Features
+
+* **discord:** add send outcome functions that say what happened ([79bb916](https://github.com/mini-app-polis/common-python-utils/commit/79bb91607698bfe47223acd17d394bb2f19f4462))
+
 # [7.4.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.3.0...v7.4.0) (2026-10-30)
 
 
