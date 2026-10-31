@@ -1,3 +1,15 @@
+# [7.7.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.6.0...v7.7.0) (2026-10-31)
+
+
+### Bug Fixes
+
+* **deps:** patch vulnerable dependencies (pyasn1) ([3255452](https://github.com/mini-app-polis/common-python-utils/commit/32554521b3ade6312dadea704d1a0ed2f3779976))
+
+
+### Features
+
+* **environment:** add log_settings to log effective settings with values only for allowlisted names ([8898ccb](https://github.com/mini-app-polis/common-python-utils/commit/8898ccbf66d69b047a647fd805afb0cb5ac9d3cb))
+
 # [7.6.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.5.0...v7.6.0) (2026-10-30)
 
 
