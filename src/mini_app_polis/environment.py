@@ -32,7 +32,11 @@ everything else.
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from enum import StrEnum
+from typing import Any
+
+from . import logger
 
 
 class Environment(StrEnum):
@@ -193,3 +197,43 @@ def summary() -> str:
         f"environment={env.value} (from {source}) {gates} "
         f"api_base_url={api_base_url() or '<unset>'}"
     )
+
+
+def log_settings(
+    settings: Any,
+    allowlist: str | Iterable[str] | None = None,
+) -> None:
+    """Log one line per effective setting, with a value only if it is allowlisted.
+
+    ``settings`` is the service's resolved settings, defaults applied: a
+    pydantic ``BaseSettings`` object or a name-to-value mapping. Call this
+    once at startup. Names are matched upper-cased, so a ``Settings`` field
+    ``sentry_dsn`` is looked up as ``SENTRY_DSN`` in the allowlist and in
+    ``os.environ``.
+
+    ``allowlist`` is an iterable of names, or the comma-separated string
+    form. When it is ``None`` the ``SETTINGS_ALLOWLIST`` variable is read,
+    and a missing or empty variable is an empty allowlist: no value is shown.
+
+    An allowlisted name logs as ``NAME=value (set)`` when it is non-empty in
+    ``os.environ`` and ``NAME=value (default)`` otherwise. Any other name logs
+    as ``NAME (set)`` or ``NAME (unset)`` and its value is never formatted.
+    The allowlist is the only thing that permits a value; nothing is guessed
+    from how a name looks.
+    """
+    if allowlist is None:
+        allowlist = os.environ.get("SETTINGS_ALLOWLIST") or ""
+    items = allowlist.split(",") if isinstance(allowlist, str) else allowlist
+    allowed = {item.strip().upper() for item in items if item and item.strip()}
+
+    values = (
+        settings.model_dump() if hasattr(settings, "model_dump") else dict(settings)
+    )
+    log = logger.get_logger()
+    for name, value in values.items():
+        key = str(name).upper()
+        state = "set" if os.environ.get(key) else None
+        if key in allowed:
+            log.info("%s=%s (%s)", key, value, state or "default")
+        else:
+            log.info("%s (%s)", key, state or "unset")
