@@ -59,6 +59,11 @@ llm = ["openai>=1.40,<4", "anthropic>=1,<2"]
 # not here: the middleware only reads attributes off Starlette's request
 # and response, as request_metrics only reads the ASGI scope.
 activity = ["sqlalchemy>=2.0,<3"]
+# mini_app_polis.testing, the route ledger, wraps FastAPI's route handler.
+# Every API that registers it already depends on FastAPI; the extra is for
+# the declaration, and so `uv sync --all-extras` installs it for the tests.
+# Same range as the APIs' own pin, so both sides resolve together.
+testing = ["fastapi>=0.110,<1"]
 dev = [
   "pytest>=9.0.3,<10.0.0",
   "pytest-cov>=6.2.1,<8.0.0",

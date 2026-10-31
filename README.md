@@ -60,6 +60,7 @@ dependencies = [
 | `sentry.py` | `from mini_app_polis.sentry import init_sentry` | Starts Sentry for a service with the fleet defaults; an empty DSN in production logs an ERROR instead of skipping silently (CD-038) |
 | `spotify/` | `from mini_app_polis.spotify import SpotifyAPI` | Spotipy wrapper; raises `SpotifyTokenExpired` when Spotify refuses the refresh token (`invalid_grant`, not retried); every request, token refresh included, is bounded by `SPOTIFY_REQUEST_TIMEOUT_SECONDS` |
 | `ssm_secrets.py` | `from mini_app_polis.ssm_secrets import load_secrets` | Loads a Lambda worker's secrets from SSM Parameter Store into the environment, at cold start and again each invocation |
+| `testing.py` | `from mini_app_polis.testing import RouteLedger` | The route ledger (TEST-018): a pytest plugin that fails a whole integration run on any API route no test called, and on exemptions that outlived their reason (`testing` extra) |
 | `timing.py` | `from mini_app_polis import timing` | Per-invocation working vs waiting time, by service, as one CloudWatch line |
 | `vdj/` | `from mini_app_polis.vdj.m3u import ParseFacade` | VirtualDJ M3U parsing |
 
@@ -482,6 +483,49 @@ with no label is read from its name. A counter with no `section` goes under
 run picks up the rest` and reported once, as WARN. The footer is the severity
 and the first 8 characters of the run id. Nothing is posted outside
 production.
+
+### Route ledger (requires `testing` extra)
+
+A pytest plugin for an API's integration suite. It records the route template
+of every request any test client makes and, when a run of the whole suite
+ends, fails the run on a route the app registers that no test called and no
+exemption names, on an exemption for a route a test now calls, and on an
+exemption for a route the app no longer registers. Templates carry their
+router and mount prefixes.
+
+The extra adds only FastAPI, which every API already depends on; declare it
+on the dependency the API already has:
+
+```toml
+dependencies = ["miniapppolis-common-utils[testing]>=7.0,<8"]
+```
+
+Register it from the integration suite's `conftest.py`, passing the app:
+
+```python
+from pathlib import Path
+
+from mini_app_polis.testing import RouteLedger
+
+from app.main import app
+
+EXEMPT = {
+    ("POST", "/v1/webhooks/stripe"): "signed by Stripe; no test can sign it",
+}
+
+
+def pytest_configure(config):
+    RouteLedger(app, exempt=EXEMPT, suite_dir=Path(__file__).parent).register(config)
+```
+
+Every exemption needs a reason; an empty one is refused when the ledger is
+built. The ledger checks only a whole run of the suite: a run that names a
+test, a file or a subdirectory of `suite_dir`, deselects any test in it
+(`-k`, `-m`, `--deselect`), or collects nothing from it checks nothing, and
+naming `suite_dir` or a directory above it is a whole run. To decide that
+another way, pass `whole_suite=lambda session: ...` instead of `suite_dir`.
+A run that has already failed is not checked, and nor is a run under
+pytest-xdist, whose workers each see only some of the requests.
 
 ### Logger
 
