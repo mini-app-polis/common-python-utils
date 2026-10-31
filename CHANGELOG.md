@@ -1,3 +1,10 @@
+# [7.8.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.7.0...v7.8.0) (2026-10-31)
+
+
+### Features
+
+* **testing:** add the shared route-ledger pytest plugin (TEST-018) ([826d0f8](https://github.com/mini-app-polis/common-python-utils/commit/826d0f802b91121227e6d4da4351443c6cd27c44))
+
 # [7.7.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.6.0...v7.7.0) (2026-10-31)
 
 
