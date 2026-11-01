@@ -1,3 +1,11 @@
+## [7.8.2](https://github.com/mini-app-polis/common-python-utils/compare/v7.8.1...v7.8.2) (2026-11-01)
+
+
+### Bug Fixes
+
+* **deps:** bump anthropic from 1.15.0 to 2.3.0 in the majors group ([5e10d64](https://github.com/mini-app-polis/common-python-utils/commit/5e10d643f448c1fae4fc12499b0b2d66218a2181))
+* **deps:** bump the minor-and-patch group with 4 updates ([abadc18](https://github.com/mini-app-polis/common-python-utils/commit/abadc18cb715001df24aec71cd9d3be08f603519))
+
 ## [7.8.1](https://github.com/mini-app-polis/common-python-utils/compare/v7.8.0...v7.8.1) (2026-11-01)
 
 
