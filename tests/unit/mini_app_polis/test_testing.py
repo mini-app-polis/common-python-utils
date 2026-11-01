@@ -252,6 +252,33 @@ def test_deselection_outside_the_suite_is_still_a_whole_run(suite, pytester) -> 
     assert result.ret == pytest.ExitCode.TESTS_FAILED
 
 
+def test_a_collect_only_run_checks_nothing(suite, pytester) -> None:
+    suite()
+    result = run(pytester, "--collect-only")
+    assert "route ledger" not in result.stdout.str()
+    assert result.ret == pytest.ExitCode.OK
+
+
+def test_a_run_with_every_test_deselected_checks_nothing(suite, pytester) -> None:
+    # Whole by the consumer's rule, so only "no test ran" can let it pass.
+    suite(whole="lambda session: True")
+    result = run(pytester, "-k", "nothing_matches")
+    assert "route ledger" not in result.stdout.str()
+    assert result.ret == pytest.ExitCode.NO_TESTS_COLLECTED
+
+
+def test_a_run_with_every_test_skipped_checks_nothing(suite, pytester) -> None:
+    suite()
+    pytester.makeconftest(
+        "import pytest\n\n\n"
+        "def pytest_runtest_setup(item):\n    pytest.skip('skipped')\n"
+    )
+    result = run(pytester)
+    result.assert_outcomes(skipped=2)
+    assert "route ledger" not in result.stdout.str()
+    assert result.ret == pytest.ExitCode.OK
+
+
 def test_an_xdist_worker_checks_nothing(suite, pytester) -> None:
     suite()
     pytester.makeconftest(

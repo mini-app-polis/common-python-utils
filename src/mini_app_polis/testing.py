@@ -14,7 +14,8 @@ on:
 
 so a new endpoint cannot merge without a test or a reason, and an exemption
 cannot outlive its reason. A run of part of the suite checks nothing, nor
-does a run that has already failed.
+does a run that has already failed, nor one in which no test ran (``--collect-only``,
+or every test deselected or skipped).
 
 The API supplies its own app; nothing here imports one. Register the ledger
 from the integration suite's ``conftest.py``::
@@ -163,6 +164,7 @@ class RouteLedger:
         self.whole_suite = whole_suite
         self.called: set[Route] = set()
         self._deselected_in_suite = False
+        self._a_test_ran = False
 
     # --- registration ------------------------------------------------------
 
@@ -213,10 +215,17 @@ class RouteLedger:
         if self.suite_dir is not None and any(self._in_suite(i.path) for i in items):
             self._deselected_in_suite = True
 
+    def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
+        # A test skipped in setup, or never run (--collect-only), has no call.
+        if report.when == "call":
+            self._a_test_ran = True
+
     def pytest_sessionfinish(self, session: pytest.Session, exitstatus: int) -> None:
         # An xdist worker saw only its share of the requests.
         worker = hasattr(session.config, "workerinput")
-        if exitstatus != 0 or worker or not self._ran_whole_suite(session):
+        if exitstatus != 0 or worker or not self._a_test_ran:
+            return
+        if not self._ran_whole_suite(session):
             return
         found = self.problems()
         if not found:
