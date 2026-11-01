@@ -1,3 +1,10 @@
+## [7.8.1](https://github.com/mini-app-polis/common-python-utils/compare/v7.8.0...v7.8.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* **testing:** skip the route ledger check when no test ran ([c161157](https://github.com/mini-app-polis/common-python-utils/commit/c16115702a15d98231b5cb6b1acc3debf5753fcc))
+
 # [7.8.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.7.0...v7.8.0) (2026-10-31)
 
 
