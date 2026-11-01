@@ -51,7 +51,7 @@ request-sweep = "mini_app_polis.api.request_sweep:cli"
 # (wiki-curator-cog) and 3.x (transcription-cog, api-kaianolevine-com),
 # so anything tighter than <4 forces one of them to move. Matches
 # api-kaianolevine-com's own pin deliberately.
-llm = ["openai>=1.40,<4", "anthropic>=1,<2"]
+llm = ["openai>=1.40,<4", "anthropic>=1,<3"]
 # mini_app_polis.activity registers SQLAlchemy session listeners at import.
 # Every service that wants it already depends on SQLAlchemy 2; the extra is
 # for the declaration, and so `uv sync --all-extras` installs it for the
