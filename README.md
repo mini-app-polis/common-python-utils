@@ -524,8 +524,9 @@ test, a file or a subdirectory of `suite_dir`, deselects any test in it
 (`-k`, `-m`, `--deselect`), or collects nothing from it checks nothing, and
 naming `suite_dir` or a directory above it is a whole run. To decide that
 another way, pass `whole_suite=lambda session: ...` instead of `suite_dir`.
-A run that has already failed is not checked, and nor is a run under
-pytest-xdist, whose workers each see only some of the requests.
+A run that has already failed is not checked, nor is a run in which no test
+ran (`--collect-only`, or every test deselected or skipped), and nor is a run
+under pytest-xdist, whose workers each see only some of the requests.
 
 ### Logger
 
