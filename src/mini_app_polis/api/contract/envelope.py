@@ -22,7 +22,12 @@ T = TypeVar("T")
 
 
 class Envelope(BaseModel, Generic[T]):
-    """TODO: describe this class."""
+    """A success response: the payload in ``data``, its metadata in ``meta``.
+
+    ``data`` is the response's value, one object or a list. ``meta`` is
+    required on every success, an object answer included: a single object
+    reports ``count=1`` and ``total=1``.
+    """
 
     data: T = Field(..., description="Semantic value for data.")
     meta: Meta = Field(..., description="Semantic value for meta.")
