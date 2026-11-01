@@ -62,10 +62,11 @@ production's record, and a development run says what it did in its own
 logs. Graded findings (:func:`post_findings`) still go to the development
 API from development, since they are records, not messages.
 
-The fleet does not run on Prefect. :func:`get_prefect_logger` and
-:func:`get_run_id` import it lazily, and fall back when it is absent,
-because callers use them; ``mini_app_polis`` does not declare Prefect as
-a dependency.
+Pipeline cogs run as AWS Lambda functions behind their own SQS queue
+and pass their own run id. :func:`get_prefect_logger` and
+:func:`get_run_id` keep a legacy Prefect lookup for callers that use
+them, imported lazily and skipped when Prefect is absent; ``mini_app_polis``
+does not declare that legacy Prefect package as a dependency.
 
 Severity classification:
 
@@ -237,12 +238,12 @@ class Finding(TypedDict, total=False):
 
 
 def get_prefect_logger() -> Any:
-    """Return the Prefect run logger inside a flow, else the module logger.
+    """Return the module logger, or a legacy Prefect run logger inside a flow.
 
-    Imports Prefect lazily so non-Prefect callers (and test environments
-    without Prefect installed) don't pay the import cost. Falls back to
-    the mini_app_polis module logger if Prefect isn't available or if we
-    aren't inside a flow run context.
+    The legacy Prefect import is lazy, so callers and test environments
+    without Prefect installed don't pay its cost. Returns the
+    mini_app_polis module logger whenever that legacy lookup fails: the
+    package is absent, or no flow run is active.
     """
     try:
         from prefect import get_run_logger  # lazy import
@@ -260,20 +261,21 @@ def get_run_id() -> str:
 
     Resolution order:
 
-    1. ``prefect.runtime.flow_run.id`` — set when running inside a Prefect
-       flow.
-    2. ``PREFECT_FLOW_RUN_ID`` env var — set by the Prefect worker
-       process.
+    1. ``prefect.runtime.flow_run.id`` — a legacy lookup, set only inside
+       a Prefect flow.
+    2. ``PREFECT_FLOW_RUN_ID`` env var — a legacy lookup, set only by a
+       Prefect worker process.
     3. ``"local-run"`` — fallback for direct invocations and tests.
 
     Deliberately does **not** consult ``GITHUB_RUN_ID``. GitHub Actions
     is a trigger, not a run identity, in the Kaiano cog ecosystem.
 
     **Every caller should prefer passing its own run id.** Both resolution
-    steps above are Prefect's, and a cog that does not run under Prefect
-    reaches the ``"local-run"`` fallback on every invocation — so its run
-    reports all arrive under one id that identifies nothing and cannot be
-    joined to the findings the same run filed. ``post_findings``,
+    steps above are legacy Prefect lookups, and a cog that does not run
+    under Prefect reaches the ``"local-run"`` fallback on every
+    invocation — so its run reports all arrive under one id that
+    identifies nothing and cannot be joined to the findings the same run
+    filed. ``post_findings``,
     ``post_run_finding`` and :class:`RunReport` all take ``run_id`` for
     that reason; this function is the fallback for callers that have none,
     and becomes a dead path once the last cog is converted.
@@ -675,9 +677,9 @@ def post_findings(
         )
         return DeliveryReport()
 
-    # The caller's own id wins. See get_run_id: its resolution order is
-    # Prefect's, and a cog not under Prefect would otherwise file every row
-    # under "local-run".
+    # The caller's own id wins. get_run_id only finds a legacy Prefect id,
+    # so without the caller's id every row would be filed under
+    # "local-run".
     run_id = run_id or get_run_id()
     sent = failed = skipped = 0
 
@@ -1068,8 +1070,8 @@ class RunReport:
     duration_sec: float | None = None
     #: The run this report belongs to.
     #:
-    #: ``None`` falls back to :func:`get_run_id`, whose resolution order is
-    #: Prefect's — so a cog that does not set this
+    #: ``None`` falls back to :func:`get_run_id`, which only finds a run id
+    #: under legacy Prefect — so a cog that does not set this
     #: sends every run report under ``"local-run"``, unattributable and
     #: unjoinable to the findings the same run filed. A caller that mints
     #: its own id should set this as soon as it has one; it may be assigned

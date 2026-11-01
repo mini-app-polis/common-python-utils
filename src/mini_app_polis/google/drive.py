@@ -25,8 +25,8 @@ FOLDER_CACHE: dict[str, str] = {}
 
 _DRIVE_ID_RE = re.compile(r"[-\w]{25,}")
 _VERSION_RE = re.compile(r"_v(\d+)$")
-# Same pattern as deejaytools-api's shareDriveFileWithUsers, so addresses the
-# old service would have shared are exactly the ones this shares.
+# A loose address shape — no whitespace, one @, a dot in the domain. An
+# address that does not match is dropped, not shared.
 _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
@@ -228,12 +228,11 @@ class DriveFacade:
     ) -> ShareResult:
         """Grant reader access on a file to each valid address, without emailing.
 
-        Mirrors deejaytools-api's ``shareDriveFileWithUsers``: each address is
-        trimmed and lowercased, empties and anything that does not look like
-        an address are dropped, and duplicates are removed keeping first-seen
-        order. ``sendNotificationEmail=False`` because the recipients are told
-        through the app itself; Drive's own share email would be a second,
-        unbranded message.
+        Each address is trimmed and lowercased, empties and anything that
+        does not look like an address are dropped, and duplicates are removed
+        keeping first-seen order. ``sendNotificationEmail=False`` because the
+        recipients are told through the app itself; Drive's own share email
+        would be a second, unbranded message.
 
         Failures are per address and are collected, never raised: one address
         Drive rejects (no Google account, domain policy) must not stop the

@@ -10,7 +10,7 @@ on:
 - a route ``app.routes`` registers that no test called and no exemption
   names;
 - an exemption for a route a test now calls;
-- an exemption for a route the app no longer registers;
+- an exemption for a route the app does not register;
 
 so a new endpoint cannot merge without a test or a reason, and an exemption
 cannot outlive its reason. A run of part of the suite checks nothing, nor
@@ -212,15 +212,31 @@ class RouteLedger:
     # --- pytest hooks --------------------------------------------------------
 
     def pytest_deselected(self, items: list[pytest.Item]) -> None:
+        """Note when ``-k``/``-m`` deselects a test in the suite.
+
+        pytest calls this with the deselected items; any from the suite
+        mark the run as partial, so :meth:`pytest_sessionfinish` checks
+        nothing.
+        """
         if self.suite_dir is not None and any(self._in_suite(i.path) for i in items):
             self._deselected_in_suite = True
 
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
-        # A test skipped in setup, or never run (--collect-only), has no call.
+        """Note that a test ran, so :meth:`pytest_sessionfinish` checks the ledger.
+
+        Only the ``call`` phase counts: a test skipped in setup, or never run
+        (``--collect-only``), has no call.
+        """
         if report.when == "call":
             self._a_test_ran = True
 
     def pytest_sessionfinish(self, session: pytest.Session, exitstatus: int) -> None:
+        """Check the ledger when a passing run of the whole suite ends.
+
+        Skips the check on a failed run, on an xdist worker, when no test
+        ran, or when only part of the suite ran. Otherwise prints each of
+        :meth:`problems` under a "route ledger" banner and fails the run.
+        """
         # An xdist worker saw only its share of the requests.
         worker = hasattr(session.config, "workerinput")
         if exitstatus != 0 or worker or not self._a_test_ran:
@@ -238,4 +254,5 @@ class RouteLedger:
         session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
     def pytest_unconfigure(self) -> None:
+        """Stop recording when pytest shuts down, via :meth:`stop`."""
         self.stop()
