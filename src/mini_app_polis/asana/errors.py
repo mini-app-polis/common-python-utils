@@ -3,8 +3,8 @@
 The split is by what the operator has to do about it, not by status
 code. ``AsanaAuthError`` means a human must rotate a credential, so a
 retry can only fail the same way; ``AsanaAPIError`` means the call
-might succeed if it runs again. Callers running under Prefect map the
-two accordingly: raise-and-stop versus raise-and-retry.
+might succeed if it runs again. Callers map the two accordingly:
+raise-and-stop versus raise-and-retry.
 """
 
 from __future__ import annotations

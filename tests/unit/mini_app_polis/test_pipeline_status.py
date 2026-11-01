@@ -938,8 +938,8 @@ def test_notable_does_not_override_gating(monkeypatch) -> None:
 # run identity — the caller's id wins over get_run_id()
 # ---------------------------------------------------------------------------
 #
-# get_run_id's resolution order is Prefect's: the flow run id, then
-# PREFECT_FLOW_RUN_ID, then "local-run". A cog that has left Prefect hits
+# get_run_id's resolution order is two legacy Prefect lookups: the flow run
+# id, then PREFECT_FLOW_RUN_ID, then "local-run". A cog not under Prefect hits
 # the fallback on every invocation, so every row and every run report it
 # sends arrives under one id that identifies nothing and cannot be joined
 # to anything else the same run did. These pin the way out.

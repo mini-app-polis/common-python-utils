@@ -162,11 +162,11 @@ def _root_handler() -> logging.Handler:
 logging.basicConfig(level=_level, handlers=[_root_handler()])
 
 #: Third-party loggers that print credentials or full request headers at
-#: DEBUG. ``websockets`` is the observed leak — Prefect's event client
-#: uses it, and it logged ``Authorization: bearer <PREFECT_API_KEY>``
-#: plus the auth frame on every container start. The HTTP transports are
-#: the same class of risk: they log request headers, which carry bearer
-#: tokens and API keys for every service in the fleet.
+#: DEBUG. ``websockets`` is the observed leak: a client built on it logs
+#: its ``Authorization: bearer <api key>`` header plus the auth frame on
+#: every connection. The HTTP transports are the same class of risk: they
+#: log request headers, which carry bearer tokens and API keys for every
+#: service in the fleet.
 #:
 #: Names are logger prefixes — setting ``websockets`` covers
 #: ``websockets.client`` and every other child.

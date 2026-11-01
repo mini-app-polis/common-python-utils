@@ -1,9 +1,8 @@
 """The running list: what it tallies, what it suppresses, what it reports.
 
-The tally arithmetic, fault policy and middleware cases are ported from
-api-kaianolevine-com's tests of the module this was extracted from. That
-service's integration suite still runs the wiring end to end against
-Postgres — a real route, a real commit, the tally read back across
+The tally arithmetic, fault policy and middleware cases are tested here as
+units. api-kaianolevine-com's integration suite runs the wiring end to end
+against Postgres — a real route, a real commit, the tally read back across
 SQLAlchemy's greenlet. Here the session events are driven directly, with
 stand-in sessions shaped like the real ones, because nothing else in this
 library's suite runs a database.

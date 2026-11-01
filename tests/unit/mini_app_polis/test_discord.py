@@ -1,7 +1,7 @@
 """Discord transport: where each channel goes, what is labeled, and rate limits.
 
-The rate-limit cases are ported from api-kaianolevine-com, where they were
-written after production on 2026-09-23: Cloudflare answered every webhook
+The rate-limit cases reproduce what api-kaianolevine-com met in production
+on 2026-09-23: Cloudflare answered every webhook
 with error 1015, an HTML page applied to the service's IP, and the API kept
 posting — 41 refused sends in four minutes, each reported to Sentry.
 Posting through a 1015 is what extends it.
