@@ -890,6 +890,28 @@ def test_list_files_builds_the_query_from_every_filter():
     )
 
 
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda d, bad: d.list_files(bad),
+        lambda d, bad: d.get_files_in_folder(bad, include_folders=False),
+        lambda d, bad: d.find_file_in_folder(bad, name="x"),
+        lambda d, bad: d.ensure_folder(bad, "x"),
+    ],
+)
+def test_a_folder_id_that_is_not_a_drive_id_is_refused_before_drive_is_called(
+    call,
+):
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = _mock_service()
+    bad = "pbpaste | tr -d '\\r\\n' | doppler secrets set FOLDER_ID"
+
+    with pytest.raises(ValueError, match="not a Drive id"):
+        call(DriveFacade(svc), bad)
+    svc.files.return_value.list.assert_not_called()
+
+
 def test_find_file_in_folder_without_mime_type_returns_first_or_none():
     from mini_app_polis.google.drive import DriveFacade
 
