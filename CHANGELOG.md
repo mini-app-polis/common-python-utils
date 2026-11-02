@@ -1,3 +1,10 @@
+## [7.9.1](https://github.com/mini-app-polis/common-python-utils/compare/v7.9.0...v7.9.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* **google:** stop reporting a recipient Drive refuses as an error ([1eea558](https://github.com/mini-app-polis/common-python-utils/commit/1eea55867ce4b121ac2201d906a9b4e3ad7a4668))
+
 # [7.9.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.8.3...v7.9.0) (2026-11-02)
 
 
