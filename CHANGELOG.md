@@ -1,3 +1,10 @@
+# [7.9.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.8.3...v7.9.0) (2026-11-02)
+
+
+### Features
+
+* **api:** add the infra-apply task source to the task contract ([cc3d5ab](https://github.com/mini-app-polis/common-python-utils/commit/cc3d5ab51b1abef9db8f80eb2ac3fea31c3bea31))
+
 ## [7.8.3](https://github.com/mini-app-polis/common-python-utils/compare/v7.8.2...v7.8.3) (2026-11-02)
 
 
