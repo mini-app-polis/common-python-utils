@@ -51,6 +51,25 @@ def _escape_query_value(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
+#: Every character a Drive file, folder or shared-drive id is made of.
+_DRIVE_ID = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def _drive_id(value: str) -> str:
+    """Return ``value`` if it can be a Drive id, else raise ``ValueError``.
+
+    For an id placed in a query as ``'<id>' in parents``. Escaping would
+    make a wrong value a well-formed query for a file that does not exist;
+    refusing it says what is actually wrong — a folder id set to something
+    that is not one — instead of Drive's "Invalid Value" for ``q``.
+    """
+    text = value or ""
+    if not _DRIVE_ID.fullmatch(text):
+        shown = text[:40] + ("…" if len(text) > 40 else "")
+        raise ValueError(f"not a Drive id: {shown!r} ({len(text)} chars)")
+    return text
+
+
 @dataclass(frozen=True)
 class DownloadedFile:
     """Represent an in-memory file download and its Drive metadata."""
@@ -130,7 +149,7 @@ class DriveFacade:
         """Find a non-trashed file by exact name in a folder. Return file id or None."""
 
         safe_name = name.replace("'", "\\'")
-        q = f"name = '{safe_name}' and '{parent_folder_id}' in parents and trashed = false"
+        q = f"name = '{safe_name}' and '{_drive_id(parent_folder_id)}' in parents and trashed = false"
         if mime_type:
             safe_mime = mime_type.replace("'", "\\'")
             q += f" and mimeType = '{safe_mime}'"
@@ -355,7 +374,7 @@ class DriveFacade:
         include_folders: bool = True,
     ) -> list[DriveFile]:
         """List Drive files in a folder with optional filtering."""
-        query = f"'{parent_id}' in parents"
+        query = f"'{_drive_id(parent_id)}' in parents"
         if not include_folders:
             query += " and mimeType != 'application/vnd.google-apps.folder'"
         if mime_type:
@@ -407,7 +426,7 @@ class DriveFacade:
 
         safe_name = name.replace("'", "\\'")
         query = (
-            f"'{parent_id}' in parents and name = '{safe_name}' "
+            f"'{_drive_id(parent_id)}' in parents and name = '{safe_name}' "
             "and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
         )
 
@@ -938,7 +957,7 @@ class DriveFacade:
         # Fetch existing files with same prefix in the destination folder.
         safe_root = (base_root + "_v").replace("'", "\\'")
         q = (
-            f"'{parent_folder_id}' in parents and trashed=false "
+            f"'{_drive_id(parent_folder_id)}' in parents and trashed=false "
             f"and name contains '{safe_root}'"
         )
 
