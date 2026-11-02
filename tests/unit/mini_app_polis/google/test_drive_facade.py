@@ -571,6 +571,47 @@ def test_share_with_readers_collects_per_address_failures(as_http_error):
     assert svc.permissions.return_value.create.call_count == 3
 
 
+def test_share_with_readers_refused_recipient_logs_no_error(as_http_error, monkeypatch):
+    from mini_app_polis.google import _retry
+    from mini_app_polis.google.drive import DriveFacade
+
+    errors: list[str] = []
+    monkeypatch.setattr(_retry.log, "error", errors.append)
+    refused = as_http_error(
+        status=400,
+        message=(
+            "<HttpError 400 ... Details: \"[{'message': 'Bad Request.', "
+            "'domain': 'global', 'reason': 'invalidSharingRequest'}]\">"
+        ),
+    )
+    other = as_http_error(status=400, message="badRequest")
+
+    def create(*, fileId, body, sendNotificationEmail, supportsAllDrives):
+        err = {"nogoogle@example.com": refused, "broken@example.com": other}.get(
+            body["emailAddress"]
+        )
+        return _Exec(
+            (lambda: (_ for _ in ()).throw(err)) if err else (lambda: {"id": "p"})
+        )
+
+    svc = _mock_service()
+    svc.permissions.return_value.create.side_effect = create
+    drive = DriveFacade(svc)
+
+    result = drive.share_with_readers(
+        "file1", ["ok@example.com", "nogoogle@example.com", "broken@example.com"]
+    )
+
+    assert result.shared == ["ok@example.com"]
+    assert [e for e, _ in result.failed] == [
+        "nogoogle@example.com",
+        "broken@example.com",
+    ]
+    # Only the unexpected 400 is reported at error level.
+    assert len(errors) == 1
+    assert "broken@example.com" in errors[0]
+
+
 def test_share_with_readers_makes_no_call_when_nothing_valid():
     from mini_app_polis.google.drive import DriveFacade, ShareResult
 

@@ -178,8 +178,13 @@ def execute_with_retry(
     *,
     context: str,
     retry: RetryConfig | None = None,
+    expected_error: Callable[[HttpError], bool] | None = None,
 ) -> T:
     """Execute a Google API call with consistent retry/backoff.
+
+    ``expected_error`` marks non-retryable HttpErrors the caller handles
+    itself (a recipient Drive refuses, say): those are re-raised without the
+    error-level log, which error tracking reports as a failure.
 
     Inside :func:`mini_app_polis.deadline.run_deadline`, an attempt is not
     started once the deadline has passed (raises
@@ -200,6 +205,8 @@ def execute_with_retry(
         except HttpError as e:
             last_error = e
             if (not is_retryable_http_error(e)) or attempt == retry.max_retries:
+                if expected_error is not None and expected_error(e):
+                    raise
                 log.error(
                     f"❌ Google API HttpError while {context} "
                     f"(attempt {attempt}/{retry.max_retries}): {e}"

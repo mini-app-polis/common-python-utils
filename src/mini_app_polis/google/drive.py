@@ -30,6 +30,18 @@ _VERSION_RE = re.compile(r"_v(\d+)$")
 _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
+def _is_refused_recipient(error: HttpError) -> bool:
+    """Drive refused this recipient: no Google account for the address while
+    the share sends no email, or a domain policy. Retrying cannot help."""
+    details = getattr(error, "error_details", None)
+    if isinstance(details, list) and any(
+        isinstance(d, dict) and d.get("reason") == "invalidSharingRequest"
+        for d in details
+    ):
+        return True
+    return "invalidsharingrequest" in str(error).lower()
+
+
 def clear_folder_cache() -> None:
     """Empty the process-wide folder-id cache used by ``ensure_folder``.
 
@@ -256,7 +268,8 @@ class DriveFacade:
         Failures are per address and are collected, never raised: one address
         Drive rejects (no Google account, domain policy) must not stop the
         others from being shared. If nothing survives cleaning, no API call
-        is made.
+        is made. A recipient Drive refuses is logged at warning level only:
+        it is an expected outcome the caller reads from ``failed``.
         """
 
         cleaned: list[str] = []
@@ -288,6 +301,7 @@ class DriveFacade:
                     partial(_call, email),
                     context=f"sharing file {file_id} with {email}",
                     retry=self._retry,
+                    expected_error=_is_refused_recipient,
                 )
                 shared.append(email)
             except Exception as e:

@@ -172,3 +172,45 @@ def test_execute_with_retry_retries_ssl_eof(monkeypatch):
     retry = RetryConfig(max_retries=3, base_delay_s=0.01, max_delay_s=0.02)
     assert execute_with_retry(fn, context="uploading bytes file", retry=retry) == "ok"
     assert state["n"] == 2
+
+
+def test_execute_with_retry_expected_error_skips_error_log(as_http_error, monkeypatch):
+    import pytest
+
+    from mini_app_polis.google import _retry
+
+    errors: list[str] = []
+    monkeypatch.setattr(_retry.log, "error", errors.append)
+    boom = as_http_error(status=400, message="invalidSharingRequest")
+
+    def fn():
+        raise boom
+
+    with pytest.raises(type(boom)):
+        _retry.execute_with_retry(fn, context="unit", expected_error=lambda _e: True)
+    assert errors == []
+
+    with pytest.raises(type(boom)):
+        _retry.execute_with_retry(fn, context="unit", expected_error=lambda _e: False)
+    assert len(errors) == 1
+
+
+def test_execute_with_retry_expected_error_does_not_stop_retries(
+    as_http_error, monkeypatch
+):
+    from mini_app_polis.google import _retry
+
+    monkeypatch.setattr(_retry.time, "sleep", lambda _s: None)
+    calls = {"n": 0}
+
+    def fn():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise as_http_error(status=503)
+        return "ok"
+
+    result = _retry.execute_with_retry(
+        fn, context="unit", expected_error=lambda _e: True
+    )
+    assert result == "ok"
+    assert calls["n"] == 2
