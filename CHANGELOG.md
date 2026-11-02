@@ -1,3 +1,10 @@
+## [7.8.3](https://github.com/mini-app-polis/common-python-utils/compare/v7.8.2...v7.8.3) (2026-11-02)
+
+
+### Bug Fixes
+
+* **google:** refuse a folder id that is not a Drive id before querying Drive ([e5dcbdb](https://github.com/mini-app-polis/common-python-utils/commit/e5dcbdb7bd937e499e80ff001a6d2bcaf2b2c8dc))
+
 ## [7.8.2](https://github.com/mini-app-polis/common-python-utils/compare/v7.8.1...v7.8.2) (2026-11-01)
 
 
