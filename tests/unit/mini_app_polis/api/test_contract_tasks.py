@@ -100,6 +100,25 @@ def test_a_due_secret_rotation_is_a_minted_source() -> None:
         )
 
 
+def test_an_infra_apply_task_is_a_minted_source() -> None:
+    request = TaskCreateRequest.model_validate(
+        _request(
+            source="infra-apply",
+            external_id="infra-apply.sns-subscription.alerts.me@example.com",
+        )
+    )
+    assert request.source == "infra-apply"
+    assert request.id is None
+    with pytest.raises(ValidationError, match="minted"):
+        TaskCreateRequest.model_validate(
+            _request(
+                source="infra-apply",
+                external_id="infra-apply.sns-subscription.alerts.me@example.com",
+                id="INF-1",
+            )
+        )
+
+
 def test_a_task_filed_by_hand_is_a_minted_manual_source() -> None:
     request = TaskCreateRequest.model_validate(
         _request(source="manual", external_id="manual.split-the-vault")
