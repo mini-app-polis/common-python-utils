@@ -35,6 +35,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 #: ``secret-rotation`` is a manual secret that is due: the secrets rotator
 #: asks for a task telling a person how to rotate it.
 #:
+#: ``infra-apply`` is a step only a person can finish, filed by the infra
+#: apply job: a new SNS alert subscription whose email must be confirmed.
+#:
 #: ``manual`` is a task filed by hand, from a working session: its key is
 #: ``manual.<key>``, a key the session chooses so a retry files nothing new,
 #: and the task manager mints its id like any other. Who works it goes in
@@ -47,6 +50,7 @@ TaskSource = Literal[
     "conformance",
     "api-fault",
     "secret-rotation",
+    "infra-apply",
     "manual",
 ]
 
