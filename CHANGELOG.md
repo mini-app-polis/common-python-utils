@@ -1,3 +1,10 @@
+# [7.10.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.9.1...v7.10.0) (2026-11-03)
+
+
+### Features
+
+* **contract:** deejay-cog runs accept the new-music mode ([20885db](https://github.com/mini-app-polis/common-python-utils/commit/20885db39f27b6e46df8bf595ca292322c1a39d3))
+
 ## [7.9.1](https://github.com/mini-app-polis/common-python-utils/compare/v7.9.0...v7.9.1) (2026-11-02)
 
 
