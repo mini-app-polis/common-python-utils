@@ -3,6 +3,10 @@
 
 type: shared-library
 
+layout_exceptions:
+  - path: contract
+    reason: "The live contract suite for the Kaiano API (TEST-016): every endpoint in the typed catalog, called against the development API through the client the cogs use. The cogs call the API through this library, so the suite lives here once rather than in every cog (ADR-0012)."
+
 traits:
   - logger-primitive
   # src/mini_app_polis/logger.py is the logger implementation — this repo
