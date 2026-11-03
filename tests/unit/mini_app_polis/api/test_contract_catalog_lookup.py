@@ -100,5 +100,6 @@ def test_the_client_sends_the_tracks_and_reads_one_answer_each(
 def test_deejay_cog_can_be_asked_to_retag_music() -> None:
     assert DeejayRunRequest(mode="retag-music").mode == "retag-music"
     assert DeejayRunRequest(mode="new-music").mode == "new-music"
+    assert DeejayRunRequest(mode="library-backfill").mode == "library-backfill"
     with pytest.raises(ValidationError):
         DeejayRunRequest(mode="retag-everything")  # type: ignore[arg-type]

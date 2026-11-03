@@ -43,7 +43,11 @@ class DeejayRunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     mode: Literal[
-        "process-new-files", "ingest-live-history", "retag-music", "new-music"
+        "process-new-files",
+        "ingest-live-history",
+        "retag-music",
+        "new-music",
+        "library-backfill",
     ] = Field(
         ...,
         description=(
