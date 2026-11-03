@@ -1,3 +1,10 @@
+# [7.11.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.10.0...v7.11.0) (2026-11-03)
+
+
+### Features
+
+* **contract:** deejay-cog runs accept the library-backfill mode ([ef43360](https://github.com/mini-app-polis/common-python-utils/commit/ef4336050ed1b5e91c012b8b00e435566fc9f5f9))
+
 # [7.10.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.9.1...v7.10.0) (2026-11-03)
 
 
