@@ -154,3 +154,49 @@ def test_a_single_within_pattern_may_be_a_string(repo: Path) -> None:
         },
     )
     assert value == 1
+
+
+#: A test function, as a test_functions fact counts one.
+TEST_DEF = "(?m)^\\s*(?:async\\s+)?def test_\\w+"
+
+
+def test_double_star_reaches_every_depth_but_not_hidden_directories(
+    repo: Path,
+) -> None:
+    (repo / "tests" / "unit" / "deep").mkdir(parents=True)
+    (repo / "tests" / "test_top.py").write_text("def test_a():\n    pass\n")
+    (repo / "tests" / "unit" / "deep" / "test_deep.py").write_text(
+        "class TestX:\n    def test_b(self):\n        pass\n\n"
+        "async def test_c():\n    pass\n\ndef helper_test_d():\n    pass\n"
+    )
+    (repo / "tests" / ".cache").mkdir()
+    (repo / "tests" / ".cache" / "test_hidden.py").write_text("def test_z(): ...\n")
+    value, source = facts.compute(
+        repo, {"matches": {"file": "tests/**/test_*.py", "pattern": TEST_DEF}}
+    )
+    assert value == 3
+    assert source == f"matches: tests/**/test_*.py /{TEST_DEF}/"
+
+
+def test_file_may_be_a_list_of_globs_each_file_counted_once(repo: Path) -> None:
+    (repo / "src").mkdir()
+    (repo / "src" / "a.test.ts").write_text("it('a', () => {})\n")
+    (repo / "src" / "b.test.tsx").write_text("it('b', () => {})\nit('c', () => {})\n")
+    value, source = facts.compute(
+        repo,
+        {
+            "matches": {
+                "file": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/a.test.ts"],
+                "pattern": "(?m)^\\s*it\\(",
+            }
+        },
+    )
+    assert value == 3
+    assert source.startswith(
+        "matches: src/**/*.test.ts, src/**/*.test.tsx, src/a.test.ts /"
+    )
+
+
+def test_each_glob_in_a_list_must_match_a_file(repo: Path) -> None:
+    with pytest.raises(facts.FactsError, match="nothing/\\*.py"):
+        facts.compute(repo, {"files": ["docs/ADR-*.md", "nothing/*.py"]})
