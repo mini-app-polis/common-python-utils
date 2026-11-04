@@ -1,3 +1,10 @@
+# [7.12.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.11.0...v7.12.0) (2026-11-04)
+
+
+### Features
+
+* add facts command to publish the figures a repo owns ([3e07c36](https://github.com/mini-app-polis/common-python-utils/commit/3e07c36c7c379b16842dfdbbb21e3b0c1390c7d8))
+
 # [7.11.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.10.0...v7.11.0) (2026-11-03)
 
 
