@@ -6,7 +6,7 @@ resolution-markers = [
     "python_full_version == '3.14.*'",
     "python_full_version == '3.13.*'",
     "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
-    "python_full_version < '3.12' or (python_full_version == '3.12.*' and sys_platform != 'emscripten')",
+    "(python_full_version < '3.13' and sys_platform != 'emscripten') or (python_full_version < '3.12' and sys_platform == 'emscripten')",
 ]
 
 [[package]]
@@ -1174,6 +1174,7 @@ dependencies = [
     { name = "mutagen" },
     { name = "pyacoustid" },
     { name = "pydantic" },
+    { name = "pyyaml" },
     { name = "spotipy" },
     { name = "tenacity" },
 ]
@@ -1220,6 +1221,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.6,<3.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3,<10.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.2.1,<8.0.0" },
+    { name = "pyyaml", specifier = ">=6.0,<7.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
     { name = "spotipy", specifier = ">=2.23.0,<3.0.0" },
     { name = "sqlalchemy", marker = "extra == 'activity'", specifier = ">=2.0,<3" },
