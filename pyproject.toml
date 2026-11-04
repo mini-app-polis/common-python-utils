@@ -25,6 +25,7 @@ dependencies = [
   "musicbrainzngs>=0.7.1,<0.8.0",
   "httpx>=0.27,<1.0",
   "tenacity>=8.2,<10.0",
+  "pyyaml>=6.0,<7.0",
   # mini_app_polis.api.contract. Same range as api-kaianolevine-com, which
   # imports these models for its routes, so both sides resolve together.
   "pydantic>=2.6,<3.0",
@@ -39,6 +40,9 @@ file-task = "mini_app_polis.api.file_task:cli"
 # Run under doppler run with CLAUDE_SESSION_API_KEY: asks for a sweep of the
 # board now through POST /v1/tasks/sweeps as the claude-session machine.
 request-sweep = "mini_app_polis.api.request_sweep:cli"
+# Run from a repo root: computes the figures the repo owns (facts.yaml) into
+# facts.json, or checks that the committed facts.json still matches.
+facts = "mini_app_polis.facts:cli"
 
 [project.optional-dependencies]
 # Upper bounds are load-bearing, not ceremony: these were unbounded, so
