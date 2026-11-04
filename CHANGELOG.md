@@ -1,3 +1,10 @@
+# [7.13.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.12.0...v7.13.0) (2026-11-04)
+
+
+### Features
+
+* **facts:** count matches across files, within regions, and distinct ([6c1ee95](https://github.com/mini-app-polis/common-python-utils/commit/6c1ee95a962ff20b3d267c41071068636e708d51))
+
 # [7.12.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.11.0...v7.12.0) (2026-11-04)
 
 
