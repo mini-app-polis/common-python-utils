@@ -1,3 +1,10 @@
+# [7.16.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.15.0...v7.16.0) (2026-11-04)
+
+
+### Features
+
+* **facts:** accept a list of globs and recurse on ** ([ecf2f98](https://github.com/mini-app-polis/common-python-utils/commit/ecf2f98fab086eaf8d09a0a997a5ee8a2028ebe7))
+
 # [7.15.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.14.0...v7.15.0) (2026-11-04)
 
 
