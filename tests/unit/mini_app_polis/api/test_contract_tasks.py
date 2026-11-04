@@ -74,11 +74,11 @@ def test_unknown_fields_are_refused() -> None:
 
 
 @pytest.mark.parametrize("source", ["ci", "cog-run", "conformance", "api-fault"])
-def test_detected_problems_are_minted_sources(source: str) -> None:
-    request = TaskCreateRequest.model_validate(
-        _request(source=source, external_id=f"{source}.some/key#1")
-    )
-    assert request.id is None
+def test_detected_problems_are_not_task_sources(source: str) -> None:
+    with pytest.raises(ValidationError):
+        TaskCreateRequest.model_validate(
+            _request(source=source, external_id=f"{source}.some/key#1")
+        )
 
 
 def test_a_due_secret_rotation_is_a_minted_source() -> None:
