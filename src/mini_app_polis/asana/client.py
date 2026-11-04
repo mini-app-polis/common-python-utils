@@ -19,7 +19,7 @@ tasks with today, no more:
   - ``get_task`` — GET /tasks/<gid>, as ``list_project_tasks`` reads one
   - ``update_task`` — PUT /tasks/<gid>, name and body
   - ``add_tag`` / ``remove_tag`` — POST /tasks/<gid>/addTag and removeTag
-  - ``complete_task`` — PUT /tasks/<gid>, completed
+  - ``complete_task`` / ``reopen_task`` — PUT /tasks/<gid>, completed or not
   - ``add_comment`` / ``list_comments`` — POST and GET /tasks/<gid>/stories
   - ``list_stories`` — GET /tasks/<gid>/stories, the whole history
 
@@ -374,6 +374,14 @@ class AsanaClient:
             "PUT",
             f"/tasks/{quote(task_gid, safe='')}",
             json_payload={"data": {"completed": True}},
+        )
+
+    def reopen_task(self, task_gid: str) -> None:
+        """Mark a task incomplete. Reopening an open task is a no-op."""
+        self._request(
+            "PUT",
+            f"/tasks/{quote(task_gid, safe='')}",
+            json_payload={"data": {"completed": False}},
         )
 
     def add_tag(self, task_gid: str, tag_name: str) -> None:

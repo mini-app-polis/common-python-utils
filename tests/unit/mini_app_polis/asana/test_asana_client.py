@@ -713,6 +713,20 @@ def test_complete_task_puts_completed() -> None:
     assert json.loads(seen[0].content) == {"data": {"completed": True}}
 
 
+def test_reopen_task_puts_not_completed() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"data": {"gid": "t1"}})
+
+    _client(handler).reopen_task("t1")
+
+    assert seen[0].method == "PUT"
+    assert seen[0].url.path == "/api/1.0/tasks/t1"
+    assert json.loads(seen[0].content) == {"data": {"completed": False}}
+
+
 def test_list_stories_reads_comments_and_column_changes_with_their_times() -> None:
     seen: list[httpx.Request] = []
 
