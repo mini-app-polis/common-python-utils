@@ -110,3 +110,47 @@ def test_a_bad_spec_is_reported_not_raised(repo: Path, capsys) -> None:
 def test_a_fact_needs_exactly_one_kind(repo: Path) -> None:
     with pytest.raises(facts.FactsError):
         facts.compute(repo, {"files": "docs/*.md", "value": {"file": "x", "path": "y"}})
+
+
+def test_matches_sums_over_a_glob(repo: Path) -> None:
+    (repo / "more.py").write_text("Machine(c)\n")
+    value, source = facts.compute(
+        repo, {"matches": {"file": "*.py", "pattern": "Machine\\("}}
+    )
+    assert value == 3
+    assert source == "matches: *.py /Machine\\(/"
+
+
+def test_matches_within_regions_counts_each_distinct_match_once(
+    repo: Path,
+) -> None:
+    (repo / "checks").mkdir()
+    (repo / "checks" / "a.py").write_text(
+        'CHECK_ID = "PY-1"\n_mark_checked("PY-1", "PY-2")\nprint("PY-9")\n'
+    )
+    (repo / "checks" / "b.py").write_text('CHECK_ID = "PY-3"\n_mark_checked("PY-2")\n')
+    spec = {
+        "file": "checks/*.py",
+        "pattern": '"([A-Z]+-[0-9]+)"',
+        "within": ['CHECK_ID = "[^"]+"', "_mark_checked\\([^)]*\\)"],
+    }
+    total, _ = facts.compute(repo, {"matches": spec})
+    distinct, source = facts.compute(repo, {"matches": {**spec, "distinct": True}})
+    assert total == 5
+    assert distinct == 3
+    assert source.endswith(" distinct")
+    assert "within" in source
+
+
+def test_a_single_within_pattern_may_be_a_string(repo: Path) -> None:
+    value, _ = facts.compute(
+        repo,
+        {
+            "matches": {
+                "file": "registry.py",
+                "pattern": "Machine",
+                "within": "Machine\\(a\\)",
+            }
+        },
+    )
+    assert value == 1
