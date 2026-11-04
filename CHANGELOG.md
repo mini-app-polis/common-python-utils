@@ -1,3 +1,10 @@
+# [7.15.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.14.0...v7.15.0) (2026-11-04)
+
+
+### Features
+
+* **asana:** add reopen_task to mark a task incomplete ([3d70749](https://github.com/mini-app-polis/common-python-utils/commit/3d7074975a6fb00e0b857fdef84ad6dd817f0b66))
+
 # [7.14.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.13.0...v7.14.0) (2026-11-04)
 
 
