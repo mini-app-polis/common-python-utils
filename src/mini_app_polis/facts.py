@@ -50,6 +50,11 @@ Each fact uses one of four kinds:
   ``distinct`` counts each different match once (the first group if the
   pattern has one), across all the files.
 
+``file`` (and the ``files`` glob) may be one glob or a list of them; a list
+counts every file any of them matches, once. ``**`` matches any depth of
+directories, hidden ones excepted, so ``tests/**/test_*.py`` reaches every
+test file under ``tests``. Each glob must match at least one file.
+
 Paths are relative to the repository root. A fact's ``as_of`` is the day its
 value last changed; regenerating without a change keeps it.
 
@@ -94,11 +99,23 @@ def _at(data: Any, path: str) -> Any:
     return data
 
 
-def _paths(root: Path, pattern: str) -> list[Path]:
-    found = sorted(Path(p) for p in glob.glob(str(root / pattern)))
-    if not found:
-        raise FactsError(f"no file matches {pattern!r}")
-    return found
+def _globs(pattern: str | Sequence[str]) -> list[str]:
+    return [pattern] if isinstance(pattern, str) else list(pattern)
+
+
+def _label(pattern: str | Sequence[str]) -> str:
+    """How a glob, or a list of them, reads in a fact's source line."""
+    return ", ".join(_globs(pattern))
+
+
+def _paths(root: Path, pattern: str | Sequence[str]) -> list[Path]:
+    found: set[Path] = set()
+    for one in _globs(pattern):
+        matched = glob.glob(str(root / one), recursive=True)
+        if not matched:
+            raise FactsError(f"no file matches {one!r}")
+        found.update(Path(p) for p in matched)
+    return sorted(found)
 
 
 def _entries(data: Any, path: str) -> list[Any]:
@@ -140,9 +157,9 @@ def compute(root: Path, spec: Mapping[str, Any]) -> tuple[Any, str]:
     kind = kinds[0]
     how = spec[kind]
     if kind == "files":
-        return len(_paths(root, how)), f"files: {how}"
+        return len(_paths(root, how)), f"files: {_label(how)}"
     if kind == "count":
-        source = f"count: {how['file']}" + (
+        source = f"count: {_label(how['file'])}" + (
             f" {how['path']}" if how.get("path") else ""
         )
         if how.get("where"):
@@ -170,7 +187,7 @@ def _matches(root: Path, spec: Mapping[str, Any]) -> tuple[int, str]:
         )
         for region in regions:
             found.extend(str(m) for m in re.findall(spec["pattern"], region))
-    source = f"matches: {spec['file']} /{spec['pattern']}/"
+    source = f"matches: {_label(spec['file'])} /{spec['pattern']}/"
     if within:
         source += " within " + ", ".join(f"/{w}/" for w in within)
     if spec.get("distinct"):
