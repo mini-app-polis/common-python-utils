@@ -1,3 +1,10 @@
+# [7.14.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.13.0...v7.14.0) (2026-11-04)
+
+
+### Features
+
+* remove the detected-problem task sources from the contract ([2ad74a8](https://github.com/mini-app-polis/common-python-utils/commit/2ad74a8af198e8585247932af8b19311d5b46208))
+
 # [7.13.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.12.0...v7.13.0) (2026-11-04)
 
 
