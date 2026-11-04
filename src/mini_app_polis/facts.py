@@ -27,6 +27,13 @@ never edited by hand.
       machines:
         description: Declared machine principals
         matches: {file: src/registry.py, pattern: "Machine\\\\("}
+      checked_rules:
+        description: Rule ids the checks register, each counted once
+        matches:
+          file: src/checks/*.py
+          pattern: '"([A-Z]+-[0-9]+)"'
+          within: ['CHECK_ID = "[^"]+"', '_mark_checked\\([^)]*\\)']
+          distinct: true
 
 Each fact uses one of four kinds:
 
@@ -37,7 +44,11 @@ Each fact uses one of four kinds:
   as ``unset``).
 - ``files``: the files a glob matches.
 - ``value``: the value at ``path`` in a YAML or JSON file.
-- ``matches``: the matches of a regular expression in a file.
+- ``matches``: the matches of a regular expression, summed over every file
+  ``file`` matches as a glob. ``within`` (a pattern or a list of them)
+  applies ``pattern`` only inside the text those patterns match;
+  ``distinct`` counts each different match once (the first group if the
+  pattern has one), across all the files.
 
 Paths are relative to the repository root. A fact's ``as_of`` is the day its
 value last changed; regenerating without a change keeps it.
@@ -142,9 +153,29 @@ def compute(root: Path, spec: Mapping[str, Any]) -> tuple[Any, str]:
     if kind == "value":
         (path,) = _paths(root, how["file"])[:1]
         return _at(_load(path), how["path"]), f"value: {how['file']} {how['path']}"
-    (path,) = _paths(root, how["file"])[:1]
-    matches = len(re.findall(how["pattern"], path.read_text()))
-    return matches, f"matches: {how['file']} /{how['pattern']}/"
+    return _matches(root, how)
+
+
+def _matches(root: Path, spec: Mapping[str, Any]) -> tuple[int, str]:
+    within = spec.get("within") or []
+    if isinstance(within, str):
+        within = [within]
+    found: list[str] = []
+    for path in _paths(root, spec["file"]):
+        text = path.read_text()
+        regions = (
+            [m.group(0) for w in within for m in re.finditer(w, text)]
+            if within
+            else [text]
+        )
+        for region in regions:
+            found.extend(str(m) for m in re.findall(spec["pattern"], region))
+    source = f"matches: {spec['file']} /{spec['pattern']}/"
+    if within:
+        source += " within " + ", ".join(f"/{w}/" for w in within)
+    if spec.get("distinct"):
+        return len(set(found)), source + " distinct"
+    return len(found), source
 
 
 def build(
