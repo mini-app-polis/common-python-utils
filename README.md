@@ -19,20 +19,36 @@ the exact pin:
 ```toml
 [project]
 dependencies = [
-  "miniapppolis-common-utils>=7.0,<8",
+  "miniapppolis-common-utils>=8.0,<9",
 ]
 ```
 
 Then `uv lock`. To move to a newer release, `uv lock --upgrade-package
 miniapppolis-common-utils` — no edit to this file.
 
-To use the LLM module, add the `llm` extra:
+The base install is small: the API client, run reports, logging, settings and
+the other modules every cog uses. The heavy modules each come with an extra;
+add the ones your code imports:
+
+| Extra | Module | Brings |
+|---|---|---|
+| `google` | `mini_app_polis.google` | google-auth, google-api-python-client, gspread |
+| `spotify` | `mini_app_polis.spotify` | spotipy |
+| `mp3` | `mini_app_polis.mp3` | mutagen, music-tag, pyacoustid, musicbrainzngs |
+| `llm` | `mini_app_polis.llm` | openai, anthropic, jsonschema |
+| `activity` | `mini_app_polis.activity` | sqlalchemy |
+| `testing` | `mini_app_polis.testing` | fastapi |
 
 ```toml
 dependencies = [
-  "miniapppolis-common-utils[llm]>=7.0,<8",
+  "miniapppolis-common-utils[google,mp3]>=8.0,<9",
 ]
 ```
+
+Importing a module without its extra fails with `ModuleNotFoundError` naming
+the missing package. Before 8.0 the Google, Spotify and MP3 packages were
+installed for every consumer; a cog moving to 8.0 adds the extras for the
+modules it imports.
 
 ---
 

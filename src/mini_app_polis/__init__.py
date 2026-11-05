@@ -11,7 +11,10 @@ nothing. Repository: mini-app-polis/common-python-utils.
 
 Install:
     # pyproject.toml
-    dependencies = ["miniapppolis-common-utils>=5.0,<6"]
+    dependencies = ["miniapppolis-common-utils[google]>=8.0,<9"]
+
+    The heavy modules (google, spotify, mp3, llm) need their extra; see the
+    README.
 
 Import:
     from mini_app_polis.api import KaianoApiClient
