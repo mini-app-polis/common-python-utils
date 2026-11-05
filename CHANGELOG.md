@@ -1,3 +1,15 @@
+# [7.18.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.17.0...v7.18.0) (2026-11-05)
+
+
+### Bug Fixes
+
+* **contract:** hold the refining endpoints out of the suite until the dev API serves them ([18b00cb](https://github.com/mini-app-polis/common-python-utils/commit/18b00cb0b96b7885655f1a1a8eeed37c3905d0a2))
+
+
+### Features
+
+* **api:** add the refining contract beside the grooming names ([b4ab1f9](https://github.com/mini-app-polis/common-python-utils/commit/b4ab1f9b1181a40077c61fc724631218a4d48ac0))
+
 # [7.17.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.16.0...v7.17.0) (2026-11-05)
 
 
