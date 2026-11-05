@@ -1,3 +1,10 @@
+# [7.17.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.16.0...v7.17.0) (2026-11-05)
+
+
+### Features
+
+* **api:** rename grooming to refining in the task-board contract ([c92507f](https://github.com/mini-app-polis/common-python-utils/commit/c92507f8d1997677aa8e903e30c0d72522a993c3))
+
 # [7.16.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.15.0...v7.16.0) (2026-11-04)
 
 
