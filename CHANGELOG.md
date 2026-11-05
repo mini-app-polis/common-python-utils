@@ -1,3 +1,13 @@
+# [8.0.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.20.0...v8.0.0) (2026-11-05)
+
+
+* feat!: move the Google, Spotify and MP3 dependencies into extras ([d280548](https://github.com/mini-app-polis/common-python-utils/commit/d28054844af8640537b6cb3a1f5935cbdf0b6c4f))
+
+
+### BREAKING CHANGES
+
+* the base install no longer brings google-auth, google-api-python-client, gspread, spotipy, mutagen, music-tag, pyacoustid, musicbrainzngs or jsonschema. Add the google, spotify, mp3 or llm extra for the modules you import.
+
 # [7.20.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.19.0...v7.20.0) (2026-11-05)
 
 
