@@ -1,3 +1,10 @@
+# [7.19.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.18.1...v7.19.0) (2026-11-05)
+
+
+### Features
+
+* **contract:** record the evaluated application's version and commit on a finding ([6266475](https://github.com/mini-app-polis/common-python-utils/commit/6266475142e0b6b847fc084bc15cf8e117c5fa45))
+
 ## [7.18.1](https://github.com/mini-app-polis/common-python-utils/compare/v7.18.0...v7.18.1) (2026-11-05)
 
 
