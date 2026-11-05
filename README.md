@@ -340,11 +340,10 @@ suffix). See the module docstring for the rest.
 ### Activity feed (requires `activity` extra)
 
 Committed data changes to `activity`, faults to `errors`, for a FastAPI
-service on SQLAlchemy 2. Needs the `activity` extra; every 7.x release has
-these modules:
+service on SQLAlchemy 2. Needs the `activity` extra:
 
 ```toml
-dependencies = ["miniapppolis-common-utils[activity]>=7.0,<8"]
+dependencies = ["miniapppolis-common-utils[activity]>=8.0,<9"]
 ```
 
 ```python
@@ -520,7 +519,7 @@ The extra adds only FastAPI, which every API already depends on; declare it
 on the dependency the API already has:
 
 ```toml
-dependencies = ["miniapppolis-common-utils[testing]>=7.0,<8"]
+dependencies = ["miniapppolis-common-utils[testing]>=8.0,<9"]
 ```
 
 Register it from the integration suite's `conftest.py`, passing the app:
