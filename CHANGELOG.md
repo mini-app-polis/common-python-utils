@@ -1,3 +1,10 @@
+## [7.18.1](https://github.com/mini-app-polis/common-python-utils/compare/v7.18.0...v7.18.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **contract:** probe the refining endpoints now that the dev API serves them ([759cfe8](https://github.com/mini-app-polis/common-python-utils/commit/759cfe831235ff5e31625204c200a674b91ee7be))
+
 # [7.18.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.17.0...v7.18.0) (2026-11-05)
 
 
