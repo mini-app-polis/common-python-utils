@@ -501,6 +501,66 @@ def _environment_prefix() -> str:
     return f"[{env.value.upper()}] "
 
 
+#: The most text one message's embed description holds: Discord's limit.
+DESCRIPTION_LIMIT = 4096
+
+
+def _split_text(text: str, limit: int = DESCRIPTION_LIMIT) -> list[str]:
+    """``text`` in pieces of at most ``limit`` characters, cut between lines.
+
+    A report too long for one message is sent as several rather than cut
+    short, so nothing under the cut (the counts, most of all) goes missing.
+    Each piece ends at a line break; a single line longer than ``limit`` is
+    the only thing ever cut mid-line.
+    """
+    if len(text) <= limit:
+        return [text]
+    pieces: list[str] = []
+    current = ""
+    for line in text.split("\n"):
+        while len(line) > limit:
+            if current:
+                pieces.append(current.rstrip("\n"))
+                current = ""
+            pieces.append(line[:limit])
+            line = line[limit:]
+        candidate = f"{current}\n{line}" if current else line
+        if len(candidate) > limit:
+            pieces.append(current.rstrip("\n"))
+            current = line
+        else:
+            current = candidate
+    if current.strip():
+        pieces.append(current.rstrip("\n"))
+    return [p for p in pieces if p.strip()]
+
+
+def _build_continuation(
+    *,
+    repo: str,
+    flow_name: str,
+    run_id: str,
+    severity: Severity,
+    text: str,
+    part: int,
+    parts: int,
+) -> dict[str, Any]:
+    """A follow-on message carrying more of one run report's text.
+
+    Its footer names no severity, so the API does not read it as another
+    run: one report is one cog-run signal, however many messages it takes.
+    """
+    embed: dict[str, Any] = {
+        "title": (f"{_environment_prefix()}{repo} · {flow_name} ({part}/{parts})")[
+            :256
+        ],
+        "color": _SEVERITY_COLORS.get(severity, _DEFAULT_COLOR),
+        "footer": {"text": f"continued · run {run_id[:8]}"[:2048]},
+        "description": text[:DESCRIPTION_LIMIT],
+    }
+    return {"embeds": [embed], "username": repo[:80]}
+
+
 def _build_message(
     *,
     repo: str,
@@ -530,7 +590,7 @@ def _build_message(
         "footer": {"text": f"{severity} · run {run_id[:8]}"[:2048]},
     }
     if text:
-        embed["description"] = text[:4096]
+        embed["description"] = text[:DESCRIPTION_LIMIT]
     if suggestion:
         embed["fields"] = [
             {"name": "Suggestion", "value": suggestion[:1024], "inline": False}
@@ -880,19 +940,37 @@ def post_run_finding(
         )
         return DeliveryReport(suppressed=1)
 
-    message = _build_message(
-        repo=repo,
-        flow_name=flow_name,
-        run_id=run_id,
-        severity=severity,
-        text=text_final,
-        source=source,
-        dimension=dimension,
-        suggestion=suggestion,
-    )
+    pieces = _split_text(text_final)
+    messages = [
+        _build_message(
+            repo=repo,
+            flow_name=flow_name,
+            run_id=run_id,
+            severity=severity,
+            text=pieces[0],
+            source=source,
+            dimension=dimension,
+            suggestion=suggestion,
+        ),
+        *(
+            _build_continuation(
+                repo=repo,
+                flow_name=flow_name,
+                run_id=run_id,
+                severity=severity,
+                text=piece,
+                part=index,
+                parts=len(pieces),
+            )
+            for index, piece in enumerate(pieces[1:], start=2)
+        ),
+    ]
 
     try:
-        delivered = _deliver(message, repo=repo, logger=logger)
+        # Every part is sent even when an earlier one fails: a missing
+        # middle is better than a missing end.
+        results = [_deliver(message, repo=repo, logger=logger) for message in messages]
+        delivered = all(results)
     except Exception as exc:
         # Defense in depth: _deliver handles its own exceptions, but this
         # must never propagate into flow code.
@@ -1081,6 +1159,10 @@ class RunReport:
     #: The caller's own ``__version__``, stamped on the message; see
     #: :func:`stamp_version`.
     version: str | None = None
+    #: Name every item instead of the first few and a count. For a run whose
+    #: list is what the reader came for; a long report is sent as several
+    #: messages rather than cut short.
+    list_all: bool = False
 
     processed: int = 0
     notes: Counter = field(default_factory=Counter)
@@ -1165,7 +1247,7 @@ class RunReport:
         if not item:
             return
         seen = self.examples.setdefault(reason, [])
-        if len(seen) < MAX_EXAMPLES:
+        if self.list_all or len(seen) < MAX_EXAMPLES:
             seen.append(str(item).strip())
 
     # -- rendering ---------------------------------------------------------
@@ -1206,7 +1288,7 @@ class RunReport:
             for kind in sorted(by_kind):
                 rows = by_kind[kind]
                 named = [r.label() for r in rows if r.item]
-                shown = named[:MAX_OUTCOMES]
+                shown = named if self.list_all else named[:MAX_OUTCOMES]
                 lines = [f"{mark} {item}" for item in shown]
                 more = len(rows) - len(shown)
                 if more and shown:
@@ -1345,6 +1427,7 @@ def run_report(
     source: str = "flow_inline",
     run_id: str | None = None,
     version: str | None = None,
+    list_all: bool = False,
 ) -> Iterator[RunReport]:
     """Open a :class:`RunReport` that sends itself however the block ends.
 
@@ -1366,6 +1449,7 @@ def run_report(
         production_only=production_only,
         run_id=run_id,
         version=version,
+        list_all=list_all,
     )
     try:
         yield report
@@ -1384,6 +1468,7 @@ def run_report(
 __all__ = [
     "CREATED",
     "DEFAULT_COUNTER_SECTION",
+    "DESCRIPTION_LIMIT",
     "DEFAULT_DIMENSION",
     "MAX_EXAMPLES",
     "MAX_OUTCOMES",

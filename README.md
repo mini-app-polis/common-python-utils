@@ -484,6 +484,13 @@ run picks up the rest` and reported once, as WARN. The footer is the severity
 and the first 8 characters of the run id. Nothing is posted outside
 production.
 
+Each reason names its first few items and counts the rest. A run whose list
+is what the reader came for passes `run_report(..., list_all=True)` to name
+every item. A report too long for one message (Discord holds 4096 characters)
+is sent as several, split between lines, so nothing is cut off; the follow-on
+messages are titled `(2/3)` and so on, and their footer reads `continued`
+instead of a severity, so the API counts the report as one run.
+
 ### Route ledger (requires `testing` extra)
 
 A pytest plugin for an API's integration suite. It records the route template
