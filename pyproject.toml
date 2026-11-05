@@ -20,6 +20,19 @@ dependencies = [
   "pydantic>=2.6,<3.0",
 ]
 
+[project.scripts]
+# Run from a repo root: lists the .env.example names Doppler dev lacks.
+check-doppler-keys = "mini_app_polis.doppler:check_keys_main"
+# Run under doppler run with CLAUDE_SESSION_API_KEY: files one task through
+# POST /v1/tasks as the claude-session machine.
+file-task = "mini_app_polis.api.file_task:cli"
+# Run under doppler run with CLAUDE_SESSION_API_KEY: asks for a sweep of the
+# board now through POST /v1/tasks/sweeps as the claude-session machine.
+request-sweep = "mini_app_polis.api.request_sweep:cli"
+# Run from a repo root: computes the figures the repo owns (facts.yaml) into
+# facts.json, or checks that the committed facts.json still matches.
+facts = "mini_app_polis.facts:cli"
+
 [project.optional-dependencies]
 # Upper bounds are load-bearing, not ceremony: these were unbounded, so
 # `anthropic` resolved across a major boundary into 1.x, which dropped
