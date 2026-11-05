@@ -3,17 +3,18 @@
 The sweep goes through ``POST /v1/tasks/sweeps``, which puts a ``task.sweep``
 on task-manager-cog's queue, so it runs in line with every other job there.
 
-Without flags it is the sweep the hourly schedule sends: it grooms and
-dispatches agents only if the time of day is one set for them.
-``--groom`` makes it the sweep for ``GROOM_TIMES`` and ``--agents`` the one
+Without flags it is the sweep the hourly schedule sends: it
+refines and dispatches agents only if the time of day is one set for them.
+``--refine`` makes it the sweep for ``REFINE_TIMES`` and ``--agents`` the one
 for ``AGENT_TIMES``, whatever the clock says. Neither turns on what is off
-(``GROOM_DISPATCH``, ``AGENT_DISPATCH``, a dry run) or raises a cap.
+(``REFINE_DISPATCH``, ``AGENT_DISPATCH``, a dry run) or raises a cap.
+``--groom`` is the old name of ``--refine`` and still works.
 
 Run it under Doppler in the ``owner-session`` project, which holds
 ``CLAUDE_SESSION_API_KEY``::
 
     doppler run --project owner-session --config prd -- \\
-        request-sweep --groom --agents
+        request-sweep --refine --agents
 
 It prints the API's answer, never the API key. A refused request exits
 non-zero with a one-line reason. Asking twice runs two sweeps.
@@ -40,9 +41,14 @@ def _parser() -> argparse.ArgumentParser:
         description="Ask for a sweep of the board now, through POST /v1/tasks/sweeps.",
     )
     parser.add_argument(
+        "--refine",
         "--groom",
+        dest="refine",
         action="store_true",
-        help="Send tasks for grooming in this sweep, whatever the time of day.",
+        help=(
+            "Send tasks for refining in this sweep, whatever the time of day. "
+            "--groom is its old name."
+        ),
     )
     parser.add_argument(
         "--agents",
@@ -54,7 +60,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def _request(args: argparse.Namespace) -> TaskSweepRequest:
     """The request, with only the flags given set, so no flag sends ``{}``."""
-    flags = {name: True for name in ("groom", "agents") if getattr(args, name)}
+    flags = {name: True for name in ("refine", "agents") if getattr(args, name)}
     return TaskSweepRequest(**flags)
 
 
@@ -81,7 +87,7 @@ def main(
             {
                 "accepted": accepted.accepted,
                 "message_id": accepted.message_id,
-                "groom": request.groom,
+                "refine": request.refine,
                 "agents": request.agents,
             }
         )

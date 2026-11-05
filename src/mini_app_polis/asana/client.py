@@ -5,7 +5,7 @@
 valid until it is revoked in the Asana UI (My Settings → Apps →
 Manage Developer Apps → Personal Access Tokens).
 
-**Scope:** this client covers what the ecosystem creates and grooms
+**Scope:** this client covers what the ecosystem creates and refines
 tasks with today, no more:
 
   - ``create_task`` — POST /tasks

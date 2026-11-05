@@ -94,6 +94,21 @@ from .contract import (
     PipelineEvaluationCreate,
     PipelineEvaluationItem,
     PipelineEvaluationWriteResult,
+    RefiningBudgetSpentMarked,
+    RefiningBudgetSpentRequest,
+    RefiningClaimReleased,
+    RefiningClaimRequest,
+    RefiningClaimResult,
+    RefiningJobAccepted,
+    RefiningJobRequest,
+    RefiningProposal,
+    RefiningProposalAccepted,
+    RefiningRecord,
+    RefiningRecordWrite,
+    RefiningReturnRate,
+    RefiningRunCreate,
+    RefiningRunRecorded,
+    RefiningSpend,
     RotationConfig,
     RotationEvent,
     RotationEventCreate,
@@ -693,11 +708,89 @@ class KaianoApiClient:
     def request_sweep(self, payload: TaskSweepRequest) -> TaskSweepAccepted:
         """``POST /v1/tasks/sweeps`` — ask the task manager for a sweep now.
 
-        Answered 202 once the sweep is queued. ``groom`` and ``agents`` make
+        Answered 202 once the sweep is queued. ``refine`` and ``agents`` make
         it count as the sweep for those times of day; every switch and cap
         still applies. Asking twice runs two sweeps.
         """
         return cast(TaskSweepAccepted, self._call("request_sweep", payload))
+
+    def list_refinings(self) -> list[RefiningRecord]:
+        """``GET /v1/tasks/refinings`` — every task's refining record."""
+        return cast(list[RefiningRecord], self._call("list_refinings"))
+
+    def record_refining(self, payload: RefiningRecordWrite) -> RefiningRecord:
+        """``POST /v1/tasks/refinings`` — write one task's refining record.
+
+        Keyed by ``task_gid``: writing a task's record again replaces it.
+        """
+        return cast(RefiningRecord, self._call("record_refining", payload))
+
+    def record_refining_run(self, payload: RefiningRunCreate) -> RefiningRunRecorded:
+        """``POST /v1/tasks/refinings/runs`` — record one paid refining run."""
+        return cast(RefiningRunRecorded, self._call("record_refining_run", payload))
+
+    def refining_spend(self) -> RefiningSpend:
+        """``GET /v1/tasks/refinings/spend`` — this month's paid refining."""
+        return cast(RefiningSpend, self._call("refining_spend"))
+
+    def refining_return_rate(self, days: int | None = None) -> RefiningReturnRate:
+        """``GET /v1/tasks/refinings/return-rate`` — how often a task moved to
+        Ready came back out, over the last ``days`` (the API's default, 30,
+        when None)."""
+        params = {"days": days} if days is not None else None
+        return cast(
+            RefiningReturnRate, self._call("refining_return_rate", params=params)
+        )
+
+    def request_refining(self, payload: RefiningJobRequest) -> RefiningJobAccepted:
+        """``POST /v1/tasks/refinings/jobs`` — queue one task for the refiner."""
+        return cast(RefiningJobAccepted, self._call("request_refining", payload))
+
+    def submit_refining_proposal(
+        self, payload: RefiningProposal
+    ) -> RefiningProposalAccepted:
+        """``POST /v1/tasks/refinings/proposals`` — hand a proposal back.
+
+        The API queues it for the task manager, which applies it.
+        """
+        return cast(
+            RefiningProposalAccepted, self._call("submit_refining_proposal", payload)
+        )
+
+    def claim_refining(self, payload: RefiningClaimRequest) -> RefiningClaimResult:
+        """``POST /v1/tasks/refinings/claims`` — claim one job before refining it.
+
+        ``claimed`` is false when the job is already held; skip it.
+        """
+        return cast(RefiningClaimResult, self._call("claim_refining", payload))
+
+    def release_refining_claim(
+        self, payload: RefiningClaimRequest
+    ) -> RefiningClaimReleased:
+        """``POST /v1/tasks/refinings/claims/release`` — give a claim back.
+
+        For a run that failed, so the next send can refine the same content.
+        """
+        return cast(
+            RefiningClaimReleased, self._call("release_refining_claim", payload)
+        )
+
+    def mark_refining_budget_spent(
+        self, payload: RefiningBudgetSpentRequest
+    ) -> RefiningBudgetSpentMarked:
+        """``POST /v1/tasks/refinings/budget-spent`` — report a budget stop.
+
+        For a run stopped because the month's refining budget is spent, so
+        the sweep sends the same content again. A later won claim clears it.
+        """
+        return cast(
+            RefiningBudgetSpentMarked,
+            self._call("mark_refining_budget_spent", payload),
+        )
+
+    # The grooming names of the methods above, which call the grooming names of
+    # the routes. Kept for cogs that have not moved to refining; removed once
+    # every cog has.
 
     def list_groomings(self) -> list[GroomingRecord]:
         """``GET /v1/tasks/groomings`` — every task's grooming record."""

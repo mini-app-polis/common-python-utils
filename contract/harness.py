@@ -72,6 +72,14 @@ NOT_EXERCISED: dict[str, str] = {
         "development has no queues: wiki-curator-dev-jobs is not provisioned, "
         "so the API cannot enqueue the job"
     ),
+    "request_refining": (
+        "development has no queues: task-refiner-dev-jobs is not provisioned, "
+        "so the API cannot enqueue the job"
+    ),
+    "submit_refining_proposal": (
+        "development has no queues: task-manager-dev-jobs.fifo is not "
+        "provisioned, so the API cannot enqueue the proposal"
+    ),
     "request_grooming": (
         "development has no queues: task-groomer-dev-jobs is not provisioned, "
         "so the API cannot enqueue the job"
@@ -92,6 +100,34 @@ NOT_EXERCISED: dict[str, str] = {
         "development has no queues: the rotator's queue is not provisioned, "
         "and a request that reached it would rotate a real secret"
     ),
+    # Task-manager-cog's and the refiner's records, which the board is run
+    # from. The contract-suite machine holds no tasks.* scope, and a fixture
+    # in them would be read as a real refining, claim or agent run.
+    "list_refinings": "the contract-suite machine holds no tasks.refinings scope",
+    "record_refining": (
+        "the contract-suite machine holds no tasks.refinings scope, and a "
+        "fixture refining record would be read as a real one"
+    ),
+    "record_refining_run": (
+        "the contract-suite machine holds no tasks.refinings scope, and a "
+        "fixture run would count toward the refiner's spend"
+    ),
+    "refining_spend": "the contract-suite machine holds no tasks.refinings scope",
+    "refining_return_rate": (
+        "the contract-suite machine holds no tasks.refinings scope"
+    ),
+    "claim_refining": (
+        "the contract-suite machine holds no tasks.refinings scope, and a "
+        "fixture claim would hold a task away from the refiner"
+    ),
+    "release_refining_claim": (
+        "the contract-suite machine holds no tasks.refinings scope"
+    ),
+    "mark_refining_budget_spent": (
+        "the contract-suite machine holds no tasks.refinings scope, and a "
+        "fixture stop would send a task to the refiner again"
+    ),
+    # The same records under their grooming names, still served.
     # Task-manager-cog's and the groomer's records, which the board is run
     # from. The contract-suite machine holds no tasks.* scope, and a fixture
     # in them would be read as a real grooming, claim or agent run.
@@ -160,7 +196,18 @@ NOT_EXERCISED: dict[str, str] = {
 #: 404, not the 401 the access check expects. Listed here, an endpoint is
 #: neither probed nor exercised; take it off once the development API has it,
 #: and exercise it in test_contract.py.
-NOT_DEPLOYED: dict[str, str] = {}
+NOT_DEPLOYED: dict[str, str] = {
+    "list_refinings": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
+    "record_refining": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
+    "record_refining_run": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
+    "refining_spend": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
+    "refining_return_rate": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
+    "request_refining": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
+    "submit_refining_proposal": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
+    "claim_refining": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
+    "release_refining_claim": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
+    "mark_refining_budget_spent": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
+}
 
 
 class ContractConfigError(RuntimeError):

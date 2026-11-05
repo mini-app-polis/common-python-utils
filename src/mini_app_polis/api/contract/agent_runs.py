@@ -13,8 +13,10 @@ that never reports is marked failed by the task manager, and a run that
 could not be started is marked failed the same way.
 
 A run that finds its task unclear or undetermined changes nothing and ends
-as ``needs_grooming``, with its questions. The task manager sends the task
-back to grooming with them; it is not retried.
+as ``needs_refining``, with its questions. The task manager sends the task
+back to refining with them; it is not retried. ``needs_grooming`` is the
+grooming name of ``needs_refining``, still accepted, and read the same, until
+the agent's workflow reports the new name.
 
 The month's spend is the sum of the runs' costs, for the monthly cap.
 
@@ -34,13 +36,20 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 #: Where a run is. ``dispatched`` until its result or failure is recorded.
 AgentRunStatus = Literal[
-    "dispatched", "succeeded", "failed", "capped", "needs_grooming"
+    "dispatched", "succeeded", "failed", "capped", "needs_refining", "needs_grooming"
 ]
 
 #: How a run ended, as its workflow reports it. ``capped``: it reached its
-#: budget limit and stopped with no pull request. ``needs_grooming``: it found
+#: budget limit and stopped with no pull request. ``needs_refining``: it found
 #: the task unclear, changed nothing, and asks its questions.
-AgentRunOutcome = Literal["succeeded", "failed", "capped", "needs_grooming"]
+#: ``needs_grooming`` is its grooming name, read the same.
+AgentRunOutcome = Literal[
+    "succeeded", "failed", "capped", "needs_refining", "needs_grooming"
+]
+
+#: The outcomes, and statuses, of a run that sends its task back to refining:
+#: the new name and the grooming one, until every caller sends the new one.
+NEEDS_REFINING: frozenset[str] = frozenset({"needs_refining", "needs_grooming"})
 
 _GID = r"^\d+$"
 _RUN_ID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
@@ -77,7 +86,7 @@ class AgentRun(BaseModel):
     actions_run_url: str | None = None
     #: Why a run failed or was capped, in a sentence.
     reason: str | None = None
-    #: What a run that needs grooming asked.
+    #: What a run that needs refining asked.
     questions: list[str] = Field(default_factory=list)
     dispatched_at: datetime
     finished_at: datetime | None = None
@@ -97,7 +106,7 @@ class AgentRunResult(BaseModel):
     """How a run ended, as its workflow reports it.
 
     A run that succeeded opened a pull request and names it; one that did
-    not opened none. A run that needs grooming asks at least one question;
+    not opened none. A run that needs refining asks at least one question;
     no other outcome carries questions.
     """
 
@@ -111,7 +120,7 @@ class AgentRunResult(BaseModel):
     pr_url: str | None = Field(default=None, max_length=500, pattern=_URL)
     actions_run_url: str | None = Field(default=None, max_length=500, pattern=_URL)
     reason: str | None = Field(default=None, max_length=2000)
-    #: What the run could not settle, for the owner to answer in grooming.
+    #: What the run could not settle, for the owner to answer in refining.
     questions: list[str] = Field(default_factory=list, max_length=10)
 
     @model_validator(mode="after")
@@ -123,10 +132,10 @@ class AgentRunResult(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _questions_only_when_grooming_is_needed(self) -> AgentRunResult:
-        if self.outcome == "needs_grooming" and not self.questions:
-            raise ValueError("a run that needs grooming asks its questions")
-        if self.outcome != "needs_grooming" and self.questions:
+    def _questions_only_when_refining_is_needed(self) -> AgentRunResult:
+        if self.outcome in NEEDS_REFINING and not self.questions:
+            raise ValueError("a run that needs refining asks its questions")
+        if self.outcome not in NEEDS_REFINING and self.questions:
             raise ValueError(f"a run that ended {self.outcome} asks no questions")
         if any(not q.strip() for q in self.questions):
             raise ValueError("a question is not blank")

@@ -14,7 +14,7 @@ same key: a comment, and optionally a move to another column.
 
 :class:`TaskSweepRequest` asks for a sweep of the board now
 (``POST /v1/tasks/sweeps``). A flag makes that sweep count as the one for
-its time of day, grooming or agent dispatch, whatever the clock says; every
+its time of day, refining or agent dispatch, whatever the clock says; every
 switch and spending cap still applies.
 """
 
@@ -82,8 +82,8 @@ class TaskDraft(BaseModel):
 
     ``done_when``, ``constraints`` and ``effort`` fill the template's fields
     of the same names. Most sources leave them out, and the fields are left
-    blank for grooming. A source that knows them, because it detected the
-    problem itself, sets them, so its task needs no grooming to be ready.
+    blank for refining. A source that knows them, because it detected the
+    problem itself, sets them, so its task needs no refining to be ready.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -205,22 +205,36 @@ class TaskCreateAccepted(BaseModel):
 class TaskSweepRequest(BaseModel):
     """Ask for a sweep of the board now.
 
-    An empty request is the sweep the hourly schedule sends: grooming and
+    An empty request is the sweep the hourly schedule sends: refining and
     agent dispatch happen only if its time of day is one set for them.
-    ``groom`` makes this sweep the one for ``GROOM_TIMES``, ``agents`` the
+    ``refine`` makes this sweep the one for ``REFINE_TIMES``, ``agents`` the
     one for ``AGENT_TIMES``. Neither turns on what is off or raises a cap.
+
+    ``groom`` is the grooming name of ``refine`` and sets it too. It goes once
+    every caller sends ``refine``.
     """
 
     model_config = ConfigDict(extra="forbid")
 
+    refine: bool = Field(
+        default=False,
+        description="Send tasks for refining in this sweep, whatever the time.",
+    )
     groom: bool = Field(
         default=False,
-        description="Send tasks for grooming in this sweep, whatever the time.",
+        description="The grooming name of refine; sets it too.",
     )
     agents: bool = Field(
         default=False,
         description="Dispatch agents in this sweep, whatever the time.",
     )
+
+    @model_validator(mode="after")
+    def _groom_is_refine(self) -> TaskSweepRequest:
+        both = self.refine or self.groom
+        object.__setattr__(self, "refine", both)
+        object.__setattr__(self, "groom", both)
+        return self
 
 
 class TaskSweepAccepted(BaseModel):

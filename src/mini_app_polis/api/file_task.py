@@ -37,7 +37,7 @@ from pydantic import ValidationError
 
 from .client import KaianoApiClient
 from .contract import TaskCreateRequest, TaskDraft
-from .contract.groomings import GroomingExecutor
+from .contract.refinings import RefiningExecutor
 from .errors import KaianoApiError
 
 #: The machine a working session files tasks as.
@@ -70,7 +70,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--body")
     parser.add_argument(
         "--executor",
-        choices=[DEFAULT_EXECUTOR, *get_args(GroomingExecutor)],
+        choices=[DEFAULT_EXECUTOR, *get_args(RefiningExecutor)],
         default=None,
         help="Who works the task (default: agent).",
     )

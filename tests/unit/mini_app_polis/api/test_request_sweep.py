@@ -40,7 +40,7 @@ def test_no_flags_sends_an_empty_body_and_prints_the_answer(capsys) -> None:
     assert json.loads(capsys.readouterr().out) == {
         "accepted": True,
         "message_id": "m-1",
-        "groom": False,
+        "refine": False,
         "agents": False,
     }
 
@@ -48,9 +48,9 @@ def test_no_flags_sends_an_empty_body_and_prints_the_answer(capsys) -> None:
 @pytest.mark.parametrize(
     ("argv", "body"),
     [
-        (["--groom"], {"groom": True}),
+        (["--refine"], {"refine": True}),
         (["--agents"], {"agents": True}),
-        (["--groom", "--agents"], {"groom": True, "agents": True}),
+        (["--refine", "--agents"], {"refine": True, "agents": True}),
     ],
 )
 def test_each_flag_is_sent_and_only_the_flags_given(argv, body) -> None:
@@ -70,7 +70,7 @@ def test_each_flag_is_sent_and_only_the_flags_given(argv, body) -> None:
     ],
 )
 def test_a_refused_request_says_why_in_one_line(capsys, error) -> None:
-    code = request_sweep.main(["--groom"], client=FakeApi(error))  # type: ignore[arg-type]
+    code = request_sweep.main(["--refine"], client=FakeApi(error))  # type: ignore[arg-type]
     assert code == 1
     captured = capsys.readouterr()
     assert captured.out == ""
@@ -94,19 +94,19 @@ def test_the_session_asks_as_its_own_machine(monkeypatch: pytest.MonkeyPatch) ->
 
 def test_a_sweep_request_refuses_unknown_fields() -> None:
     with pytest.raises(ValueError):
-        TaskSweepRequest.model_validate({"groom": True, "limit": 50})
+        TaskSweepRequest.model_validate({"refine": True, "limit": 50})
 
 
 def test_a_scheduled_sweep_message_parses_with_no_flags() -> None:
     message = TaskSweepMessage.model_validate({"type": "task.sweep", "version": 1})
-    assert (message.payload.groom, message.payload.agents) == (False, False)
+    assert (message.payload.refine, message.payload.agents) == (False, False)
 
 
 def test_a_flagged_sweep_message_carries_its_flags() -> None:
     message = TaskSweepMessage.model_validate(
-        {"type": "task.sweep", "version": 1, "payload": {"groom": True}}
+        {"type": "task.sweep", "version": 1, "payload": {"refine": True}}
     )
-    assert (message.payload.groom, message.payload.agents) == (True, False)
+    assert (message.payload.refine, message.payload.agents) == (True, False)
 
 
 def test_a_sweep_message_tolerates_a_flag_it_does_not_know() -> None:
