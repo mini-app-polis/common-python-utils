@@ -1,3 +1,10 @@
+## [8.0.1](https://github.com/mini-app-polis/common-python-utils/compare/v8.0.0...v8.0.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **packaging:** restore the facts, file-task, request-sweep and check-doppler-keys commands ([38afe61](https://github.com/mini-app-polis/common-python-utils/commit/38afe61ed5f5170e237aa08aa0a74e0e2baba2fc))
+
 # [8.0.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.20.0...v8.0.0) (2026-11-05)
 
 
