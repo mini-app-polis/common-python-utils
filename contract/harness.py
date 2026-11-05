@@ -196,18 +196,7 @@ NOT_EXERCISED: dict[str, str] = {
 #: 404, not the 401 the access check expects. Listed here, an endpoint is
 #: neither probed nor exercised; take it off once the development API has it,
 #: and exercise it in test_contract.py.
-NOT_DEPLOYED: dict[str, str] = {
-    "list_refinings": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
-    "record_refining": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
-    "record_refining_run": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
-    "refining_spend": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
-    "refining_return_rate": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
-    "request_refining": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
-    "submit_refining_proposal": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
-    "claim_refining": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
-    "release_refining_claim": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
-    "mark_refining_budget_spent": "api-kaianolevine-com serves /v1/tasks/refinings from its next deploy",
-}
+NOT_DEPLOYED: dict[str, str] = {}
 
 
 class ContractConfigError(RuntimeError):
