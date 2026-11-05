@@ -152,6 +152,27 @@ def test_examples_are_capped_and_the_rest_counted():
     ]
 
 
+def test_list_all_names_every_item():
+    r = ps.RunReport(flow_name="f", repo="c", list_all=True)
+    for i in range(7):
+        r.notice("not_in_catalog", f"f{i}.mp3")
+    for i in range(8):
+        r.created("tags written", f"t{i}.mp3")
+    text = r.text()
+    assert "more" not in text
+    for i in range(7):
+        assert f"  f{i}.mp3" in text
+    for i in range(8):
+        assert f"  + t{i}.mp3" in text
+
+
+def test_run_report_passes_list_all_through(sent):
+    with ps.run_report("f", repo="c", list_all=True) as r:
+        for i in range(6):
+            r.issue("bad", f"f{i}.txt")
+    assert "  f5.txt" in sent[0]["text"]
+
+
 def test_detail_is_carried_with_the_item():
     r = ps.RunReport(flow_name="f", repo="c")
     r.issue("ingest_failed", "2025-01-02 Venue", detail="422 unprocessable")

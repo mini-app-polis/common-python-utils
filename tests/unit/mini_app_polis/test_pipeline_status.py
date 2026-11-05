@@ -322,6 +322,58 @@ def test_a_report_the_api_forwarded_is_delivered() -> None:
         )
 
 
+def test_a_long_report_is_split_between_lines_and_nothing_is_cut(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    lines = [f"  file-{i:03}.mp3 ({'x' * 180})" for i in range(60)]
+    text = "Run complete in 1s.\n\nwould_write\n" + "\n".join(lines)
+    with captured() as cap:
+        result = ps.post_run_finding("f", "WARN", text=text, repo="my-cog")
+    messages = [call.args[0] for call in cap.deliver.call_args_list]
+    assert len(messages) > 1
+    bodies = [m["embeds"][0]["description"] for m in messages]
+    assert all(len(b) <= ps.DESCRIPTION_LIMIT for b in bodies)
+    sent = "\n".join(bodies)
+    for line in lines:
+        assert line in sent.splitlines()
+    assert result.sent == 1
+
+
+def test_only_the_first_message_of_a_split_report_declares_its_severity(
+    monkeypatch,
+) -> None:
+    """The API counts each footer that names a severity as a run; a report
+    sent as three messages is still one run."""
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    text = "\n".join(f"line {i} {'y' * 200}" for i in range(60))
+    with captured() as cap:
+        ps.post_run_finding(
+            "f", "ERROR", text=text, repo="my-cog", run_id="abcdef123456"
+        )
+    footers = [
+        call.args[0]["embeds"][0]["footer"]["text"]
+        for call in cap.deliver.call_args_list
+    ]
+    assert footers[0].startswith("ERROR")
+    assert all(f == "continued · run abcdef12" for f in footers[1:])
+    titles = [call.args[0]["embeds"][0]["title"] for call in cap.deliver.call_args_list]
+    assert titles[1].endswith(f"(2/{len(titles)})")
+
+
+def test_a_split_report_is_not_delivered_when_any_part_fails(monkeypatch) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    text = "\n".join(f"line {i} {'z' * 200}" for i in range(60))
+    with patch.object(ps, "_deliver", side_effect=[True, False, True]):
+        result = ps.post_run_finding("f", "WARN", text=text, repo="my-cog")
+    assert result.failed == 1
+
+
+def test_a_single_line_longer_than_a_message_is_cut_into_pieces() -> None:
+    pieces = ps._split_text("a" * 9000)
+    assert [len(p) for p in pieces] == [4096, 4096, 808]
+
+
 def test_post_findings_is_deprecated(monkeypatch) -> None:
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
     with (
