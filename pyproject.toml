@@ -13,36 +13,12 @@ readme = "README.md"
 requires-python = ">=3.11"
 
 dependencies = [
-  "jsonschema>=4.23.0,<5.0.0",
-  "gspread>=6.0.2,<7.0.0",
-  "google-auth>=2.29.0,<3.0.0",
-  "google-api-python-client>=2.177.0,<3.0.0",
-  "spotipy>=2.23.0,<3.0.0",
-  "mutagen>=1.47.0,<2.0.0",
-  "gspread-formatting>=1.2.1,<2.0.0",
-  "music-tag>=0.4.3,<0.5.0",
-  "pyacoustid>=1.3.0,<2.0.0",
-  "musicbrainzngs>=0.7.1,<0.8.0",
   "httpx>=0.27,<1.0",
-  "tenacity>=8.2,<10.0",
   "pyyaml>=6.0,<7.0",
   # mini_app_polis.api.contract. Same range as api-kaianolevine-com, which
   # imports these models for its routes, so both sides resolve together.
   "pydantic>=2.6,<3.0",
 ]
-
-[project.scripts]
-# Run from a repo root: lists the .env.example names Doppler dev lacks.
-check-doppler-keys = "mini_app_polis.doppler:check_keys_main"
-# Run under doppler run with CLAUDE_SESSION_API_KEY: files one task through
-# POST /v1/tasks as the claude-session machine.
-file-task = "mini_app_polis.api.file_task:cli"
-# Run under doppler run with CLAUDE_SESSION_API_KEY: asks for a sweep of the
-# board now through POST /v1/tasks/sweeps as the claude-session machine.
-request-sweep = "mini_app_polis.api.request_sweep:cli"
-# Run from a repo root: computes the figures the repo owns (facts.yaml) into
-# facts.json, or checks that the committed facts.json still matches.
-facts = "mini_app_polis.facts:cli"
 
 [project.optional-dependencies]
 # Upper bounds are load-bearing, not ceremony: these were unbounded, so
@@ -55,7 +31,27 @@ facts = "mini_app_polis.facts:cli"
 # (wiki-curator-cog) and 3.x (transcription-cog, api-kaianolevine-com),
 # so anything tighter than <4 forces one of them to move. Matches
 # api-kaianolevine-com's own pin deliberately.
-llm = ["openai>=1.40,<4", "anthropic>=1,<3"]
+llm = ["openai>=1.40,<4", "anthropic>=1,<3", "jsonschema>=4.23.0,<5.0.0"]
+# The rest of the heavy modules each have an extra of their own, so a cog
+# installs only what it imports. Every one of these packages was in the base
+# dependencies until 8.0: each cog then carried Google, Spotify and the MP3
+# stack whether it used them or not, and an advisory against any one of them
+# (oauthlib, under gspread) failed every build in the fleet at once.
+# mini_app_polis.google: Drive and Sheets, through the fleet service account.
+google = [
+  "google-auth>=2.29.0,<3.0.0",
+  "google-api-python-client>=2.177.0,<3.0.0",
+  "gspread>=6.0.2,<7.0.0",
+]
+# mini_app_polis.spotify.
+spotify = ["spotipy>=2.23.0,<3.0.0"]
+# mini_app_polis.mp3: reading and writing tags, and identifying a recording.
+mp3 = [
+  "mutagen>=1.47.0,<2.0.0",
+  "music-tag>=0.4.3,<0.5.0",
+  "pyacoustid>=1.3.0,<2.0.0",
+  "musicbrainzngs>=0.7.1,<0.8.0",
+]
 # mini_app_polis.activity registers SQLAlchemy session listeners at import.
 # Every service that wants it already depends on SQLAlchemy 2; the extra is
 # for the declaration, and so `uv sync --all-extras` installs it for the

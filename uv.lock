@@ -805,17 +805,6 @@ wheels = [
 ]
 
 [[package]]
-name = "gspread-formatting"
-version = "1.2.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "gspread" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/26/71/b32df64c1bb97c2289f0916c6192d2d37cfc4a78b863b545b4b27142f3bc/gspread_formatting-1.2.1-py2.py3-none-any.whl", hash = "sha256:76bef0e751dc276bab666351035f15a818866dea5ca20603a34ae6c847333662", size = 22391, upload-time = "2025-03-07T20:24:53.474Z" },
-]
-
-[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1163,20 +1152,9 @@ wheels = [
 name = "miniapppolis-common-utils"
 source = { editable = "." }
 dependencies = [
-    { name = "google-api-python-client" },
-    { name = "google-auth" },
-    { name = "gspread" },
-    { name = "gspread-formatting" },
     { name = "httpx" },
-    { name = "jsonschema" },
-    { name = "music-tag" },
-    { name = "musicbrainzngs" },
-    { name = "mutagen" },
-    { name = "pyacoustid" },
     { name = "pydantic" },
     { name = "pyyaml" },
-    { name = "spotipy" },
-    { name = "tenacity" },
 ]
 
 [package.optional-dependencies]
@@ -1192,9 +1170,24 @@ dev = [
     { name = "ruff" },
     { name = "types-requests" },
 ]
+google = [
+    { name = "google-api-python-client" },
+    { name = "google-auth" },
+    { name = "gspread" },
+]
 llm = [
     { name = "anthropic" },
+    { name = "jsonschema" },
     { name = "openai" },
+]
+mp3 = [
+    { name = "music-tag" },
+    { name = "musicbrainzngs" },
+    { name = "mutagen" },
+    { name = "pyacoustid" },
+]
+spotify = [
+    { name = "spotipy" },
 ]
 testing = [
     { name = "fastapi" },
@@ -1205,30 +1198,28 @@ requires-dist = [
     { name = "anthropic", marker = "extra == 'llm'", specifier = ">=1,<3" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.10.1,<8.0.0" },
     { name = "fastapi", marker = "extra == 'testing'", specifier = ">=0.110,<1" },
-    { name = "google-api-python-client", specifier = ">=2.177.0,<3.0.0" },
-    { name = "google-auth", specifier = ">=2.29.0,<3.0.0" },
-    { name = "gspread", specifier = ">=6.0.2,<7.0.0" },
-    { name = "gspread-formatting", specifier = ">=1.2.1,<2.0.0" },
+    { name = "google-api-python-client", marker = "extra == 'google'", specifier = ">=2.177.0,<3.0.0" },
+    { name = "google-auth", marker = "extra == 'google'", specifier = ">=2.29.0,<3.0.0" },
+    { name = "gspread", marker = "extra == 'google'", specifier = ">=6.0.2,<7.0.0" },
     { name = "httpx", specifier = ">=0.27,<1.0" },
-    { name = "jsonschema", specifier = ">=4.23.0,<5.0.0" },
-    { name = "music-tag", specifier = ">=0.4.3,<0.5.0" },
-    { name = "musicbrainzngs", specifier = ">=0.7.1,<0.8.0" },
-    { name = "mutagen", specifier = ">=1.47.0,<2.0.0" },
+    { name = "jsonschema", marker = "extra == 'llm'", specifier = ">=4.23.0,<5.0.0" },
+    { name = "music-tag", marker = "extra == 'mp3'", specifier = ">=0.4.3,<0.5.0" },
+    { name = "musicbrainzngs", marker = "extra == 'mp3'", specifier = ">=0.7.1,<0.8.0" },
+    { name = "mutagen", marker = "extra == 'mp3'", specifier = ">=1.47.0,<2.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11.2,<3.0.0" },
     { name = "openai", marker = "extra == 'llm'", specifier = ">=1.40,<4" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.2.0,<5.0.0" },
-    { name = "pyacoustid", specifier = ">=1.3.0,<2.0.0" },
+    { name = "pyacoustid", marker = "extra == 'mp3'", specifier = ">=1.3.0,<2.0.0" },
     { name = "pydantic", specifier = ">=2.6,<3.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3,<10.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.2.1,<8.0.0" },
     { name = "pyyaml", specifier = ">=6.0,<7.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
-    { name = "spotipy", specifier = ">=2.23.0,<3.0.0" },
+    { name = "spotipy", marker = "extra == 'spotify'", specifier = ">=2.23.0,<3.0.0" },
     { name = "sqlalchemy", marker = "extra == 'activity'", specifier = ">=2.0,<3" },
-    { name = "tenacity", specifier = ">=8.2,<10.0" },
     { name = "types-requests", marker = "extra == 'dev'", specifier = ">=2.32.0,<3.0.0" },
 ]
-provides-extras = ["activity", "dev", "llm", "testing"]
+provides-extras = ["activity", "dev", "google", "llm", "mp3", "spotify", "testing"]
 
 [[package]]
 name = "music-tag"
@@ -2110,15 +2101,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/48/bb/3d8757f21e9a53d9035c9eb039a777047139a16bfdbedfc7a58241c3d914/starlette-1.10.0.tar.gz", hash = "sha256:b8399098d4c1e3522734f7235dc79b1fc967f96cf139c81e0fa30479e0685f9b", size = 2734356, upload-time = "2026-10-24T15:04:12.342Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/88/2e/947cfe02def9371c07cd5bf5b6b61c829e9aecb9904db02a66cfafbc1eec/starlette-1.10.0-py3-none-any.whl", hash = "sha256:478c0ab3b4ced6e82719849c118fa406f0278a3499c1a898cd15cd31bdc38ce4", size = 80571, upload-time = "2026-10-24T15:04:10.371Z" },
-]
-
-[[package]]
-name = "tenacity"
-version = "9.2.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/82/9e/497c1c8ebe5a5b5d1d4a7511aea22c0bb1a97e3170d98abdef0e1b34265a/tenacity-9.2.1.tar.gz", hash = "sha256:a606b5c808d0cded4a359d5b9932d867ff2a6a6b64d37350260fd01bbdf83839", size = 58261, upload-time = "2026-10-07T12:13:01.633Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d6/26/1ff2b0721ac66a3ec5b1402b333110b352ab0a8724052ac279a7b82d40c4/tenacity-9.2.1-py3-none-any.whl", hash = "sha256:9e56f17539296baab7beabb08b92f6ee3d7be92d8be72d763360677c2ad6580e", size = 32310, upload-time = "2026-10-07T12:13:00.102Z" },
 ]
 
 [[package]]
