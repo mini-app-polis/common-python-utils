@@ -21,6 +21,7 @@ from mini_app_polis.api.contract import (
     IngestTrack,
     NotificationResult,
     NotifyRequest,
+    PipelineEvaluationCreate,
     PipelineEvaluationItem,
     SetListItem,
     TranscriptionRunRequest,
@@ -830,3 +831,49 @@ def test_listing_agent_runs_sends_only_the_filters_given(
             {"status": "dispatched", "repository": "watcher-cog"},
         ),
     ]
+
+
+# -- the evaluated application's version on a finding -------------------------
+
+
+def test_a_finding_may_name_the_application_version_and_commit_it_evaluated() -> None:
+    finding = PipelineEvaluationCreate(
+        repo="api-kaianolevine-com",
+        dimension="documentation_coverage",
+        severity="SUCCESS",
+        finding="clean",
+        standards_version="6.20.0",
+        evaluator_version="4.2.0",
+        repo_version="v1.43.0",
+        repo_commit="abc1234def5678",
+    )
+    sent = finding.model_dump()
+    assert sent["repo_version"] == "v1.43.0"
+    assert sent["repo_commit"] == "abc1234def5678"
+
+
+def test_a_self_report_leaves_the_application_version_out() -> None:
+    finding = PipelineEvaluationCreate(
+        repo="deejay-cog", dimension="pipeline", severity="INFO", finding="ran"
+    )
+    assert finding.repo_version is None
+    assert finding.repo_commit is None
+
+
+def test_a_stored_finding_without_the_version_still_reads() -> None:
+    """An API that predates the fields answers without them."""
+    item = PipelineEvaluationItem.model_validate(
+        {
+            "id": str(uuid.uuid4()),
+            "run_id": "r1",
+            "repo": "infra",
+            "dimension": "testing",
+            "severity": "WARN",
+            "finding": "f",
+            "suggestion": None,
+            "standards_version": None,
+            "evaluated_at": "2026-11-05T00:00:00Z",
+        }
+    )
+    assert item.repo_version is None
+    assert item.repo_commit is None
