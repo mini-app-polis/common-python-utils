@@ -1,3 +1,15 @@
+# [7.20.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.19.0...v7.20.0) (2026-11-05)
+
+
+### Bug Fixes
+
+* **deps:** patch vulnerable dependencies (oauthlib) ([692c7ce](https://github.com/mini-app-polis/common-python-utils/commit/692c7ce2cebf6ab5009c5d72dcc0b300e03dc1e7))
+
+
+### Features
+
+* **pipeline-status:** name every item with list_all and split long reports across messages ([c0ebc17](https://github.com/mini-app-polis/common-python-utils/commit/c0ebc17a51feb58e9965bae60f70c691d632072e))
+
 # [7.19.0](https://github.com/mini-app-polis/common-python-utils/compare/v7.18.1...v7.19.0) (2026-11-05)
 
 
