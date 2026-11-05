@@ -70,21 +70,6 @@ from .contract import (
     DeejayRunAccepted,
     DeejayRunRequest,
     Envelope,
-    GroomingBudgetSpentMarked,
-    GroomingBudgetSpentRequest,
-    GroomingClaimReleased,
-    GroomingClaimRequest,
-    GroomingClaimResult,
-    GroomingJobAccepted,
-    GroomingJobRequest,
-    GroomingProposal,
-    GroomingProposalAccepted,
-    GroomingRecord,
-    GroomingRecordWrite,
-    GroomingReturnRate,
-    GroomingRunCreate,
-    GroomingRunRecorded,
-    GroomingSpend,
     IngestResponseData,
     IngestSet,
     LivePlaysIngest,
@@ -786,84 +771,6 @@ class KaianoApiClient:
         return cast(
             RefiningBudgetSpentMarked,
             self._call("mark_refining_budget_spent", payload),
-        )
-
-    # The grooming names of the methods above, which call the grooming names of
-    # the routes. Kept for cogs that have not moved to refining; removed once
-    # every cog has.
-
-    def list_groomings(self) -> list[GroomingRecord]:
-        """``GET /v1/tasks/groomings`` — every task's grooming record."""
-        return cast(list[GroomingRecord], self._call("list_groomings"))
-
-    def record_grooming(self, payload: GroomingRecordWrite) -> GroomingRecord:
-        """``POST /v1/tasks/groomings`` — write one task's grooming record.
-
-        Keyed by ``task_gid``: writing a task's record again replaces it.
-        """
-        return cast(GroomingRecord, self._call("record_grooming", payload))
-
-    def record_grooming_run(self, payload: GroomingRunCreate) -> GroomingRunRecorded:
-        """``POST /v1/tasks/groomings/runs`` — record one paid grooming run."""
-        return cast(GroomingRunRecorded, self._call("record_grooming_run", payload))
-
-    def grooming_spend(self) -> GroomingSpend:
-        """``GET /v1/tasks/groomings/spend`` — this month's paid grooming."""
-        return cast(GroomingSpend, self._call("grooming_spend"))
-
-    def grooming_return_rate(self, days: int | None = None) -> GroomingReturnRate:
-        """``GET /v1/tasks/groomings/return-rate`` — how often a task moved to
-        Ready came back out, over the last ``days`` (the API's default, 30,
-        when None)."""
-        params = {"days": days} if days is not None else None
-        return cast(
-            GroomingReturnRate, self._call("grooming_return_rate", params=params)
-        )
-
-    def request_grooming(self, payload: GroomingJobRequest) -> GroomingJobAccepted:
-        """``POST /v1/tasks/groomings/jobs`` — queue one task for the groomer."""
-        return cast(GroomingJobAccepted, self._call("request_grooming", payload))
-
-    def submit_grooming_proposal(
-        self, payload: GroomingProposal
-    ) -> GroomingProposalAccepted:
-        """``POST /v1/tasks/groomings/proposals`` — hand a proposal back.
-
-        The API queues it for the task manager, which applies it.
-        """
-        return cast(
-            GroomingProposalAccepted, self._call("submit_grooming_proposal", payload)
-        )
-
-    def claim_grooming(self, payload: GroomingClaimRequest) -> GroomingClaimResult:
-        """``POST /v1/tasks/groomings/claims`` — claim one job before grooming it.
-
-        ``claimed`` is false when the job is already held; skip it.
-        """
-        return cast(GroomingClaimResult, self._call("claim_grooming", payload))
-
-    def release_grooming_claim(
-        self, payload: GroomingClaimRequest
-    ) -> GroomingClaimReleased:
-        """``POST /v1/tasks/groomings/claims/release`` — give a claim back.
-
-        For a run that failed, so the next send can groom the same content.
-        """
-        return cast(
-            GroomingClaimReleased, self._call("release_grooming_claim", payload)
-        )
-
-    def mark_grooming_budget_spent(
-        self, payload: GroomingBudgetSpentRequest
-    ) -> GroomingBudgetSpentMarked:
-        """``POST /v1/tasks/groomings/budget-spent`` — report a budget stop.
-
-        For a run stopped because the month's grooming budget is spent, so
-        the sweep sends the same content again. A later won claim clears it.
-        """
-        return cast(
-            GroomingBudgetSpentMarked,
-            self._call("mark_grooming_budget_spent", payload),
         )
 
     def record_agent_run(self, payload: AgentRunCreate) -> AgentRun:

@@ -14,9 +14,7 @@ could not be started is marked failed the same way.
 
 A run that finds its task unclear or undetermined changes nothing and ends
 as ``needs_refining``, with its questions. The task manager sends the task
-back to refining with them; it is not retried. ``needs_grooming`` is the
-grooming name of ``needs_refining``, still accepted, and read the same, until
-the agent's workflow reports the new name.
+back to refining with them; it is not retried.
 
 The month's spend is the sum of the runs' costs, for the monthly cap.
 
@@ -36,20 +34,13 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 #: Where a run is. ``dispatched`` until its result or failure is recorded.
 AgentRunStatus = Literal[
-    "dispatched", "succeeded", "failed", "capped", "needs_refining", "needs_grooming"
+    "dispatched", "succeeded", "failed", "capped", "needs_refining"
 ]
 
 #: How a run ended, as its workflow reports it. ``capped``: it reached its
 #: budget limit and stopped with no pull request. ``needs_refining``: it found
 #: the task unclear, changed nothing, and asks its questions.
-#: ``needs_grooming`` is its grooming name, read the same.
-AgentRunOutcome = Literal[
-    "succeeded", "failed", "capped", "needs_refining", "needs_grooming"
-]
-
-#: The outcomes, and statuses, of a run that sends its task back to refining:
-#: the new name and the grooming one, until every caller sends the new one.
-NEEDS_REFINING: frozenset[str] = frozenset({"needs_refining", "needs_grooming"})
+AgentRunOutcome = Literal["succeeded", "failed", "capped", "needs_refining"]
 
 _GID = r"^\d+$"
 _RUN_ID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
@@ -133,9 +124,9 @@ class AgentRunResult(BaseModel):
 
     @model_validator(mode="after")
     def _questions_only_when_refining_is_needed(self) -> AgentRunResult:
-        if self.outcome in NEEDS_REFINING and not self.questions:
+        if self.outcome == "needs_refining" and not self.questions:
             raise ValueError("a run that needs refining asks its questions")
-        if self.outcome not in NEEDS_REFINING and self.questions:
+        if self.outcome != "needs_refining" and self.questions:
             raise ValueError(f"a run that ended {self.outcome} asks no questions")
         if any(not q.strip() for q in self.questions):
             raise ValueError("a question is not blank")
