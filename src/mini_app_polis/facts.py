@@ -4,8 +4,8 @@ A repository that owns some data publishes the figures drawn from it, so a
 reader (a resume, a site, a report) points at them instead of recounting.
 The repository declares each figure in ``facts.yaml``; this module computes
 them and writes ``facts.json``, which is committed. ``facts check`` runs in
-CI and fails when the committed file no longer matches what the repository's
-data computes, so a published figure cannot drift. Facts are generated,
+CI and fails when the committed file differs from what the repository's data
+computes, so a published figure cannot drift. Facts are generated,
 never edited by hand.
 
 ``facts.yaml``::
