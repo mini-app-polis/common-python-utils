@@ -209,9 +209,6 @@ class TaskSweepRequest(BaseModel):
     agent dispatch happen only if its time of day is one set for them.
     ``refine`` makes this sweep the one for ``REFINE_TIMES``, ``agents`` the
     one for ``AGENT_TIMES``. Neither turns on what is off or raises a cap.
-
-    ``groom`` is the grooming name of ``refine`` and sets it too. It goes once
-    every caller sends ``refine``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -220,21 +217,10 @@ class TaskSweepRequest(BaseModel):
         default=False,
         description="Send tasks for refining in this sweep, whatever the time.",
     )
-    groom: bool = Field(
-        default=False,
-        description="The grooming name of refine; sets it too.",
-    )
     agents: bool = Field(
         default=False,
         description="Dispatch agents in this sweep, whatever the time.",
     )
-
-    @model_validator(mode="after")
-    def _groom_is_refine(self) -> TaskSweepRequest:
-        both = self.refine or self.groom
-        object.__setattr__(self, "refine", both)
-        object.__setattr__(self, "groom", both)
-        return self
 
 
 class TaskSweepAccepted(BaseModel):

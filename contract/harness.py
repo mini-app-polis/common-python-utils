@@ -80,14 +80,6 @@ NOT_EXERCISED: dict[str, str] = {
         "development has no queues: task-manager-dev-jobs.fifo is not "
         "provisioned, so the API cannot enqueue the proposal"
     ),
-    "request_grooming": (
-        "development has no queues: task-groomer-dev-jobs is not provisioned, "
-        "so the API cannot enqueue the job"
-    ),
-    "submit_grooming_proposal": (
-        "development has no queues: task-manager-dev-jobs.fifo is not "
-        "provisioned, so the API cannot enqueue the proposal"
-    ),
     "submit_agent_result": (
         "development has no queues: task-manager-dev-jobs.fifo is not "
         "provisioned, so the API cannot enqueue the result"
@@ -126,34 +118,6 @@ NOT_EXERCISED: dict[str, str] = {
     "mark_refining_budget_spent": (
         "the contract-suite machine holds no tasks.refinings scope, and a "
         "fixture stop would send a task to the refiner again"
-    ),
-    # The same records under their grooming names, still served.
-    # Task-manager-cog's and the groomer's records, which the board is run
-    # from. The contract-suite machine holds no tasks.* scope, and a fixture
-    # in them would be read as a real grooming, claim or agent run.
-    "list_groomings": "the contract-suite machine holds no tasks.groomings scope",
-    "record_grooming": (
-        "the contract-suite machine holds no tasks.groomings scope, and a "
-        "fixture grooming record would be read as a real one"
-    ),
-    "record_grooming_run": (
-        "the contract-suite machine holds no tasks.groomings scope, and a "
-        "fixture run would count toward the groomer's spend"
-    ),
-    "grooming_spend": "the contract-suite machine holds no tasks.groomings scope",
-    "grooming_return_rate": (
-        "the contract-suite machine holds no tasks.groomings scope"
-    ),
-    "claim_grooming": (
-        "the contract-suite machine holds no tasks.groomings scope, and a "
-        "fixture claim would hold a task away from the groomer"
-    ),
-    "release_grooming_claim": (
-        "the contract-suite machine holds no tasks.groomings scope"
-    ),
-    "mark_grooming_budget_spent": (
-        "the contract-suite machine holds no tasks.groomings scope, and a "
-        "fixture stop would send a task to the groomer again"
     ),
     "record_agent_run": (
         "the contract-suite machine holds no tasks.agent-runs scope, and a "

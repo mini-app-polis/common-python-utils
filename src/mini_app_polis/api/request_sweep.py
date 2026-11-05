@@ -8,7 +8,6 @@ refines and dispatches agents only if the time of day is one set for them.
 ``--refine`` makes it the sweep for ``REFINE_TIMES`` and ``--agents`` the one
 for ``AGENT_TIMES``, whatever the clock says. Neither turns on what is off
 (``REFINE_DISPATCH``, ``AGENT_DISPATCH``, a dry run) or raises a cap.
-``--groom`` is the old name of ``--refine`` and still works.
 
 Run it under Doppler in the ``owner-session`` project, which holds
 ``CLAUDE_SESSION_API_KEY``::
@@ -42,13 +41,8 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--refine",
-        "--groom",
-        dest="refine",
         action="store_true",
-        help=(
-            "Send tasks for refining in this sweep, whatever the time of day. "
-            "--groom is its old name."
-        ),
+        help="Send tasks for refining in this sweep, whatever the time of day.",
     )
     parser.add_argument(
         "--agents",

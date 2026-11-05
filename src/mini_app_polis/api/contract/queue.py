@@ -20,10 +20,9 @@ from __future__ import annotations
 
 from typing import Annotated, Any, ClassVar, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from .agent_runs import AgentRun
-from .groomings import GroomingJobRequest, GroomingProposal
 from .refinings import RefiningJobRequest, RefiningProposal
 from .secret_rotations import _INCIDENT_ID, RotationConfig, RotationRequest
 from .tasks import TaskCreateRequest, TaskUpdateRequest
@@ -162,22 +161,6 @@ class TaskRefineProposalMessage(QueueMessage[RefiningProposal]):
     type: Literal["task.refine-proposal"] = "task.refine-proposal"
 
 
-class TaskGroomMessage(QueueMessage[GroomingJobRequest]):
-    """``task.groom``: the grooming name of :class:`TaskRefineMessage`, on
-    task-groomer-cog's queue. Sent while any cog still asks under the
-    grooming names; removed once every cog has moved to refining."""
-
-    type: Literal["task.groom"] = "task.groom"
-
-
-class TaskGroomProposalMessage(QueueMessage[GroomingProposal]):
-    """``task.groom-proposal``: the grooming name of
-    :class:`TaskRefineProposalMessage`, kept with it until every cog has moved
-    to refining."""
-
-    type: Literal["task.groom-proposal"] = "task.groom-proposal"
-
-
 class TaskCreateMessage(QueueMessage[TaskCreateRequest]):
     """``task.create`` on task-manager-cog's queue."""
 
@@ -199,30 +182,16 @@ class TaskAgentResultMessage(QueueMessage[AgentRun]):
 class TaskSweepPayload(BaseModel):
     """What a sweep was asked to do beyond its schedule.
 
-    A scheduled sweep carries nothing, so every flag is false. A sweep asked
+    A scheduled sweep carries nothing, so both flags are false. A sweep asked
     for on demand (:class:`~.tasks.TaskSweepRequest`) may set ``refine`` to
     count as the one for ``REFINE_TIMES`` and ``agents`` as the one for
     ``AGENT_TIMES``. Neither turns on what is off or raises a cap.
-
-    ``groom`` is the grooming name of ``refine``. Either one sets both, so a
-    task manager reading either name sees the sweep it was asked for. It goes
-    once every cog reads ``refine``.
     """
 
     refine: bool = Field(default=False, description="Refine whatever the time.")
-    groom: bool = Field(
-        default=False, description="The grooming name of refine; sets it too."
-    )
     agents: bool = Field(
         default=False, description="Dispatch agents whatever the time."
     )
-
-    @model_validator(mode="after")
-    def _groom_is_refine(self) -> TaskSweepPayload:
-        both = self.refine or self.groom
-        object.__setattr__(self, "refine", both)
-        object.__setattr__(self, "groom", both)
-        return self
 
 
 class TaskSweepMessage(QueueMessage[TaskSweepPayload]):
@@ -287,8 +256,6 @@ JobMessage = Annotated[
     | WikiJobMessage
     | TaskRefineMessage
     | TaskRefineProposalMessage
-    | TaskGroomMessage
-    | TaskGroomProposalMessage
     | TaskCreateMessage
     | TaskUpdateMessage
     | TaskAgentResultMessage
@@ -316,8 +283,6 @@ __all__ = [
     "RotationSweepPayload",
     "TaskAgentResultMessage",
     "TaskCreateMessage",
-    "TaskGroomMessage",
-    "TaskGroomProposalMessage",
     "TaskRefineMessage",
     "TaskRefineProposalMessage",
     "TaskSweepMessage",

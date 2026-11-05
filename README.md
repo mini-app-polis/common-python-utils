@@ -177,14 +177,6 @@ times that content has been sent so (`refine_attempts`). The task manager sets
 them when it sends and clears them when it writes an applied refining, so it
 can send again content whose refining was lost.
 
-**The grooming names.** Grooming was renamed refining. Until every cog has
-moved, the `Grooming*` names, the `/v1/tasks/groomings` routes and their
-client methods, the `task.groom` and `task.groom-proposal` messages, the
-sweep's `groom` flag (and `request-sweep --groom`) and the `needs_grooming`
-agent outcome still work beside the refining ones. The grooming record keeps
-its field names on the wire (`groomed_fingerprint`, `groom_sent_at`,
-`groom_attempts`).
-
 **Contract suite.** `contract/` checks the catalog against the deployed
 development API (TEST-016). It calls every endpoint through the typed methods
 and fails if an endpoint is neither exercised nor listed in
