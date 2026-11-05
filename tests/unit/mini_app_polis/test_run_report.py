@@ -93,11 +93,11 @@ def test_empty_run_says_so():
 
 def test_a_run_with_only_outcomes_is_not_called_empty():
     r = ps.RunReport(flow_name="f", repo="c", duration_sec=0.4)
-    r.updated("grooming proposal", "TASK-129")
+    r.updated("refining proposal", "TASK-129")
     assert r.text().splitlines() == [
         "Run complete in 0.40s.",
         "",
-        "grooming proposal",
+        "refining proposal",
         "  ~ TASK-129",
     ]
 
@@ -381,7 +381,7 @@ def test_running_out_of_time_is_a_planned_stop_said_once(sent):
 
     with (
         pytest.raises(RunOutOfTime),
-        ps.run_report("groom-sweep", repo="task-manager-cog") as r,
+        ps.run_report("refine-sweep", repo="task-manager-cog") as r,
     ):
         r.ok(3)
         r.duration_sec = 97

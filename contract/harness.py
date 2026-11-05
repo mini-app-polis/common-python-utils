@@ -72,6 +72,14 @@ NOT_EXERCISED: dict[str, str] = {
         "development has no queues: wiki-curator-dev-jobs is not provisioned, "
         "so the API cannot enqueue the job"
     ),
+    "request_refining": (
+        "development has no queues: task-refiner-dev-jobs is not provisioned, "
+        "so the API cannot enqueue the job"
+    ),
+    "submit_refining_proposal": (
+        "development has no queues: task-manager-dev-jobs.fifo is not "
+        "provisioned, so the API cannot enqueue the proposal"
+    ),
     "request_grooming": (
         "development has no queues: task-groomer-dev-jobs is not provisioned, "
         "so the API cannot enqueue the job"
@@ -92,6 +100,34 @@ NOT_EXERCISED: dict[str, str] = {
         "development has no queues: the rotator's queue is not provisioned, "
         "and a request that reached it would rotate a real secret"
     ),
+    # Task-manager-cog's and the refiner's records, which the board is run
+    # from. The contract-suite machine holds no tasks.* scope, and a fixture
+    # in them would be read as a real refining, claim or agent run.
+    "list_refinings": "the contract-suite machine holds no tasks.refinings scope",
+    "record_refining": (
+        "the contract-suite machine holds no tasks.refinings scope, and a "
+        "fixture refining record would be read as a real one"
+    ),
+    "record_refining_run": (
+        "the contract-suite machine holds no tasks.refinings scope, and a "
+        "fixture run would count toward the refiner's spend"
+    ),
+    "refining_spend": "the contract-suite machine holds no tasks.refinings scope",
+    "refining_return_rate": (
+        "the contract-suite machine holds no tasks.refinings scope"
+    ),
+    "claim_refining": (
+        "the contract-suite machine holds no tasks.refinings scope, and a "
+        "fixture claim would hold a task away from the refiner"
+    ),
+    "release_refining_claim": (
+        "the contract-suite machine holds no tasks.refinings scope"
+    ),
+    "mark_refining_budget_spent": (
+        "the contract-suite machine holds no tasks.refinings scope, and a "
+        "fixture stop would send a task to the refiner again"
+    ),
+    # The same records under their grooming names, still served.
     # Task-manager-cog's and the groomer's records, which the board is run
     # from. The contract-suite machine holds no tasks.* scope, and a fixture
     # in them would be read as a real grooming, claim or agent run.

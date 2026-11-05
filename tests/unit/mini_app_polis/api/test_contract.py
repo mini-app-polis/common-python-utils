@@ -423,159 +423,159 @@ def test_a_marked_notify_request_sends_the_mark_but_not_to_discord(
     assert req.to_discord() == {"content": "contract suite passed"}
 
 
-# ── Grooming records ──────────────────────────────────────────────────────
+# ── Refining records ──────────────────────────────────────────────────────
 
 
-def test_a_grooming_record_round_trips_and_its_write_refuses_extras() -> None:
-    from mini_app_polis.api.contract import GroomingRecord, GroomingRecordWrite
+def test_a_refining_record_round_trips_and_its_write_refuses_extras() -> None:
+    from mini_app_polis.api.contract import RefiningRecord, RefiningRecordWrite
 
-    write = GroomingRecordWrite(
+    write = RefiningRecordWrite(
         task_gid="1219755103049631",
         task_id="TASK-151",
         fingerprint="a" * 64,
         outcome="not_ready",
         problems=["Effort is blank, not S, M or L"],
     )
-    stored = GroomingRecord.model_validate(
+    stored = RefiningRecord.model_validate(
         {**write.model_dump(mode="json"), "updated_at": "2026-10-21T19:38:16Z", "x": 1}
     )
     assert stored.returned_count == 0
     assert stored.moved_to_ready_at is None
     with pytest.raises(ValidationError):
-        GroomingRecordWrite.model_validate({**write.model_dump(), "x": 1})
+        RefiningRecordWrite.model_validate({**write.model_dump(), "x": 1})
     with pytest.raises(ValidationError):
-        GroomingRecordWrite.model_validate({**write.model_dump(), "fingerprint": "abc"})
+        RefiningRecordWrite.model_validate({**write.model_dump(), "fingerprint": "abc"})
 
 
-# ── Grooming claims ───────────────────────────────────────────────────────
+# ── Refining claims ───────────────────────────────────────────────────────
 
 _GID = "1219848148842653"
 
 
-def test_a_grooming_claim_request_refuses_extras_and_bad_keys() -> None:
-    from mini_app_polis.api.contract import GroomingClaimRequest
+def test_a_refining_claim_request_refuses_extras_and_bad_keys() -> None:
+    from mini_app_polis.api.contract import RefiningClaimRequest
 
-    claim = GroomingClaimRequest(task_gid=_GID, fingerprint="b" * 64)
+    claim = RefiningClaimRequest(task_gid=_GID, fingerprint="b" * 64)
     assert claim.model_dump() == {"task_gid": _GID, "fingerprint": "b" * 64}
     with pytest.raises(ValidationError):
-        GroomingClaimRequest.model_validate({**claim.model_dump(), "x": 1})
+        RefiningClaimRequest.model_validate({**claim.model_dump(), "x": 1})
     with pytest.raises(ValidationError):
-        GroomingClaimRequest(task_gid="TASK-292", fingerprint="b" * 64)
+        RefiningClaimRequest(task_gid="TASK-292", fingerprint="b" * 64)
     with pytest.raises(ValidationError):
-        GroomingClaimRequest(task_gid=_GID, fingerprint="B" * 64)
+        RefiningClaimRequest(task_gid=_GID, fingerprint="B" * 64)
     with pytest.raises(ValidationError):
-        GroomingClaimRequest(task_gid=_GID, fingerprint="b" * 63)
+        RefiningClaimRequest(task_gid=_GID, fingerprint="b" * 63)
 
 
 def test_a_claim_already_held_is_an_answer_not_an_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from mini_app_polis.api.contract import GroomingClaimRequest, GroomingClaimResult
+    from mini_app_polis.api.contract import RefiningClaimRequest, RefiningClaimResult
 
     answer = {"task_gid": _GID, "fingerprint": "b" * 64, "claimed": False}
     client, calls = _client(monkeypatch, {"data": answer, "meta": _META})
 
-    out = client.claim_grooming(
-        GroomingClaimRequest(task_gid=_GID, fingerprint="b" * 64)
+    out = client.claim_refining(
+        RefiningClaimRequest(task_gid=_GID, fingerprint="b" * 64)
     )
 
     assert calls == [
         (
             "POST",
-            "/v1/tasks/groomings/claims",
+            "/v1/tasks/refinings/claims",
             {"task_gid": _GID, "fingerprint": "b" * 64},
         )
     ]
-    assert isinstance(out, GroomingClaimResult)
+    assert isinstance(out, RefiningClaimResult)
     assert out.claimed is False
 
 
 def test_releasing_a_claim_posts_the_same_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from mini_app_polis.api.contract import GroomingClaimReleased, GroomingClaimRequest
+    from mini_app_polis.api.contract import RefiningClaimReleased, RefiningClaimRequest
 
     answer = {"task_gid": _GID, "fingerprint": "b" * 64, "released": True}
     client, calls = _client(monkeypatch, {"data": answer, "meta": _META})
 
-    out = client.release_grooming_claim(
-        GroomingClaimRequest(task_gid=_GID, fingerprint="b" * 64)
+    out = client.release_refining_claim(
+        RefiningClaimRequest(task_gid=_GID, fingerprint="b" * 64)
     )
 
     assert calls == [
         (
             "POST",
-            "/v1/tasks/groomings/claims/release",
+            "/v1/tasks/refinings/claims/release",
             {"task_gid": _GID, "fingerprint": "b" * 64},
         )
     ]
-    assert isinstance(out, GroomingClaimReleased)
+    assert isinstance(out, RefiningClaimReleased)
     assert out.released is True
 
 
-# ── Grooming budget stops ─────────────────────────────────────────────────
+# ── Refining budget stops ─────────────────────────────────────────────────
 
 
 def test_a_budget_spent_report_refuses_extras_and_bad_keys() -> None:
-    from mini_app_polis.api.contract import GroomingBudgetSpentRequest
+    from mini_app_polis.api.contract import RefiningBudgetSpentRequest
 
-    stop = GroomingBudgetSpentRequest(task_gid=_GID, fingerprint="c" * 64)
+    stop = RefiningBudgetSpentRequest(task_gid=_GID, fingerprint="c" * 64)
     assert stop.model_dump() == {"task_gid": _GID, "fingerprint": "c" * 64}
     with pytest.raises(ValidationError):
-        GroomingBudgetSpentRequest.model_validate({**stop.model_dump(), "x": 1})
+        RefiningBudgetSpentRequest.model_validate({**stop.model_dump(), "x": 1})
     with pytest.raises(ValidationError):
-        GroomingBudgetSpentRequest(task_gid="TASK-292", fingerprint="c" * 64)
+        RefiningBudgetSpentRequest(task_gid="TASK-292", fingerprint="c" * 64)
     with pytest.raises(ValidationError):
-        GroomingBudgetSpentRequest(task_gid=_GID, fingerprint="C" * 64)
+        RefiningBudgetSpentRequest(task_gid=_GID, fingerprint="C" * 64)
     with pytest.raises(ValidationError):
-        GroomingBudgetSpentRequest(task_gid=_GID, fingerprint="c" * 63)
+        RefiningBudgetSpentRequest(task_gid=_GID, fingerprint="c" * 63)
 
 
 def test_marking_a_budget_stop_posts_the_task_and_fingerprint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from mini_app_polis.api.contract import (
-        GroomingBudgetSpentMarked,
-        GroomingBudgetSpentRequest,
+        RefiningBudgetSpentMarked,
+        RefiningBudgetSpentRequest,
     )
 
     answer = {"task_gid": _GID, "fingerprint": "c" * 64}
     client, calls = _client(monkeypatch, {"data": answer, "meta": _META})
 
-    out = client.mark_grooming_budget_spent(
-        GroomingBudgetSpentRequest(task_gid=_GID, fingerprint="c" * 64)
+    out = client.mark_refining_budget_spent(
+        RefiningBudgetSpentRequest(task_gid=_GID, fingerprint="c" * 64)
     )
 
     assert calls == [
         (
             "POST",
-            "/v1/tasks/groomings/budget-spent",
+            "/v1/tasks/refinings/budget-spent",
             {"task_gid": _GID, "fingerprint": "c" * 64},
         )
     ]
-    assert isinstance(out, GroomingBudgetSpentMarked)
+    assert isinstance(out, RefiningBudgetSpentMarked)
     assert out.fingerprint == "c" * 64
 
 
-def test_the_budget_spent_endpoint_is_a_grooming_write() -> None:
+def test_the_budget_spent_endpoint_is_a_refining_write() -> None:
     from mini_app_polis.api.contract import (
         ENDPOINTS_BY_NAME,
-        GroomingBudgetSpentMarked,
-        GroomingBudgetSpentRequest,
+        RefiningBudgetSpentMarked,
+        RefiningBudgetSpentRequest,
     )
 
-    endpoint = ENDPOINTS_BY_NAME["mark_grooming_budget_spent"]
+    endpoint = ENDPOINTS_BY_NAME["mark_refining_budget_spent"]
     assert (endpoint.method, endpoint.path, endpoint.scope) == (
         "POST",
-        "/v1/tasks/groomings/budget-spent",
-        "tasks.groomings.write",
+        "/v1/tasks/refinings/budget-spent",
+        "tasks.refinings.write",
     )
-    assert endpoint.request is GroomingBudgetSpentRequest
-    assert endpoint.response is GroomingBudgetSpentMarked
+    assert endpoint.request is RefiningBudgetSpentRequest
+    assert endpoint.response is RefiningBudgetSpentMarked
 
 
-def test_a_grooming_record_carries_a_budget_stop_only_when_read() -> None:
-    from mini_app_polis.api.contract import GroomingRecord, GroomingRecordWrite
+def test_a_refining_record_carries_a_budget_stop_only_when_read() -> None:
+    from mini_app_polis.api.contract import RefiningRecord, RefiningRecordWrite
 
     stored = {
         "task_gid": _GID,
@@ -583,63 +583,63 @@ def test_a_grooming_record_carries_a_budget_stop_only_when_read() -> None:
         "outcome": "not_ready",
         "updated_at": "2026-10-21T19:38:16Z",
     }
-    assert GroomingRecord.model_validate(stored).budget_spent_fingerprint is None
-    stopped = GroomingRecord.model_validate(
+    assert RefiningRecord.model_validate(stored).budget_spent_fingerprint is None
+    stopped = RefiningRecord.model_validate(
         {**stored, "budget_spent_fingerprint": "a" * 64}
     )
     assert stopped.budget_spent_fingerprint == "a" * 64
     with pytest.raises(ValidationError):
-        GroomingRecord.model_validate({**stored, "budget_spent_fingerprint": "abc"})
-    assert "budget_spent_fingerprint" not in GroomingRecordWrite.model_fields
+        RefiningRecord.model_validate({**stored, "budget_spent_fingerprint": "abc"})
+    assert "budget_spent_fingerprint" not in RefiningRecordWrite.model_fields
 
 
-def test_a_grooming_record_tracks_a_send_with_no_grooming_back() -> None:
-    from mini_app_polis.api.contract import GroomingRecord, GroomingRecordWrite
+def test_a_refining_record_tracks_a_send_with_no_refining_back() -> None:
+    from mini_app_polis.api.contract import RefiningRecord, RefiningRecordWrite
 
     written = {"task_gid": _GID, "fingerprint": "a" * 64, "outcome": "not_ready"}
-    plain = GroomingRecordWrite.model_validate(written)
-    assert (plain.groom_sent_at, plain.groom_attempts) == (None, 0)
-    sent = GroomingRecordWrite.model_validate(
-        {**written, "groom_sent_at": "2026-10-28T09:15:00Z", "groom_attempts": 2}
+    plain = RefiningRecordWrite.model_validate(written)
+    assert (plain.refine_sent_at, plain.refine_attempts) == (None, 0)
+    sent = RefiningRecordWrite.model_validate(
+        {**written, "refine_sent_at": "2026-10-28T09:15:00Z", "refine_attempts": 2}
     )
-    assert sent.groom_attempts == 2
-    assert sent.groom_sent_at is not None
+    assert sent.refine_attempts == 2
+    assert sent.refine_sent_at is not None
     with pytest.raises(ValidationError):
-        GroomingRecordWrite.model_validate({**written, "groom_attempts": -1})
+        RefiningRecordWrite.model_validate({**written, "refine_attempts": -1})
     # A record from an API that does not store them yet reads as never sent.
-    stored = GroomingRecord.model_validate(
+    stored = RefiningRecord.model_validate(
         {**written, "updated_at": "2026-10-28T09:15:00Z"}
     )
-    assert (stored.groom_sent_at, stored.groom_attempts) == (None, 0)
+    assert (stored.refine_sent_at, stored.refine_attempts) == (None, 0)
 
 
 _PROPOSAL = {
     "task_gid": "1219804023646894",
     "fingerprint": "a" * 64,
-    "title": "common-python-utils: a grooming proposal can carry an executor tag",
+    "title": "common-python-utils: a refining proposal can carry an executor tag",
     "model": "claude-sonnet-5-5",
     "cost_usd": 0.12,
 }
 
 
 @pytest.mark.parametrize("executor", ["cowork", "person"])
-def test_a_grooming_proposal_can_name_its_executor(executor: str) -> None:
-    from mini_app_polis.api.contract import GroomingProposal
+def test_a_refining_proposal_can_name_its_executor(executor: str) -> None:
+    from mini_app_polis.api.contract import RefiningProposal
 
-    assert GroomingProposal(**_PROPOSAL, executor=executor).executor == executor
-
-
-def test_a_grooming_proposal_without_an_executor_is_for_the_agent() -> None:
-    from mini_app_polis.api.contract import GroomingProposal
-
-    assert GroomingProposal(**_PROPOSAL).executor is None
+    assert RefiningProposal(**_PROPOSAL, executor=executor).executor == executor
 
 
-def test_a_grooming_proposal_refuses_an_unknown_executor() -> None:
-    from mini_app_polis.api.contract import GroomingProposal
+def test_a_refining_proposal_without_an_executor_is_for_the_agent() -> None:
+    from mini_app_polis.api.contract import RefiningProposal
+
+    assert RefiningProposal(**_PROPOSAL).executor is None
+
+
+def test_a_refining_proposal_refuses_an_unknown_executor() -> None:
+    from mini_app_polis.api.contract import RefiningProposal
 
     with pytest.raises(ValidationError):
-        GroomingProposal(**_PROPOSAL, executor="agent")
+        RefiningProposal(**_PROPOSAL, executor="agent")
 
 
 def _child(**overrides: Any) -> dict[str, Any]:
@@ -654,10 +654,10 @@ def _child(**overrides: Any) -> dict[str, Any]:
     }
 
 
-def test_a_grooming_proposal_can_split_its_task_into_children() -> None:
-    from mini_app_polis.api.contract import GroomingProposal
+def test_a_refining_proposal_can_split_its_task_into_children() -> None:
+    from mini_app_polis.api.contract import RefiningProposal
 
-    proposal = GroomingProposal(
+    proposal = RefiningProposal(
         **_PROPOSAL,
         children=[
             _child(),
@@ -669,47 +669,47 @@ def test_a_grooming_proposal_can_split_its_task_into_children() -> None:
     assert proposal.children[2].blocked_by_siblings == [0, 1]
 
 
-def test_a_grooming_proposal_without_children_still_validates() -> None:
-    from mini_app_polis.api.contract import GroomingProposal
+def test_a_refining_proposal_without_children_still_validates() -> None:
+    from mini_app_polis.api.contract import RefiningProposal
 
-    assert GroomingProposal(**_PROPOSAL).children == []
+    assert RefiningProposal(**_PROPOSAL).children == []
 
 
-def test_a_grooming_proposal_over_the_children_cap_is_refused() -> None:
-    from mini_app_polis.api.contract import GROOMING_MAX_CHILDREN, GroomingProposal
+def test_a_refining_proposal_over_the_children_cap_is_refused() -> None:
+    from mini_app_polis.api.contract import REFINING_MAX_CHILDREN, RefiningProposal
 
-    GroomingProposal(**_PROPOSAL, children=[_child()] * GROOMING_MAX_CHILDREN)
+    RefiningProposal(**_PROPOSAL, children=[_child()] * REFINING_MAX_CHILDREN)
     with pytest.raises(ValidationError):
-        GroomingProposal(**_PROPOSAL, children=[_child()] * (GROOMING_MAX_CHILDREN + 1))
+        RefiningProposal(**_PROPOSAL, children=[_child()] * (REFINING_MAX_CHILDREN + 1))
 
 
 @pytest.mark.parametrize("sibling", [5, 1, -1])
 def test_a_child_waiting_on_a_sibling_that_is_not_earlier_is_refused(
     sibling: int,
 ) -> None:
-    from mini_app_polis.api.contract import GroomingProposal
+    from mini_app_polis.api.contract import RefiningProposal
 
     with pytest.raises(ValidationError):
-        GroomingProposal(
+        RefiningProposal(
             **_PROPOSAL,
             children=[_child(), _child(blocked_by_siblings=[sibling])],
         )
 
 
 def test_a_child_is_a_complete_leaf() -> None:
-    from mini_app_polis.api.contract import GroomingProposal
+    from mini_app_polis.api.contract import RefiningProposal
 
     for missing in ("done_when", "where", "constraints", "effort", "body"):
         child = _child()
         del child[missing]
         with pytest.raises(ValidationError):
-            GroomingProposal(**_PROPOSAL, children=[child])
+            RefiningProposal(**_PROPOSAL, children=[child])
 
 
 def test_the_executor_names_are_defined_once() -> None:
-    from mini_app_polis.api.contract import GroomingExecutor
+    from mini_app_polis.api.contract import RefiningExecutor
 
-    assert typing.get_args(GroomingExecutor) == ("cowork", "person")
+    assert typing.get_args(RefiningExecutor) == ("cowork", "person")
 
 
 # ── Agent runs ────────────────────────────────────────────────────────────
@@ -744,12 +744,12 @@ def test_a_run_that_did_not_succeed_opened_no_pull_request(outcome: str) -> None
         )
 
 
-def test_a_run_that_needs_grooming_asks_its_questions() -> None:
+def test_a_run_that_needs_refining_asks_its_questions() -> None:
     from mini_app_polis.api.contract import AgentRun, AgentRunResult
 
     result = AgentRunResult(
         run_id=_RUN_ID,
-        outcome="needs_grooming",
+        outcome="needs_refining",
         cost_usd=0.31,
         questions=["Which env var name should replace FOLDER_ID?"],
     )
@@ -760,7 +760,7 @@ def test_a_run_that_needs_grooming_asks_its_questions() -> None:
             "task_gid": "1219804099689049",
             "repository": "watcher-cog",
             "model": "claude-sonnet-5-5",
-            "status": "needs_grooming",
+            "status": "needs_refining",
             "questions": result.questions,
             "dispatched_at": "2026-10-23T16:00:00Z",
         }
@@ -769,13 +769,13 @@ def test_a_run_that_needs_grooming_asks_its_questions() -> None:
 
 
 @pytest.mark.parametrize("questions", [[], ["  "]])
-def test_a_run_that_needs_grooming_without_questions_is_refused(
+def test_a_run_that_needs_refining_without_questions_is_refused(
     questions: list[str],
 ) -> None:
     from mini_app_polis.api.contract import AgentRunResult
 
     with pytest.raises(ValidationError):
-        AgentRunResult(run_id=_RUN_ID, outcome="needs_grooming", questions=questions)
+        AgentRunResult(run_id=_RUN_ID, outcome="needs_refining", questions=questions)
 
 
 @pytest.mark.parametrize("outcome", ["failed", "capped"])
@@ -793,13 +793,13 @@ def test_questions_on_another_outcome_are_refused(outcome: str) -> None:
         )
 
 
-def test_a_run_that_needs_grooming_opened_no_pull_request() -> None:
+def test_a_run_that_needs_refining_opened_no_pull_request() -> None:
     from mini_app_polis.api.contract import AgentRunResult
 
     with pytest.raises(ValidationError):
         AgentRunResult(
             run_id=_RUN_ID,
-            outcome="needs_grooming",
+            outcome="needs_refining",
             questions=["Which one?"],
             pr_url="https://github.com/mini-app-polis/watcher-cog/pull/7",
         )

@@ -117,12 +117,12 @@ when the draft or the request is refused.
 `POST /v1/tasks/sweeps`, as the same `claude-session` machine:
 
 ```bash
-doppler run --project owner-session --config prd -- uv run request-sweep --groom --agents
+doppler run --project owner-session --config prd -- uv run request-sweep --refine --agents
 ```
 
-With no flags it is the sweep the hourly schedule sends, which grooms and
-dispatches agents only at the times set for them. `--groom` makes it the
-sweep for `GROOM_TIMES` and `--agents` the one for `AGENT_TIMES`, whatever
+With no flags it is the sweep the hourly schedule sends, which refines and
+dispatches agents only at the times set for them. `--refine` makes it the
+sweep for `REFINE_TIMES` and `--agents` the one for `AGENT_TIMES`, whatever
 the time of day. Neither turns on what is off or raises a spending cap. It
 prints the API's answer, never the API key, and exits non-zero with one
 line saying why when the request is refused. Asking twice runs two sweeps.
@@ -162,20 +162,28 @@ kept body is validated again, so each call gets a model of its own. A warm
 Lambda keeps that copy between invocations. The export also gets a 120 s
 timeout, since a cold build takes longer than the default 30 s.
 
-**Grooming budget stops.** When a grooming run is stopped because the month's
-grooming budget is spent, the groomer reports the stop with
-`mark_grooming_budget_spent()` (`POST /v1/tasks/groomings/budget-spent`, the
-task and its content fingerprint). The API stores it apart from the grooming
-record and returns it on each `GroomingRecord` as `budget_spent_fingerprint`.
+**Refining budget stops.** When a refining run is stopped because the month's
+refining budget is spent, the refiner reports the stop with
+`mark_refining_budget_spent()` (`POST /v1/tasks/refinings/budget-spent`, the
+task and its content fingerprint). The API stores it apart from the refining
+record and returns it on each `RefiningRecord` as `budget_spent_fingerprint`.
 The sweep sends a task that is not ready again when that equals the task's
 current fingerprint, and the API clears the stop when a later claim for that
-task and content is won. The sweep's `GroomingRecordWrite` never carries it.
+task and content is won. The sweep's `RefiningRecordWrite` never carries it.
 
-**Lost groomings.** A `GroomingRecord` also says when its content was last
-sent for grooming with no grooming back yet (`groom_sent_at`) and how many
-times that content has been sent so (`groom_attempts`). The task manager sets
-them when it sends and clears them when it writes an applied grooming, so it
-can send again content whose grooming was lost.
+**Lost refinings.** A `RefiningRecord` also says when its content was last
+sent for refining with no refining back yet (`refine_sent_at`) and how many
+times that content has been sent so (`refine_attempts`). The task manager sets
+them when it sends and clears them when it writes an applied refining, so it
+can send again content whose refining was lost.
+
+**The grooming names.** Grooming was renamed refining. Until every cog has
+moved, the `Grooming*` names, the `/v1/tasks/groomings` routes and their
+client methods, the `task.groom` and `task.groom-proposal` messages, the
+sweep's `groom` flag (and `request-sweep --groom`) and the `needs_grooming`
+agent outcome still work beside the refining ones. The grooming record keeps
+its field names on the wire (`groomed_fingerprint`, `groom_sent_at`,
+`groom_attempts`).
 
 **Contract suite.** `contract/` checks the catalog against the deployed
 development API (TEST-016). It calls every endpoint through the typed methods
@@ -458,7 +466,7 @@ A run report reads as a headline and labelled sections, one item a line,
 never `name=value`:
 
 ```python
-with run_report("groom-sweep", repo="task-manager-cog", run_id=run_id) as report:
+with run_report("refine-sweep", repo="task-manager-cog", run_id=run_id) as report:
     report.updated("task moved to Ready", "MINI-431 · …", link=url)
     report.count("tasks_checked", 42, label="tasks checked", section="Board")
     report.count("agent_spend_usd", "0.10", label="${} spent", section="Agent")

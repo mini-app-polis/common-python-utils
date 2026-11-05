@@ -14,7 +14,7 @@ from mini_app_polis.api.contract import (
     DeejayRunMessage,
     RotationJobMessage,
     RotationSweepMessage,
-    TaskGroomMessage,
+    TaskRefineMessage,
     TaskSweepMessage,
     TranscriptionRunMessage,
 )
@@ -262,5 +262,5 @@ def test_imports_no_google_or_aws_client() -> None:
     assert out.stdout.strip() == ""
 
 
-def test_grooming_kind_carries_its_contract_model() -> None:
-    assert TaskGroomMessage.message_type() == "task.groom"
+def test_refining_kind_carries_its_contract_model() -> None:
+    assert TaskRefineMessage.message_type() == "task.refine"

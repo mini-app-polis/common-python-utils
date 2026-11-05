@@ -641,8 +641,8 @@ def test_comments_are_posted_and_read_back_without_the_history() -> None:
         )
 
     client = _client(handler)
-    client.add_comment("t1", "Grooming questions: why?")
-    assert json.loads(seen[0].content) == {"data": {"text": "Grooming questions: why?"}}
+    client.add_comment("t1", "Refining questions: why?")
+    assert json.loads(seen[0].content) == {"data": {"text": "Refining questions: why?"}}
     assert seen[0].url.path == "/api/1.0/tasks/t1/stories"
     assert client.list_comments("t1") == ["first", "second"]
 

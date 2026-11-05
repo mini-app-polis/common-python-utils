@@ -9,7 +9,7 @@ caller namespaces however it likes (``voicenote.<drive_file_id>``,
 ``discord.<message_id>``).
 
 ``AsanaSection``, ``AsanaTaskRecord`` and ``AsanaStory`` are what the read
-methods return: a board's columns, its tasks as a caller that grooms them
+methods return: a board's columns, its tasks as a caller that refines them
 needs to see them, and a task's history.
 """
 
