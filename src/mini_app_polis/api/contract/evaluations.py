@@ -58,6 +58,25 @@ class PipelineEvaluationCreate(BaseModel):
             "Null for self-reported runs from pipeline cogs."
         ),
     )
+    repo_version: str | None = Field(
+        default=None,
+        max_length=200,
+        description=(
+            "The version of the application that was evaluated: the ref read, "
+            "a release tag on a release-triggered evaluation. With "
+            "standards_version and evaluator_version it says what was graded, "
+            "against what, by what. Null for self-reported runs from pipeline "
+            "cogs, which evaluate no repository."
+        ),
+    )
+    repo_commit: str | None = Field(
+        default=None,
+        max_length=64,
+        description=(
+            "The commit sha of the application at repo_version, as evaluated. "
+            "Null where repo_version is."
+        ),
+    )
     source: str | None = Field(default=None, description="Semantic value for source.")
     flow_name: str | None = Field(
         default=None, description="Semantic value for flow name."
@@ -86,6 +105,13 @@ class PipelineEvaluationItem(BaseModel):
     )
     evaluator_version: str | None = Field(
         default=None, description="Release of evaluator-cog that wrote the finding."
+    )
+    repo_version: str | None = Field(
+        default=None,
+        description="The version of the application evaluated (a ref or tag).",
+    )
+    repo_commit: str | None = Field(
+        default=None, description="The commit sha of the application evaluated."
     )
     source: str | None = Field(default=None, description="Semantic value for source.")
     flow_name: str | None = Field(
