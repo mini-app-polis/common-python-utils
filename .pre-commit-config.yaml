@@ -16,8 +16,9 @@ repos:
     rev: v8.28.0
     hooks:
       - id: gitleaks
-  # ADR-0016. This repository defines the shared facts hook
-  # (.pre-commit-hooks.yaml); here it runs from the working copy.
+  # ADR-0016. Regenerates facts.json before every commit, and stops the
+  # commit when it changed (add facts.json and commit again). Other repos run
+  # the published command; this one runs its own working copy.
   - repo: local
     hooks:
       - id: facts
