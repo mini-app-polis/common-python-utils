@@ -1,3 +1,10 @@
+# [8.3.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.2.0...v8.3.0) (2026-11-06)
+
+
+### Features
+
+* **api:** the catalog display read and fill-up contract and client methods ([56720d8](https://github.com/mini-app-polis/common-python-utils/commit/56720d80a96d2ea850027fc8a0959b52564b4cc8))
+
 # [8.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.1.0...v8.2.0) (2026-11-06)
 
 
