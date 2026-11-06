@@ -182,3 +182,67 @@ class LibraryEntryCreated(BaseModel):
     created: bool = Field(
         ..., description="False when an entry for the song already existed."
     )
+
+
+#: The most catalog entries one display read may ask for.
+CATALOG_DISPLAY_MAX_IDS = 200
+
+
+class CatalogDisplayRequest(BaseModel):
+    """Catalog entries whose owned fields a reconcile compares with files."""
+
+    ids: list[uuid.UUID] = Field(
+        ...,
+        min_length=1,
+        max_length=CATALOG_DISPLAY_MAX_IDS,
+        description="The catalog entries to read, in the order the answers come back.",
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class CatalogDisplay(BaseModel):
+    """A catalog entry's owned fields as a file should carry them: written out
+    by the display rules, so the title includes the version."""
+
+    id: uuid.UUID = Field(..., description="The catalog entry's id.")
+    title: str = Field(..., description="The title, with its version.")
+    artist: str = Field(..., description="The artist, with any featured artists.")
+    release_year: int | None = Field(default=None, description="The release year.")
+    genre: str | None = Field(default=None, description="The broad genre.")
+    subgenre: str | None = Field(default=None, description="The subgenre.")
+    bpm: float | None = Field(default=None, description="BPM, as the rules round it.")
+    label: str | None = Field(default=None, description="The record label.")
+    changed_at: dt.datetime = Field(
+        ...,
+        description=(
+            "When what is shown last changed: the entry, or the display rules, "
+            "whichever is later."
+        ),
+    )
+
+
+class CatalogFillUp(BaseModel):
+    """A library file's values for fields its catalog entry may leave empty.
+
+    Only fields the entry leaves empty are set; a value the catalog has is
+    never overwritten. A genre is placed on the catalog's vocabulary first.
+    """
+
+    release_year: int | None = Field(
+        default=None, ge=1000, le=9999, description="The file's year."
+    )
+    genre: str | None = Field(default=None, description="The file's genre.")
+    bpm: float | None = Field(default=None, gt=0, description="The file's BPM.")
+    label: str | None = Field(default=None, description="The file's label.")
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class CatalogFillUpResult(BaseModel):
+    """The entry after a fill-up, and which fields it filled."""
+
+    entry: CatalogDisplay = Field(..., description="The entry, as it is now.")
+    filled: list[str] = Field(
+        default_factory=list, description="The fields the call set."
+    )
