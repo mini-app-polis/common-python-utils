@@ -48,6 +48,7 @@ import logging as _logging
 import os
 import random
 import time
+import uuid
 from functools import cache
 from typing import Any, cast
 from urllib.parse import quote
@@ -72,6 +73,13 @@ from .contract import (
     Envelope,
     IngestResponseData,
     IngestSet,
+    LibraryEntryCreate,
+    LibraryEntryCreated,
+    LibraryFile,
+    LibraryFileRegister,
+    LibraryFilesAbsentRequest,
+    LibraryFilesAbsentResult,
+    LibraryIdentification,
     LivePlaysIngest,
     LivePlaysResponseData,
     NotificationResult,
@@ -551,6 +559,66 @@ class KaianoApiClient:
         matches its plays, and nothing is recorded.
         """
         return cast(list[CatalogMatch | None], self._call("lookup_catalog", payload))
+
+    def register_library_file(self, payload: LibraryFileRegister) -> LibraryFile:
+        """``POST /v1/catalog/library/files`` — register a library file, or
+        bring its row up to date, keyed by its Drive id.
+
+        The file is present again and its ``last_seen`` is now. Optional
+        fields not set on ``payload`` are not sent, so they keep their value.
+        """
+        return cast(LibraryFile, self._call("register_library_file", payload))
+
+    def mark_library_files_absent(
+        self, payload: LibraryFilesAbsentRequest
+    ) -> LibraryFilesAbsentResult:
+        """``POST /v1/catalog/library/files/absent`` — files gone from the
+        library are marked not present; their rows and links are kept."""
+        return cast(
+            LibraryFilesAbsentResult,
+            self._call("mark_library_files_absent", payload),
+        )
+
+    def list_library_files(
+        self,
+        *,
+        catalog_id: uuid.UUID | None = None,
+        identification_status: LibraryIdentification | None = None,
+        present: bool | None = None,
+        library_root_id: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[LibraryFile]:
+        """``GET /v1/catalog/library/files`` — one page of registered files.
+
+        Filter by the catalog entry they link to, their identification
+        status, whether they are present, or their library root. Unset
+        filters are not sent, so the API's own defaults apply (``limit``
+        100, at most 500). Page with ``offset`` until a page comes back
+        shorter than ``limit``.
+        """
+        params = {
+            key: value
+            for key, value in {
+                "catalog_id": str(catalog_id) if catalog_id else None,
+                "identification_status": identification_status,
+                "present": None if present is None else str(present).lower(),
+                "library_root_id": library_root_id,
+                "limit": limit,
+                "offset": offset,
+            }.items()
+            if value is not None
+        }
+        return cast(list[LibraryFile], self._call("list_library_files", params=params))
+
+    def create_library_entry(self, payload: LibraryEntryCreate) -> LibraryEntryCreated:
+        """``POST /v1/catalog/library/entries`` — a catalog entry, from the
+        library and with no plays, for a song that was never played.
+
+        When the catalog already has the song's entry, that entry comes back
+        with ``created`` false and nothing is made.
+        """
+        return cast(LibraryEntryCreated, self._call("create_library_entry", payload))
 
     def ingest(self, payload: IngestSet) -> IngestResponseData:
         """``POST /v1/ingest`` — one set and its tracks."""

@@ -52,6 +52,16 @@ from .evaluations import (
     PipelineEvaluationItem,
     PipelineEvaluationWriteResult,
 )
+from .library import (
+    LIBRARY_ABSENT_MAX_FILES,
+    LibraryEntryCreate,
+    LibraryEntryCreated,
+    LibraryFile,
+    LibraryFileRegister,
+    LibraryFilesAbsentRequest,
+    LibraryFilesAbsentResult,
+    LibraryIdentification,
+)
 from .notify import (
     NOTIFY_DELIVERY_FAILED,
     NOTIFY_FORWARDED,
@@ -303,6 +313,14 @@ __all__ = [
     "CATALOG_LOOKUP_MAX_TRACKS",
     "CatalogLookupRequest",
     "CatalogMatch",
+    "LIBRARY_ABSENT_MAX_FILES",
+    "LibraryEntryCreate",
+    "LibraryEntryCreated",
+    "LibraryFile",
+    "LibraryFileRegister",
+    "LibraryFilesAbsentRequest",
+    "LibraryFilesAbsentResult",
+    "LibraryIdentification",
     "SpotifyPlaylistIngest",
     "SpotifyPlaylistsIngest",
     "SpotifyPlaylistsIngestResponse",

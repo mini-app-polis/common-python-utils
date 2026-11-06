@@ -160,7 +160,14 @@ NOT_EXERCISED: dict[str, str] = {
 #: 404, not the 401 the access check expects. Listed here, an endpoint is
 #: neither probed nor exercised; take it off once the development API has it,
 #: and exercise it in test_contract.py.
-NOT_DEPLOYED: dict[str, str] = {}
+NOT_DEPLOYED: dict[str, str] = {
+    "register_library_file": "the library registry is not deployed to development yet",
+    "mark_library_files_absent": (
+        "the library registry is not deployed to development yet"
+    ),
+    "list_library_files": "the library registry is not deployed to development yet",
+    "create_library_entry": "the library registry is not deployed to development yet",
+}
 
 
 class ContractConfigError(RuntimeError):
