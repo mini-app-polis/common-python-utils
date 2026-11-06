@@ -41,6 +41,10 @@ from .evaluations import (
     PipelineEvaluationWriteResult,
 )
 from .library import (
+    CatalogDisplay,
+    CatalogDisplayRequest,
+    CatalogFillUp,
+    CatalogFillUpResult,
     LibraryEntryCreate,
     LibraryEntryCreated,
     LibraryFile,
@@ -182,6 +186,24 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         path="/v1/catalog/library/entries",
         request=LibraryEntryCreate,
         response=LibraryEntryCreated,
+        scope="catalog.library.write",
+    ),
+    # The reconcile reads entries as files should carry them, and sends a
+    # file's values up for fields the catalog leaves empty.
+    Endpoint(
+        name="read_catalog_display",
+        method="POST",
+        path="/v1/catalog/display",
+        request=CatalogDisplayRequest,
+        response=list[CatalogDisplay | None],
+        scope="catalog.library.write",
+    ),
+    Endpoint(
+        name="fill_up_catalog_entry",
+        method="POST",
+        path="/v1/catalog/{catalog_id}/fill-up",
+        request=CatalogFillUp,
+        response=CatalogFillUpResult,
         scope="catalog.library.write",
     ),
     Endpoint(

@@ -66,6 +66,10 @@ from .contract import (
     AgentRunFailure,
     AgentRunResult,
     AgentSpend,
+    CatalogDisplay,
+    CatalogDisplayRequest,
+    CatalogFillUp,
+    CatalogFillUpResult,
     CatalogLookupRequest,
     CatalogMatch,
     DeejayRunAccepted,
@@ -619,6 +623,30 @@ class KaianoApiClient:
         with ``created`` false and nothing is made.
         """
         return cast(LibraryEntryCreated, self._call("create_library_entry", payload))
+
+    def read_catalog_display(
+        self, payload: CatalogDisplayRequest
+    ) -> list[CatalogDisplay | None]:
+        """``POST /v1/catalog/display`` — each entry's owned fields as a file
+        should carry them, in the order asked; None for an id the catalog
+        does not have."""
+        return cast(
+            list[CatalogDisplay | None], self._call("read_catalog_display", payload)
+        )
+
+    def fill_up_catalog_entry(
+        self, catalog_id: str | uuid.UUID, payload: CatalogFillUp
+    ) -> CatalogFillUpResult:
+        """``POST /v1/catalog/{catalog_id}/fill-up`` — a file's values for the
+        fields the entry leaves empty; a value the catalog has is kept."""
+        return cast(
+            CatalogFillUpResult,
+            self._call(
+                "fill_up_catalog_entry",
+                payload,
+                path_params={"catalog_id": str(catalog_id)},
+            ),
+        )
 
     def ingest(self, payload: IngestSet) -> IngestResponseData:
         """``POST /v1/ingest`` — one set and its tracks."""

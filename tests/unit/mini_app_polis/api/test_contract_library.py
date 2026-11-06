@@ -11,8 +11,13 @@ from pydantic import ValidationError
 
 from mini_app_polis.api import KaianoApiClient
 from mini_app_polis.api.contract import (
+    CATALOG_DISPLAY_MAX_IDS,
     ENDPOINTS_BY_NAME,
     LIBRARY_ABSENT_MAX_FILES,
+    CatalogDisplay,
+    CatalogDisplayRequest,
+    CatalogFillUp,
+    CatalogFillUpResult,
     LibraryEntryCreate,
     LibraryEntryCreated,
     LibraryFile,
@@ -252,3 +257,76 @@ def test_creating_an_entry_reads_whether_it_was_made(
     assert isinstance(out, LibraryEntryCreated)
     assert out.created is False
     assert out.entry.id == _ENTRY
+
+
+# ── The reconcile's display read and fill-up ──────────────────────────────
+
+
+def test_the_display_read_and_fill_up_are_under_the_library_scope() -> None:
+    display = ENDPOINTS_BY_NAME["read_catalog_display"]
+    assert (display.method, display.path) == ("POST", "/v1/catalog/display")
+    assert display.request is CatalogDisplayRequest
+    fill = ENDPOINTS_BY_NAME["fill_up_catalog_entry"]
+    assert (fill.method, fill.path) == ("POST", "/v1/catalog/{catalog_id}/fill-up")
+    assert fill.request is CatalogFillUp
+    assert {display.scope, fill.scope} == {"catalog.library.write"}
+
+
+def test_a_display_read_takes_between_one_and_the_most_ids() -> None:
+    with pytest.raises(ValidationError):
+        CatalogDisplayRequest(ids=[])
+    with pytest.raises(ValidationError):
+        CatalogDisplayRequest(ids=[_ENTRY] * (CATALOG_DISPLAY_MAX_IDS + 1))
+    assert CatalogDisplayRequest(ids=[_ENTRY]).ids == [_ENTRY]
+
+
+def test_a_fill_up_refuses_fields_it_does_not_own() -> None:
+    with pytest.raises(ValidationError):
+        CatalogFillUp.model_validate({"title": "Temple"})
+    with pytest.raises(ValidationError):
+        CatalogFillUp(release_year=19)
+    assert CatalogFillUp(genre="House").genre == "House"
+
+
+def _display(**overrides: Any) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "id": str(_ENTRY),
+        "title": "Temple (Niko The Kid Remix)",
+        "artist": "Thomas Gold",
+        "release_year": 2019,
+        "genre": "Dance/Electronic",
+        "subgenre": "House",
+        "bpm": 124.0,
+        "label": "Armada",
+        "changed_at": "2026-11-06T10:00:00Z",
+    }
+    row.update(overrides)
+    return row
+
+
+def test_the_client_reads_displays_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    client, calls = _client(monkeypatch, {"data": [_display(), None], "meta": _META})
+    other = uuid.UUID("00000000-0000-4000-8000-000000000000")
+
+    found, missing = client.read_catalog_display(
+        CatalogDisplayRequest(ids=[_ENTRY, other])
+    )
+
+    assert calls == [
+        ("POST", "/v1/catalog/display", {"ids": [str(_ENTRY), str(other)]})
+    ]
+    assert isinstance(found, CatalogDisplay) and found.subgenre == "House"
+    assert missing is None
+
+
+def test_the_client_fills_up_one_entry(monkeypatch: pytest.MonkeyPatch) -> None:
+    client, calls = _client(
+        monkeypatch,
+        {"data": {"entry": _display(), "filled": ["genre"]}, "meta": _META},
+    )
+
+    result = client.fill_up_catalog_entry(_ENTRY, CatalogFillUp(genre="House"))
+
+    assert calls == [("POST", f"/v1/catalog/{_ENTRY}/fill-up", {"genre": "House"})]
+    assert isinstance(result, CatalogFillUpResult)
+    assert result.filled == ["genre"]
