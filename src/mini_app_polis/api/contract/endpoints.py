@@ -40,6 +40,14 @@ from .evaluations import (
     PipelineEvaluationItem,
     PipelineEvaluationWriteResult,
 )
+from .library import (
+    LibraryEntryCreate,
+    LibraryEntryCreated,
+    LibraryFile,
+    LibraryFileRegister,
+    LibraryFilesAbsentRequest,
+    LibraryFilesAbsentResult,
+)
 from .notify import NotificationResult, NotifyRequest
 from .refinings import (
     RefiningBudgetSpentMarked,
@@ -141,6 +149,40 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         request=CatalogLookupRequest,
         response=list[CatalogMatch | None],
         scope="catalog.sets.write",
+    ),
+    # The library registry: deejay-cog registers the library's files and
+    # makes catalog entries for the songs in it that were never played.
+    Endpoint(
+        name="register_library_file",
+        method="POST",
+        path="/v1/catalog/library/files",
+        request=LibraryFileRegister,
+        response=LibraryFile,
+        scope="catalog.library.write",
+    ),
+    Endpoint(
+        name="mark_library_files_absent",
+        method="POST",
+        path="/v1/catalog/library/files/absent",
+        request=LibraryFilesAbsentRequest,
+        response=LibraryFilesAbsentResult,
+        scope="catalog.library.write",
+    ),
+    Endpoint(
+        name="list_library_files",
+        method="GET",
+        path="/v1/catalog/library/files",
+        request=None,
+        response=list[LibraryFile],
+        scope="catalog.library.write",
+    ),
+    Endpoint(
+        name="create_library_entry",
+        method="POST",
+        path="/v1/catalog/library/entries",
+        request=LibraryEntryCreate,
+        response=LibraryEntryCreated,
+        scope="catalog.library.write",
     ),
     Endpoint(
         name="ingest_live_plays",
