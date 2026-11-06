@@ -1,3 +1,10 @@
+# [8.1.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.0.1...v8.1.0) (2026-11-06)
+
+
+### Features
+
+* **facts:** ship a pre-commit hook that regenerates facts.json ([b0d2a4f](https://github.com/mini-app-polis/common-python-utils/commit/b0d2a4f7e966fd42df693caee31cc9598a4ac517))
+
 ## [8.0.1](https://github.com/mini-app-polis/common-python-utils/compare/v8.0.0...v8.0.1) (2026-11-05)
 
 
