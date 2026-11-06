@@ -1,3 +1,10 @@
+# [8.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.1.0...v8.2.0) (2026-11-06)
+
+
+### Features
+
+* **api:** the library registry contract and client methods ([002e5a4](https://github.com/mini-app-polis/common-python-utils/commit/002e5a4974cd1d9559f7856629abe48c6c11e7eb))
+
 # [8.1.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.0.1...v8.1.0) (2026-11-06)
 
 
