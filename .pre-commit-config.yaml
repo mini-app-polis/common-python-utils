@@ -16,3 +16,13 @@ repos:
     rev: v8.28.0
     hooks:
       - id: gitleaks
+  # ADR-0016. This repository defines the shared facts hook
+  # (.pre-commit-hooks.yaml); here it runs from the working copy.
+  - repo: local
+    hooks:
+      - id: facts
+        name: facts generate
+        entry: uv run --frozen facts generate
+        language: system
+        pass_filenames: false
+        always_run: true
