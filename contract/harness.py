@@ -147,6 +147,36 @@ NOT_EXERCISED: dict[str, str] = {
     "get_rotation_incident": (
         "the contract-suite machine holds no secrets.rotation-incidents scope"
     ),
+    # The music library registry and the catalog reads and writes deejay-cog
+    # makes for it. The contract-suite machine holds no catalog.library.write
+    # scope, and a fixture file in the registry would be read as a real one.
+    "register_library_file": (
+        "the contract-suite machine holds no catalog.library.write scope"
+    ),
+    "mark_library_files_absent": (
+        "the contract-suite machine holds no catalog.library.write scope"
+    ),
+    "list_library_files": (
+        "the contract-suite machine holds no catalog.library.write scope"
+    ),
+    "create_library_entry": (
+        "the contract-suite machine holds no catalog.library.write scope"
+    ),
+    "read_catalog_display": (
+        "the contract-suite machine holds no catalog.library.write scope"
+    ),
+    "fill_up_catalog_entry": (
+        "the contract-suite machine holds no catalog.library.write scope"
+    ),
+    "list_library_files_needing_sync": (
+        "the contract-suite machine holds no catalog.library.write scope"
+    ),
+    "mark_library_files_synced": (
+        "the contract-suite machine holds no catalog.library.write scope"
+    ),
+    "report_duplicate_groups": (
+        "the contract-suite machine holds no catalog.library.write scope"
+    ),
     "create_wcs_source": (
         "a source cannot be deleted and every source is in the unfiltered "
         "wiki export, so a fixture would stay in dev's wiki for good"
@@ -160,21 +190,7 @@ NOT_EXERCISED: dict[str, str] = {
 #: 404, not the 401 the access check expects. Listed here, an endpoint is
 #: neither probed nor exercised; take it off once the development API has it,
 #: and exercise it in test_contract.py.
-NOT_DEPLOYED: dict[str, str] = {
-    "register_library_file": "the library registry is not deployed to development yet",
-    "mark_library_files_absent": (
-        "the library registry is not deployed to development yet"
-    ),
-    "list_library_files": "the library registry is not deployed to development yet",
-    "create_library_entry": "the library registry is not deployed to development yet",
-    "read_catalog_display": "the catalog display read is not deployed to development yet",
-    "fill_up_catalog_entry": "the catalog fill-up is not deployed to development yet",
-    "list_library_files_needing_sync": (
-        "the sync listing is not deployed to development yet"
-    ),
-    "mark_library_files_synced": "the sync marking is not deployed to development yet",
-    "report_duplicate_groups": "the duplicate report is not deployed to development yet",
-}
+NOT_DEPLOYED: dict[str, str] = {}
 
 
 class ContractConfigError(RuntimeError):
