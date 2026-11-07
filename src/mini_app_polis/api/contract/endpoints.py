@@ -55,6 +55,10 @@ from .library import (
     LibraryFilesAbsentResult,
     LibraryFilesSynced,
     LibraryFilesSyncedResult,
+    ReconcileApprovals,
+    ReconcileApprovalsSet,
+    ReconcileReport,
+    ReconcileReportResult,
 )
 from .notify import NotificationResult, NotifyRequest
 from .refinings import (
@@ -236,6 +240,34 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         path="/v1/catalog/{catalog_id}/fill-up",
         request=CatalogFillUp,
         response=CatalogFillUpResult,
+        scope="catalog.library.write",
+    ),
+    # The reconcile's differences, for the owner to review and approve on
+    # the WCS site, and the approvals its write runs apply. Seeding carries
+    # approvals given before the API held them; it is refused once any are
+    # set.
+    Endpoint(
+        name="report_reconcile_differences",
+        method="POST",
+        path="/v1/catalog/library/reconcile/differences",
+        request=ReconcileReport,
+        response=ReconcileReportResult,
+        scope="catalog.library.write",
+    ),
+    Endpoint(
+        name="read_reconcile_approvals",
+        method="GET",
+        path="/v1/catalog/library/reconcile/approvals",
+        request=None,
+        response=ReconcileApprovals,
+        scope="catalog.library.write",
+    ),
+    Endpoint(
+        name="seed_reconcile_approvals",
+        method="POST",
+        path="/v1/catalog/library/reconcile/approvals/seed",
+        request=ReconcileApprovalsSet,
+        response=ReconcileApprovals,
         scope="catalog.library.write",
     ),
     Endpoint(

@@ -177,6 +177,15 @@ NOT_EXERCISED: dict[str, str] = {
     "report_duplicate_groups": (
         "the contract-suite machine holds no catalog.library.write scope"
     ),
+    "report_reconcile_differences": (
+        "the contract-suite machine holds no catalog.library.write scope"
+    ),
+    "read_reconcile_approvals": (
+        "the contract-suite machine holds no catalog.library.write scope"
+    ),
+    "seed_reconcile_approvals": (
+        "the contract-suite machine holds no catalog.library.write scope"
+    ),
     "create_wcs_source": (
         "a source cannot be deleted and every source is in the unfiltered "
         "wiki export, so a fixture would stay in dev's wiki for good"
@@ -190,7 +199,11 @@ NOT_EXERCISED: dict[str, str] = {
 #: 404, not the 401 the access check expects. Listed here, an endpoint is
 #: neither probed nor exercised; take it off once the development API has it,
 #: and exercise it in test_contract.py.
-NOT_DEPLOYED: dict[str, str] = {}
+NOT_DEPLOYED: dict[str, str] = {
+    "report_reconcile_differences": "new: the API serves it after its next deploy",
+    "read_reconcile_approvals": "new: the API serves it after its next deploy",
+    "seed_reconcile_approvals": "new: the API serves it after its next deploy",
+}
 
 
 class ContractConfigError(RuntimeError):

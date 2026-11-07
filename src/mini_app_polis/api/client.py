@@ -95,6 +95,10 @@ from .contract import (
     PipelineEvaluationCreate,
     PipelineEvaluationItem,
     PipelineEvaluationWriteResult,
+    ReconcileApprovals,
+    ReconcileApprovalsSet,
+    ReconcileReport,
+    ReconcileReportResult,
     RefiningBudgetSpentMarked,
     RefiningBudgetSpentRequest,
     RefiningClaimReleased,
@@ -692,6 +696,30 @@ class KaianoApiClient:
         return cast(
             list[CatalogDisplay | None], self._call("read_catalog_display", payload)
         )
+
+    def report_reconcile_differences(
+        self, payload: ReconcileReport
+    ) -> ReconcileReportResult:
+        """``POST /v1/catalog/library/reconcile/differences`` — the files a
+        reconcile run compared and their differences, which replace what the
+        API holds for those files."""
+        return cast(
+            ReconcileReportResult,
+            self._call("report_reconcile_differences", payload),
+        )
+
+    def read_reconcile_approvals(self) -> ReconcileApprovals:
+        """``GET /v1/catalog/library/reconcile/approvals`` — what the owner
+        approved for the reconcile's write runs (empty, with no
+        ``updated_at``, until any are set)."""
+        return cast(ReconcileApprovals, self._call("read_reconcile_approvals"))
+
+    def seed_reconcile_approvals(
+        self, payload: ReconcileApprovalsSet
+    ) -> ReconcileApprovals:
+        """``POST /v1/catalog/library/reconcile/approvals/seed`` — approvals
+        given before the API held them; refused (409) once any are set."""
+        return cast(ReconcileApprovals, self._call("seed_reconcile_approvals", payload))
 
     def fill_up_catalog_entry(
         self, catalog_id: str | uuid.UUID, payload: CatalogFillUp

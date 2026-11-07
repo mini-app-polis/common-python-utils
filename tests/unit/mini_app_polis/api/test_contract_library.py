@@ -16,6 +16,7 @@ from mini_app_polis.api.contract import (
     DUPLICATE_REPORT_MAX_GROUPS,
     ENDPOINTS_BY_NAME,
     LIBRARY_ABSENT_MAX_FILES,
+    RECONCILE_REPORT_MAX_FILES,
     CatalogDisplay,
     CatalogDisplayRequest,
     CatalogFillUp,
@@ -33,6 +34,10 @@ from mini_app_polis.api.contract import (
     LibraryFilesSynced,
     LibraryFilesSyncedResult,
     LibraryFileTags,
+    ReconcileApprovalsSet,
+    ReconcileDifference,
+    ReconcileReport,
+    ReconcileReportResult,
 )
 
 _META = {"count": 1, "total": 1, "version": "test"}
@@ -540,3 +545,105 @@ def test_tags_answered_with_a_field_this_version_lacks_still_read() -> None:
 def test_a_row_without_tags_reads_as_none() -> None:
     row = LibraryFile.model_validate(_file_row())
     assert row.tags is None and row.identify_note is None
+
+
+def _difference(file_id: str = "a", kind: str = "other") -> dict[str, Any]:
+    return {
+        "drive_file_id": file_id,
+        "path": "Pop/song.mp3",
+        "field": "title",
+        "kind": kind,
+        "file_value": "Song",
+        "catalog_value": "Song (Remix)",
+    }
+
+
+def test_the_reconcile_endpoints_are_under_the_library_scope() -> None:
+    expected = {
+        "report_reconcile_differences": (
+            "POST",
+            "/v1/catalog/library/reconcile/differences",
+            ReconcileReport,
+        ),
+        "read_reconcile_approvals": (
+            "GET",
+            "/v1/catalog/library/reconcile/approvals",
+            None,
+        ),
+        "seed_reconcile_approvals": (
+            "POST",
+            "/v1/catalog/library/reconcile/approvals/seed",
+            ReconcileApprovalsSet,
+        ),
+    }
+    for name, shape in expected.items():
+        endpoint = ENDPOINTS_BY_NAME[name]
+        assert (endpoint.method, endpoint.path, endpoint.request) == shape
+        assert endpoint.scope == "catalog.library.write"
+
+
+def test_a_reconcile_report_names_every_file_it_has_differences_for() -> None:
+    ReconcileReport.model_validate(
+        {"run_id": "r", "compared": ["a", "b"], "differences": [_difference()]}
+    )
+    with pytest.raises(ValidationError):
+        ReconcileReport.model_validate(
+            {"run_id": "r", "compared": ["b"], "differences": [_difference()]}
+        )
+    with pytest.raises(ValidationError):
+        ReconcileDifference.model_validate({**_difference(), "kind": "vibes"})
+    with pytest.raises(ValidationError):
+        ReconcileReport.model_validate(
+            {
+                "run_id": "r",
+                "compared": [f"f{n}" for n in range(RECONCILE_REPORT_MAX_FILES + 1)],
+            }
+        )
+
+
+def test_other_is_approved_file_by_file_not_as_a_kind() -> None:
+    ReconcileApprovalsSet(kinds=["fill_up"], files={"a": ["title", "catalog_id"]})
+    with pytest.raises(ValidationError):
+        ReconcileApprovalsSet.model_validate({"kinds": ["other"]})
+    with pytest.raises(ValidationError):
+        ReconcileApprovalsSet.model_validate({"files": {"a": ["subgenre"]}})
+
+
+def test_reporting_differences_posts_them(monkeypatch: pytest.MonkeyPatch) -> None:
+    client, calls = _client(
+        monkeypatch,
+        {"data": {"open_differences": 1, "files_with_differences": 1}, "meta": _META},
+    )
+
+    result = client.report_reconcile_differences(
+        ReconcileReport.model_validate(
+            {"run_id": "r", "compared": ["a"], "differences": [_difference()]}
+        )
+    )
+
+    [(method, path, body)] = calls
+    assert (method, path) == ("POST", "/v1/catalog/library/reconcile/differences")
+    assert body["differences"][0]["catalog_value"] == "Song (Remix)"
+    assert result == ReconcileReportResult(open_differences=1, files_with_differences=1)
+
+
+def test_reading_approvals_gets_them(monkeypatch: pytest.MonkeyPatch) -> None:
+    client, calls = _client(
+        monkeypatch,
+        {
+            "data": {
+                "kinds": ["fill_up"],
+                "files": {"a": ["title"]},
+                "updated_at": "2026-11-07T21:00:00Z",
+                "updated_by": "owner",
+            },
+            "meta": _META,
+        },
+    )
+
+    approvals = client.read_reconcile_approvals()
+
+    [(method, path, _)] = calls
+    assert (method, path) == ("GET", "/v1/catalog/library/reconcile/approvals")
+    assert approvals.kinds == ["fill_up"]
+    assert approvals.files == {"a": ["title"]}
