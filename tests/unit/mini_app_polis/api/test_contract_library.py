@@ -3,6 +3,7 @@ catalog entries made for songs that were never played."""
 
 from __future__ import annotations
 
+import datetime as dt
 import uuid
 from typing import Any
 
@@ -24,6 +25,8 @@ from mini_app_polis.api.contract import (
     LibraryFileRegister,
     LibraryFilesAbsentRequest,
     LibraryFilesAbsentResult,
+    LibraryFilesSynced,
+    LibraryFilesSyncedResult,
 )
 
 _META = {"count": 1, "total": 1, "version": "test"}
@@ -330,3 +333,68 @@ def test_the_client_fills_up_one_entry(monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls == [("POST", f"/v1/catalog/{_ENTRY}/fill-up", {"genre": "House"})]
     assert isinstance(result, CatalogFillUpResult)
     assert result.filled == ["genre"]
+
+
+def test_the_sync_endpoints_are_under_the_library_scope() -> None:
+    listing = ENDPOINTS_BY_NAME["list_library_files_needing_sync"]
+    assert (listing.method, listing.path, listing.request) == (
+        "GET",
+        "/v1/catalog/library/files/needing-sync",
+        None,
+    )
+    marking = ENDPOINTS_BY_NAME["mark_library_files_synced"]
+    assert (marking.method, marking.path, marking.request) == (
+        "POST",
+        "/v1/catalog/library/files/synced",
+        LibraryFilesSynced,
+    )
+    assert listing.scope == marking.scope == "catalog.library.write"
+
+
+def test_synced_takes_between_one_and_the_most_files_and_a_time() -> None:
+    when = dt.datetime(2026, 11, 7, tzinfo=dt.UTC)
+    with pytest.raises(ValidationError):
+        LibraryFilesSynced(drive_file_ids=[], synced_at=when)
+    with pytest.raises(ValidationError):
+        LibraryFilesSynced(
+            drive_file_ids=["x"] * (LIBRARY_ABSENT_MAX_FILES + 1), synced_at=when
+        )
+    with pytest.raises(ValidationError):
+        LibraryFilesSynced.model_validate({"drive_file_ids": ["a"]})
+
+
+def test_listing_needing_sync_sends_only_the_arguments_given(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, calls = _client(monkeypatch, {"data": [_file_row()], "meta": _META})
+
+    rows = client.list_library_files_needing_sync(library_root_id="root", limit=50)
+
+    assert calls == [
+        (
+            "GET",
+            "/v1/catalog/library/files/needing-sync",
+            {"library_root_id": "root", "limit": 50},
+        )
+    ]
+    assert [r.drive_file_id for r in rows] == ["drive-1"]
+
+
+def test_marking_synced_posts_the_ids_and_the_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, calls = _client(monkeypatch, {"data": {"marked": 1}, "meta": _META})
+    when = dt.datetime(2026, 11, 7, 4, 41, tzinfo=dt.UTC)
+
+    result = client.mark_library_files_synced(
+        LibraryFilesSynced(drive_file_ids=["a"], synced_at=when)
+    )
+
+    assert calls == [
+        (
+            "POST",
+            "/v1/catalog/library/files/synced",
+            {"drive_file_ids": ["a"], "synced_at": "2026-11-07T04:41:00Z"},
+        )
+    ]
+    assert result == LibraryFilesSyncedResult(marked=1)

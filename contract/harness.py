@@ -169,6 +169,10 @@ NOT_DEPLOYED: dict[str, str] = {
     "create_library_entry": "the library registry is not deployed to development yet",
     "read_catalog_display": "the catalog display read is not deployed to development yet",
     "fill_up_catalog_entry": "the catalog fill-up is not deployed to development yet",
+    "list_library_files_needing_sync": (
+        "the sync listing is not deployed to development yet"
+    ),
+    "mark_library_files_synced": "the sync marking is not deployed to development yet",
 }
 
 

@@ -150,6 +150,33 @@ class LibraryFilesAbsentResult(BaseModel):
     )
 
 
+class LibraryFilesSynced(BaseModel):
+    """Files whose owned fields now carry the catalog's values: each one's
+    ``last_synced`` becomes ``synced_at``.
+
+    An id the registry does not hold is ignored, so a retried call does no
+    harm.
+    """
+
+    drive_file_ids: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=LIBRARY_ABSENT_MAX_FILES,
+        description="The Drive ids of the files written.",
+    )
+    synced_at: dt.datetime = Field(
+        ..., description="When the catalog's values were written to them."
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class LibraryFilesSyncedResult(BaseModel):
+    """How many registered files the call marked synced."""
+
+    marked: int = Field(..., ge=0, description="Files whose last sync was set.")
+
+
 class LibraryEntryCreate(BaseModel):
     """A catalog entry for a song in the library that has never been played.
 

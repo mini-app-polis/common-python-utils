@@ -51,6 +51,8 @@ from .library import (
     LibraryFileRegister,
     LibraryFilesAbsentRequest,
     LibraryFilesAbsentResult,
+    LibraryFilesSynced,
+    LibraryFilesSyncedResult,
 )
 from .notify import NotificationResult, NotifyRequest
 from .refinings import (
@@ -178,6 +180,24 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         path="/v1/catalog/library/files",
         request=None,
         response=list[LibraryFile],
+        scope="catalog.library.write",
+    ),
+    # The nightly sync: present, linked files whose entry or the display
+    # rules changed after the file last had the catalog's values written.
+    Endpoint(
+        name="list_library_files_needing_sync",
+        method="GET",
+        path="/v1/catalog/library/files/needing-sync",
+        request=None,
+        response=list[LibraryFile],
+        scope="catalog.library.write",
+    ),
+    Endpoint(
+        name="mark_library_files_synced",
+        method="POST",
+        path="/v1/catalog/library/files/synced",
+        request=LibraryFilesSynced,
+        response=LibraryFilesSyncedResult,
         scope="catalog.library.write",
     ),
     Endpoint(
