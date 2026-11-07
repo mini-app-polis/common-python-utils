@@ -155,6 +155,35 @@ def test_a_library_entry_needs_a_title_and_artist_and_refuses_extras() -> None:
         )
     entry = LibraryEntryCreate(title="Temple", artist="Thomas Gold", bpm=124.0)
     assert entry.bpm == 124.0
+    assert entry.preview is False
+
+
+def test_a_library_entry_preview_is_sent_only_when_asked_for(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    answer = {
+        "data": {
+            "entry": {"id": str(_ENTRY), "title": "Temple", "artist": "Thomas Gold"},
+            "created": False,
+            "previewed": True,
+        },
+        "meta": _META,
+    }
+    client, calls = _client(monkeypatch, answer)
+
+    out = client.create_library_entry(
+        LibraryEntryCreate(title="Temple", artist="Thomas Gold", preview=True)
+    )
+
+    assert calls == [
+        (
+            "POST",
+            "/v1/catalog/library/entries",
+            {"title": "Temple", "artist": "Thomas Gold", "preview": True},
+        )
+    ]
+    assert out.previewed is True
+    assert out.created is False
 
 
 def test_a_library_file_round_trips_and_tolerates_new_fields() -> None:
@@ -271,6 +300,7 @@ def test_creating_an_entry_reads_whether_it_was_made(
     assert isinstance(out, LibraryEntryCreated)
     assert out.created is False
     assert out.entry.id == _ENTRY
+    assert out.previewed is False
 
 
 # ── The reconcile's display read and fill-up ──────────────────────────────

@@ -683,7 +683,9 @@ class KaianoApiClient:
         library and with no plays, for a song that was never played.
 
         When the catalog already has the song's entry, that entry comes back
-        with ``created`` false and nothing is made.
+        with ``created`` false and nothing is made. With ``preview`` set,
+        nothing is saved: a song the catalog lacks comes back as the entry
+        that would be made, with ``previewed`` true.
         """
         return cast(LibraryEntryCreated, self._call("create_library_entry", payload))
 
