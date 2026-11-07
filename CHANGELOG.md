@@ -1,3 +1,10 @@
+# [8.10.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.9.0...v8.10.0) (2026-11-07)
+
+
+### Features
+
+* **library:** a library entry can be previewed: the entry the call would make, nothing saved ([9bfef54](https://github.com/mini-app-polis/common-python-utils/commit/9bfef5483044e333652d2af1fc0a7fe7e2e0d1ee))
+
 # [8.9.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.8.0...v8.9.0) (2026-11-07)
 
 
