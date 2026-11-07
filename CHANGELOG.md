@@ -1,3 +1,10 @@
+# [8.4.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.3.0...v8.4.0) (2026-11-07)
+
+
+### Features
+
+* **api:** the library sync contract and client methods ([afbca4d](https://github.com/mini-app-polis/common-python-utils/commit/afbca4d6bade75490802e98c8ebf878ce7a03bb9))
+
 # [8.3.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.2.0...v8.3.0) (2026-11-06)
 
 
