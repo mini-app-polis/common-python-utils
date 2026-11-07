@@ -74,6 +74,8 @@ from .contract import (
     CatalogMatch,
     DeejayRunAccepted,
     DeejayRunRequest,
+    DuplicateReport,
+    DuplicateReportResult,
     Envelope,
     IngestResponseData,
     IngestSet,
@@ -592,13 +594,15 @@ class KaianoApiClient:
         identification_status: LibraryIdentification | None = None,
         present: bool | None = None,
         library_root_id: str | None = None,
+        trash_requested: bool | None = None,
         limit: int | None = None,
         offset: int | None = None,
     ) -> list[LibraryFile]:
         """``GET /v1/catalog/library/files`` — one page of registered files.
 
         Filter by the catalog entry they link to, their identification
-        status, whether they are present, or their library root. Unset
+        status, whether they are present, their library root, or whether
+        the owner asked for them to go to Drive's trash. Unset
         filters are not sent, so the API's own defaults apply (``limit``
         100, at most 500). Page with ``offset`` until a page comes back
         shorter than ``limit``.
@@ -610,6 +614,9 @@ class KaianoApiClient:
                 "identification_status": identification_status,
                 "present": None if present is None else str(present).lower(),
                 "library_root_id": library_root_id,
+                "trash_requested": (
+                    None if trash_requested is None else str(trash_requested).lower()
+                ),
                 "limit": limit,
                 "offset": offset,
             }.items()
@@ -655,6 +662,16 @@ class KaianoApiClient:
         return cast(
             LibraryFilesSyncedResult,
             self._call("mark_library_files_synced", payload),
+        )
+
+    def report_duplicate_groups(
+        self, payload: DuplicateReport
+    ) -> DuplicateReportResult:
+        """``POST /v1/catalog/library/duplicates`` — the duplicate groups a
+        report run found under one root; they replace the open groups, and
+        groups the owner already resolved are kept."""
+        return cast(
+            DuplicateReportResult, self._call("report_duplicate_groups", payload)
         )
 
     def create_library_entry(self, payload: LibraryEntryCreate) -> LibraryEntryCreated:

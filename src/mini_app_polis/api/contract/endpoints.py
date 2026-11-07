@@ -45,6 +45,8 @@ from .library import (
     CatalogDisplayRequest,
     CatalogFillUp,
     CatalogFillUpResult,
+    DuplicateReport,
+    DuplicateReportResult,
     LibraryEntryCreate,
     LibraryEntryCreated,
     LibraryFile,
@@ -198,6 +200,16 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         path="/v1/catalog/library/files/synced",
         request=LibraryFilesSynced,
         response=LibraryFilesSyncedResult,
+        scope="catalog.library.write",
+    ),
+    # The duplicate report: groups of library files that look like copies
+    # of one song, for the owner to resolve on the WCS site.
+    Endpoint(
+        name="report_duplicate_groups",
+        method="POST",
+        path="/v1/catalog/library/duplicates",
+        request=DuplicateReport,
+        response=DuplicateReportResult,
         scope="catalog.library.write",
     ),
     Endpoint(
