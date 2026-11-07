@@ -1,3 +1,10 @@
+# [8.6.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.5.0...v8.6.0) (2026-11-07)
+
+
+### Features
+
+* **api:** a library file's own tags and why it could not be identified ([ed78e50](https://github.com/mini-app-polis/common-python-utils/commit/ed78e50bc25f3a6436e6e0dc2232e9c034d38987))
+
 # [8.5.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.4.0...v8.5.0) (2026-11-07)
 
 
