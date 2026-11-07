@@ -126,7 +126,7 @@ class LibraryFile(BaseModel):
 
 
 class LibraryFilesAbsentRequest(BaseModel):
-    """Files no longer in the library: each is marked not present.
+    """Files gone from the library: each is marked not present.
 
     Their rows, links and catalog entries are kept. An id the registry does
     not hold is ignored, so a retried call does no harm.
