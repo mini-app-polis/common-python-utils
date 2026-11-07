@@ -1578,3 +1578,23 @@ def test_remove_permission_lets_a_drive_error_propagate(monkeypatch, as_http_err
     with pytest.raises(Exception, match="forbidden"):
         drive.remove_permission("f", "dj@example.com")
     svc.permissions.return_value.delete.assert_not_called()
+
+
+def test_a_small_update_is_one_request_and_a_large_one_resumable(
+    tmp_path: Path,
+) -> None:
+    from mini_app_polis.google import drive as drive_mod
+    from mini_app_polis.google.drive import DriveFacade
+
+    svc = FakeDriveService()
+    drive = DriveFacade(svc)
+    small = tmp_path / "state.json"
+    small.write_text("{}")
+    large = tmp_path / "song.mp3"
+    large.write_bytes(b"x" * (drive_mod.SIMPLE_UPLOAD_MAX_BYTES + 1))
+
+    drive.update_file("a", str(small))
+    drive.update_file("b", str(large))
+
+    media = [kw["media_body"] for op, kw in svc.calls if op == "update"]
+    assert [m.resumable for m in media] == [False, True]
