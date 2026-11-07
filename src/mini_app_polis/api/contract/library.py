@@ -227,6 +227,13 @@ class LibraryEntryCreate(BaseModel):
     release_year: int | None = Field(
         default=None, ge=1000, le=9999, description="The release year."
     )
+    preview: bool = Field(
+        default=False,
+        description=(
+            "Save nothing: answer with the entry the call would make, written "
+            "out by the same parsing and display rules, or the existing entry."
+        ),
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -237,6 +244,13 @@ class LibraryEntryCreated(BaseModel):
     entry: CatalogMatch = Field(..., description="The catalog entry.")
     created: bool = Field(
         ..., description="False when an entry for the song already existed."
+    )
+    previewed: bool = Field(
+        default=False,
+        description=(
+            "True when a preview would make this entry: nothing was saved, "
+            "and its id is not a real catalog id."
+        ),
     )
 
 
