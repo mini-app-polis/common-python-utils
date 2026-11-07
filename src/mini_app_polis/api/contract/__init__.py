@@ -65,6 +65,8 @@ from .library import (
     LibraryFileRegister,
     LibraryFilesAbsentRequest,
     LibraryFilesAbsentResult,
+    LibraryFilesSynced,
+    LibraryFilesSyncedResult,
     LibraryIdentification,
 )
 from .notify import (
@@ -330,6 +332,8 @@ __all__ = [
     "LibraryFileRegister",
     "LibraryFilesAbsentRequest",
     "LibraryFilesAbsentResult",
+    "LibraryFilesSynced",
+    "LibraryFilesSyncedResult",
     "LibraryIdentification",
     "SpotifyPlaylistIngest",
     "SpotifyPlaylistsIngest",

@@ -83,6 +83,8 @@ from .contract import (
     LibraryFileRegister,
     LibraryFilesAbsentRequest,
     LibraryFilesAbsentResult,
+    LibraryFilesSynced,
+    LibraryFilesSyncedResult,
     LibraryIdentification,
     LivePlaysIngest,
     LivePlaysResponseData,
@@ -614,6 +616,46 @@ class KaianoApiClient:
             if value is not None
         }
         return cast(list[LibraryFile], self._call("list_library_files", params=params))
+
+    def list_library_files_needing_sync(
+        self,
+        *,
+        library_root_id: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[LibraryFile]:
+        """``GET /v1/catalog/library/files/needing-sync`` — one page of the
+        present, linked files whose catalog entry, or the display rules,
+        changed after the catalog's values were last written to them (or
+        that never had them written).
+
+        Unset arguments are not sent, so the API's defaults apply (``limit``
+        100, at most 500). Page with ``offset`` until a page comes back
+        shorter than ``limit``.
+        """
+        params = {
+            key: value
+            for key, value in {
+                "library_root_id": library_root_id,
+                "limit": limit,
+                "offset": offset,
+            }.items()
+            if value is not None
+        }
+        return cast(
+            list[LibraryFile],
+            self._call("list_library_files_needing_sync", params=params),
+        )
+
+    def mark_library_files_synced(
+        self, payload: LibraryFilesSynced
+    ) -> LibraryFilesSyncedResult:
+        """``POST /v1/catalog/library/files/synced`` — the files named now
+        carry the catalog's values, as of ``payload.synced_at``."""
+        return cast(
+            LibraryFilesSyncedResult,
+            self._call("mark_library_files_synced", payload),
+        )
 
     def create_library_entry(self, payload: LibraryEntryCreate) -> LibraryEntryCreated:
         """``POST /v1/catalog/library/entries`` — a catalog entry, from the
