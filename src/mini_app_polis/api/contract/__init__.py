@@ -73,6 +73,7 @@ from .library import (
     LibraryFilesAbsentResult,
     LibraryFilesSynced,
     LibraryFilesSyncedResult,
+    LibraryFileTags,
     LibraryIdentification,
 )
 from .notify import (
@@ -336,6 +337,7 @@ __all__ = [
     "LibraryEntryCreated",
     "LibraryFile",
     "LibraryFileRegister",
+    "LibraryFileTags",
     "LibraryFilesAbsentRequest",
     "LibraryFilesAbsentResult",
     "LibraryFilesSynced",

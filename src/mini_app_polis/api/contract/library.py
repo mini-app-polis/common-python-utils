@@ -28,6 +28,18 @@ LibraryIdentification = Literal["identified", "unidentified"]
 LIBRARY_ABSENT_MAX_FILES = 500
 
 
+class LibraryFileTags(BaseModel):
+    """A library file's own tags as last read, shown to the owner for a file
+    the nightly run could not identify."""
+
+    title: str | None = Field(default=None, description="Its title tag.")
+    artist: str | None = Field(default=None, description="Its artist tag.")
+    genre: str | None = Field(default=None, description="Its genre tag.")
+    bpm: str | None = Field(default=None, description="Its BPM tag, as written.")
+    year: str | None = Field(default=None, description="Its year tag.")
+    label: str | None = Field(default=None, description="Its record label tag.")
+
+
 class LibraryFileRegister(BaseModel):
     """A library file, registered or brought up to date.
 
@@ -81,6 +93,17 @@ class LibraryFileRegister(BaseModel):
         default=None,
         description="When the catalog's values were last written to the file.",
     )
+    tags: LibraryFileTags | None = Field(
+        default=None,
+        description="The file's own tags as last read; sent for an unidentified file.",
+    )
+    identify_note: str | None = Field(
+        default=None,
+        description=(
+            "Why the nightly run could not identify the file, with the "
+            "fingerprint's best guess when it had one."
+        ),
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -122,6 +145,12 @@ class LibraryFile(BaseModel):
     last_seen: dt.datetime = Field(..., description="When it was last registered.")
     last_synced: dt.datetime | None = Field(
         default=None, description="When the catalog's values were last written to it."
+    )
+    tags: LibraryFileTags | None = Field(
+        default=None, description="Its own tags as last registered."
+    )
+    identify_note: str | None = Field(
+        default=None, description="Why the nightly run could not identify it."
     )
 
 
