@@ -1,3 +1,10 @@
+# [8.7.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.6.1...v8.7.0) (2026-11-07)
+
+
+### Features
+
+* **facts:** generate --stage adds facts.json to the commit being made when it changed ([3c2e22c](https://github.com/mini-app-polis/common-python-utils/commit/3c2e22cd3deea8ebb25c800f4234e5c1aa5816bd))
+
 ## [8.6.1](https://github.com/mini-app-polis/common-python-utils/compare/v8.6.0...v8.6.1) (2026-11-07)
 
 
