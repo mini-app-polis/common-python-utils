@@ -42,6 +42,11 @@ def _is_refused_recipient(error: HttpError) -> bool:
     return "invalidsharingrequest" in str(error).lower()
 
 
+#: Files up to this size are updated in one request rather than a resumable
+#: upload (two at least): Drive's own guidance for small files.
+SIMPLE_UPLOAD_MAX_BYTES = 5 * 1024 * 1024
+
+
 def clear_folder_cache() -> None:
     """Empty the process-wide folder-id cache used by ``ensure_folder``.
 
@@ -678,9 +683,15 @@ class DriveFacade:
         *,
         mime_type: str | None = None,
     ) -> None:
-        """Upload a new version of an existing Drive file (in-place update)."""
+        """Upload a new version of an existing Drive file (in-place update).
 
-        media = MediaFileUpload(filepath, mimetype=mime_type, resumable=True)
+        A file up to :data:`SIMPLE_UPLOAD_MAX_BYTES` goes in one request; a
+        larger one as a resumable upload, which takes a request more to open
+        but survives a dropped connection.
+        """
+
+        resumable = os.path.getsize(filepath) > SIMPLE_UPLOAD_MAX_BYTES
+        media = MediaFileUpload(filepath, mimetype=mime_type, resumable=resumable)
 
         execute_with_retry(
             lambda: (
