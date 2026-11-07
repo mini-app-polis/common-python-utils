@@ -1,3 +1,10 @@
+# [8.9.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.8.0...v8.9.0) (2026-11-07)
+
+
+### Features
+
+* **contract:** library reconcile differences and approvals endpoints ([f83d29e](https://github.com/mini-app-polis/common-python-utils/commit/f83d29ebd9b9876dab5204f5387167f99151662b))
+
 # [8.8.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.7.0...v8.8.0) (2026-11-07)
 
 
