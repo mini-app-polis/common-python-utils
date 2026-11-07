@@ -388,3 +388,118 @@ class CatalogFillUpResult(BaseModel):
     filled: list[str] = Field(
         default_factory=list, description="The fields the call set."
     )
+
+
+#: The kinds a library reconcile files a difference under (deejay-cog's
+#: library_reconcile). ``other`` is approved file by file, never as a kind.
+ReconcileKind = Literal[
+    "case_punctuation",
+    "featured_moved",
+    "artist_joiner",
+    "version_brackets",
+    "genre_remapped",
+    "genre_filled",
+    "year_filled",
+    "year_earlier",
+    "year_later",
+    "year_differs",
+    "bpm_rounding",
+    "bpm_differs",
+    "label_differs",
+    "fill_up",
+    "other",
+]
+
+#: The fields a reconcile compares (and ``catalog_id``, the file's link tag).
+ReconcileField = Literal[
+    "title", "artist", "year", "genre", "bpm", "label", "catalog_id"
+]
+
+#: The most files one reconcile report may name as compared.
+RECONCILE_REPORT_MAX_FILES = 500
+
+
+class ReconcileDifference(BaseModel):
+    """One field where a library file and its catalog entry differ."""
+
+    drive_file_id: str = Field(..., min_length=1, description="The Drive file's id.")
+    path: str = Field(..., description="The file's path under the library root.")
+    field: ReconcileField = Field(..., description="The field that differs.")
+    kind: ReconcileKind = Field(..., description="The kind it is filed under.")
+    file_value: str = Field(..., description="The file's value ('' when empty).")
+    catalog_value: str = Field(..., description="The catalog's value ('' when empty).")
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReconcileReport(BaseModel):
+    """The files one reconcile run compared, and their differences.
+
+    For every file named in ``compared``, the report replaces what the API
+    holds: its differences become these, and a compared file with none has
+    none left. Files the run did not compare keep theirs.
+    """
+
+    run_id: str = Field(..., min_length=1, description="The run that compared them.")
+    compared: list[str] = Field(
+        ...,
+        max_length=RECONCILE_REPORT_MAX_FILES,
+        description="The Drive ids of every file the run compared.",
+    )
+    differences: list[ReconcileDifference] = Field(
+        default_factory=list,
+        max_length=RECONCILE_REPORT_MAX_FILES * 7,
+        description="Their differences; each one's file is in compared.",
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def _differences_are_of_compared_files(self) -> ReconcileReport:
+        named = set(self.compared)
+        stray = sorted({d.drive_file_id for d in self.differences} - named)
+        if stray:
+            raise ValueError(f"differences for files not in compared: {stray[:5]}")
+        return self
+
+
+class ReconcileReportResult(BaseModel):
+    """The open differences after a report."""
+
+    open_differences: int = Field(..., ge=0, description="Differences now held.")
+    files_with_differences: int = Field(
+        ..., ge=0, description="Files that have at least one."
+    )
+
+
+class ReconcileApprovalsSet(BaseModel):
+    """What the owner approved for the reconcile's write runs: whole kinds,
+    and ``other`` differences one file and field at a time."""
+
+    kinds: list[ReconcileKind] = Field(
+        default_factory=list, description="The approved kinds (never 'other')."
+    )
+    files: dict[str, list[ReconcileField]] = Field(
+        default_factory=dict,
+        description="Approved 'other' differences: Drive file id to its fields.",
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def _other_is_by_file(self) -> ReconcileApprovalsSet:
+        if "other" in self.kinds:
+            raise ValueError("'other' is approved file by file, under files")
+        return self
+
+
+class ReconcileApprovals(ReconcileApprovalsSet):
+    """The approvals as the API holds them, and who last changed them."""
+
+    updated_at: dt.datetime | None = Field(
+        default=None, description="When they last changed; None if never set."
+    )
+    updated_by: str | None = Field(default=None, description="Who last changed them.")
+
+    # A response: fields this library does not know yet are ignored.
+    model_config = ConfigDict(extra="ignore")
