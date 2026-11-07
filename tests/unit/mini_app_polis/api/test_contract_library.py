@@ -13,12 +13,17 @@ from pydantic import ValidationError
 from mini_app_polis.api import KaianoApiClient
 from mini_app_polis.api.contract import (
     CATALOG_DISPLAY_MAX_IDS,
+    DUPLICATE_REPORT_MAX_GROUPS,
     ENDPOINTS_BY_NAME,
     LIBRARY_ABSENT_MAX_FILES,
     CatalogDisplay,
     CatalogDisplayRequest,
     CatalogFillUp,
     CatalogFillUpResult,
+    DuplicateGroupReport,
+    DuplicateMember,
+    DuplicateReport,
+    DuplicateReportResult,
     LibraryEntryCreate,
     LibraryEntryCreated,
     LibraryFile,
@@ -398,3 +403,94 @@ def test_marking_synced_posts_the_ids_and_the_time(
         )
     ]
     assert result == LibraryFilesSyncedResult(marked=1)
+
+
+def _group(key: str = "same_md5:abc") -> dict[str, Any]:
+    return {
+        "key": key,
+        "reasons": ["same_md5"],
+        "files": [
+            {"drive_file_id": "a"},
+            {
+                "drive_file_id": "b",
+                "kept_on_purpose": True,
+                "why_kept": "No Intro Edit: 12 s shorter",
+            },
+        ],
+    }
+
+
+def test_the_duplicate_report_is_under_the_library_scope() -> None:
+    endpoint = ENDPOINTS_BY_NAME["report_duplicate_groups"]
+    assert (endpoint.method, endpoint.path, endpoint.request) == (
+        "POST",
+        "/v1/catalog/library/duplicates",
+        DuplicateReport,
+    )
+    assert endpoint.scope == "catalog.library.write"
+
+
+def test_a_group_has_two_files_a_reason_and_says_why_a_file_is_kept() -> None:
+    DuplicateGroupReport.model_validate(_group())
+    with pytest.raises(ValidationError):
+        DuplicateGroupReport.model_validate(
+            {**_group(), "files": [{"drive_file_id": "a"}]}
+        )
+    with pytest.raises(ValidationError):
+        DuplicateGroupReport.model_validate({**_group(), "reasons": []})
+    with pytest.raises(ValidationError):
+        DuplicateGroupReport.model_validate({**_group(), "reasons": ["vibes"]})
+    with pytest.raises(ValidationError):
+        DuplicateMember(drive_file_id="a", kept_on_purpose=True)
+
+
+def test_a_report_may_be_empty_and_has_a_ceiling() -> None:
+    assert DuplicateReport(library_root_id="root", groups=[]).groups == []
+    with pytest.raises(ValidationError):
+        DuplicateReport.model_validate(
+            {
+                "library_root_id": "root",
+                "groups": [
+                    _group(f"k{n}") for n in range(DUPLICATE_REPORT_MAX_GROUPS + 1)
+                ],
+            }
+        )
+
+
+def test_reporting_posts_the_groups(monkeypatch: pytest.MonkeyPatch) -> None:
+    client, calls = _client(
+        monkeypatch,
+        {"data": {"open_groups": 1, "added": 1, "dropped": 0}, "meta": _META},
+    )
+
+    result = client.report_duplicate_groups(
+        DuplicateReport.model_validate(
+            {"library_root_id": "root", "groups": [_group()]}
+        )
+    )
+
+    [(method, path, body)] = calls
+    assert (method, path) == ("POST", "/v1/catalog/library/duplicates")
+    assert body["library_root_id"] == "root"
+    assert body["groups"][0]["files"][1] == {
+        "drive_file_id": "b",
+        "kept_on_purpose": True,
+        "why_kept": "No Intro Edit: 12 s shorter",
+    }
+    assert result == DuplicateReportResult(open_groups=1, added=1, dropped=0)
+
+
+def test_listing_can_ask_for_the_files_to_trash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, calls = _client(monkeypatch, {"data": [], "meta": _META})
+
+    client.list_library_files(trash_requested=True, present=True)
+
+    assert calls == [
+        (
+            "GET",
+            "/v1/catalog/library/files",
+            {"present": "true", "trash_requested": "true"},
+        )
+    ]

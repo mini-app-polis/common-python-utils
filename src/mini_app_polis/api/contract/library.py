@@ -211,6 +211,89 @@ class LibraryEntryCreated(BaseModel):
     )
 
 
+#: Why files were grouped as copies of one song.
+DuplicateReason = Literal[
+    "same_md5", "same_catalog_id", "same_title_artist", "same_name"
+]
+
+#: The most groups one duplicate report may carry.
+DUPLICATE_REPORT_MAX_GROUPS = 2000
+
+
+class DuplicateMember(BaseModel):
+    """One registered file in a duplicate group.
+
+    A file kept on purpose (a different edit, such as a No Intro Edit whose
+    length differs, or a different release label, such as Clean against
+    Explicit) is shown in its group but can never be sent to the trash
+    through it.
+    """
+
+    drive_file_id: str = Field(..., min_length=1, description="The Drive file's id.")
+    kept_on_purpose: bool = Field(
+        default=False, description="A different edit or label: not a duplicate."
+    )
+    why_kept: str | None = Field(
+        default=None, description="Why the file is kept on purpose, when it is."
+    )
+    bitrate_kbps: int | None = Field(
+        default=None, ge=0, description="Its bitrate, when known."
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def _why_when_kept(self) -> DuplicateMember:
+        if self.kept_on_purpose and not self.why_kept:
+            raise ValueError("a file kept on purpose says why")
+        return self
+
+
+class DuplicateGroupReport(BaseModel):
+    """Files that look like copies of one song, and why they were grouped.
+
+    ``key`` names the group the same way every run (for example the shared
+    md5 or catalog id), so an unchanged library reports the same groups.
+    """
+
+    key: str = Field(..., min_length=1, description="The group's stable key.")
+    reasons: list[DuplicateReason] = Field(
+        ..., min_length=1, description="Why the files were grouped."
+    )
+    files: list[DuplicateMember] = Field(
+        ..., min_length=2, description="The files in the group."
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class DuplicateReport(BaseModel):
+    """Every duplicate group a report run found under one library root.
+
+    The report replaces the open groups the API holds for that root: a group
+    no longer found is dropped, unless the owner has already resolved it.
+    """
+
+    library_root_id: str = Field(
+        ..., min_length=1, description="The library root the groups are under."
+    )
+    groups: list[DuplicateGroupReport] = Field(
+        ...,
+        max_length=DUPLICATE_REPORT_MAX_GROUPS,
+        description="The groups found; empty when the library has none.",
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class DuplicateReportResult(BaseModel):
+    """What the report changed among the open groups."""
+
+    open_groups: int = Field(..., ge=0, description="Open groups after the report.")
+    added: int = Field(..., ge=0, description="Groups the report added.")
+    dropped: int = Field(..., ge=0, description="Open groups no longer found.")
+
+
 #: The most catalog entries one display read may ask for.
 CATALOG_DISPLAY_MAX_IDS = 200
 
