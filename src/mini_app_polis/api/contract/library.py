@@ -299,8 +299,9 @@ class DuplicateGroupReport(BaseModel):
 class DuplicateReport(BaseModel):
     """Every duplicate group a report run found under one library root.
 
-    The report replaces the open groups the API holds for that root: a group
-    no longer found is dropped, unless the owner has already resolved it.
+    The report replaces the open groups the API holds for that root: an open
+    group the report does not include is dropped, and groups the owner has
+    resolved are kept.
     """
 
     library_root_id: str = Field(
@@ -320,7 +321,9 @@ class DuplicateReportResult(BaseModel):
 
     open_groups: int = Field(..., ge=0, description="Open groups after the report.")
     added: int = Field(..., ge=0, description="Groups the report added.")
-    dropped: int = Field(..., ge=0, description="Open groups no longer found.")
+    dropped: int = Field(
+        ..., ge=0, description="Open groups the report did not include, now dropped."
+    )
 
 
 #: The most catalog entries one display read may ask for.
