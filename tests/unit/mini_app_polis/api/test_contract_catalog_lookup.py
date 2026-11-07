@@ -101,5 +101,6 @@ def test_deejay_cog_can_be_asked_to_retag_music() -> None:
     assert DeejayRunRequest(mode="retag-music").mode == "retag-music"
     assert DeejayRunRequest(mode="new-music").mode == "new-music"
     assert DeejayRunRequest(mode="library-backfill").mode == "library-backfill"
+    assert DeejayRunRequest(mode="library-reconcile").mode == "library-reconcile"
     with pytest.raises(ValidationError):
         DeejayRunRequest(mode="retag-everything")  # type: ignore[arg-type]

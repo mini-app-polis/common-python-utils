@@ -48,6 +48,7 @@ class DeejayRunRequest(BaseModel):
         "retag-music",
         "new-music",
         "library-backfill",
+        "library-reconcile",
     ] = Field(
         ...,
         description=(
