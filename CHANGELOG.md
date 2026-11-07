@@ -1,3 +1,10 @@
+# [8.8.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.7.0...v8.8.0) (2026-11-07)
+
+
+### Features
+
+* **contract:** deejay runs accept the library-reconcile mode ([d8fcc35](https://github.com/mini-app-polis/common-python-utils/commit/d8fcc3526c1f51ad5bb2338550bf340bcc19f4df))
+
 # [8.7.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.6.1...v8.7.0) (2026-11-07)
 
 
