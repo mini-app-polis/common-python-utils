@@ -200,3 +200,45 @@ def test_file_may_be_a_list_of_globs_each_file_counted_once(repo: Path) -> None:
 def test_each_glob_in_a_list_must_match_a_file(repo: Path) -> None:
     with pytest.raises(facts.FactsError, match="nothing/\\*.py"):
         facts.compute(repo, {"files": ["docs/ADR-*.md", "nothing/*.py"]})
+
+
+def _git(repo: Path, *args: str) -> str:
+    import subprocess
+
+    return subprocess.run(
+        ["git", *args], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout
+
+
+@pytest.fixture
+def git_repo(repo: Path) -> Path:
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "t@example.com")
+    _git(repo, "config", "user.name", "t")
+    return repo
+
+
+def test_generate_stage_adds_facts_json_when_it_changed(git_repo: Path) -> None:
+    assert facts.main(["generate", "--root", str(git_repo), "--stage"]) == 0
+    assert _git(git_repo, "diff", "--cached", "--name-only").split() == ["facts.json"]
+
+
+def test_generate_stage_stages_nothing_else(git_repo: Path) -> None:
+    (git_repo / "other.txt").write_text("not mine\n")
+    assert facts.main(["generate", "--root", str(git_repo), "--stage"]) == 0
+    assert "other.txt" not in _git(git_repo, "diff", "--cached", "--name-only")
+
+
+def test_generate_stage_does_nothing_when_facts_json_is_current(
+    git_repo: Path, capsys
+) -> None:
+    facts.main(["generate", "--root", str(git_repo)])
+    capsys.readouterr()
+    assert facts.main(["generate", "--root", str(git_repo), "--stage"]) == 0
+    assert "staged" not in capsys.readouterr().out
+    assert _git(git_repo, "diff", "--cached", "--name-only") == ""
+
+
+def test_generate_stage_outside_a_git_repository_fails(repo: Path, capsys) -> None:
+    assert facts.main(["generate", "--root", str(repo), "--stage"]) == 1
+    assert "could not stage" in capsys.readouterr().err

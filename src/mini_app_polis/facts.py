@@ -58,8 +58,11 @@ test file under ``tests``. Each glob must match at least one file.
 Paths are relative to the repository root. A fact's ``as_of`` is the day its
 value last changed; regenerating without a change keeps it.
 
-    facts generate   compute the facts and write facts.json
-    facts check      exit 1 when facts.json differs from what is computed
+    facts generate           compute the facts and write facts.json
+    facts generate --stage   the same, then ``git add facts.json`` when it
+                             changed (for a pre-commit hook: the new figures
+                             go into the commit being made)
+    facts check              exit 1 when facts.json differs from what is computed
 """
 
 from __future__ import annotations
@@ -69,6 +72,7 @@ import datetime as dt
 import glob
 import json
 import re
+import subprocess
 import sys
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -246,6 +250,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("command", choices=["generate", "check"])
     parser.add_argument("--root", default=".", help="The repository root.")
+    parser.add_argument(
+        "--stage",
+        action="store_true",
+        help="generate: git add facts.json when it changed.",
+    )
     args = parser.parse_args(argv)
     root = Path(args.root)
     out = root / OUT_FILE
@@ -257,8 +266,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"facts: {exc}", file=sys.stderr)
         return 2
     if args.command == "generate":
-        out.write_text(json.dumps(document, indent=2) + "\n")
+        text = json.dumps(document, indent=2) + "\n"
+        changed = not out.exists() or out.read_text() != text
+        out.write_text(text)
         print(f"facts: wrote {len(document['facts'])} facts to {OUT_FILE}")
+        if args.stage and changed:
+            return _stage(root)
         return 0
     if previous is None:
         print(f"facts: {OUT_FILE} is missing; run `facts generate`", file=sys.stderr)
@@ -272,6 +285,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"  {line}", file=sys.stderr)
         return 1
     print(f"facts: {OUT_FILE} matches ({len(document['facts'])} facts)")
+    return 0
+
+
+def _stage(root: Path) -> int:
+    """``git add facts.json`` in ``root``, and nothing else."""
+    done = subprocess.run(
+        ["git", "add", "--", OUT_FILE],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if done.returncode != 0:
+        print(
+            f"facts: could not stage {OUT_FILE}: {done.stderr.strip()}", file=sys.stderr
+        )
+        return 1
+    print(f"facts: staged {OUT_FILE}")
     return 0
 
 
