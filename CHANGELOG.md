@@ -1,3 +1,10 @@
+# [8.5.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.4.0...v8.5.0) (2026-11-07)
+
+
+### Features
+
+* **api:** the duplicate report contract, and listing library files by trash request ([43d5211](https://github.com/mini-app-polis/common-python-utils/commit/43d52111e0d12cb79db553f54dfbb6c48f3122f7))
+
 # [8.4.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.3.0...v8.4.0) (2026-11-07)
 
 
