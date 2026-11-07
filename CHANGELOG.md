@@ -1,3 +1,10 @@
+## [8.6.1](https://github.com/mini-app-polis/common-python-utils/compare/v8.6.0...v8.6.1) (2026-11-07)
+
+
+### Performance Improvements
+
+* **drive:** update a small file in one request ([3f5df8b](https://github.com/mini-app-polis/common-python-utils/commit/3f5df8b35bc66183869091660e63a1ae8323af87))
+
 # [8.6.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.5.0...v8.6.0) (2026-11-07)
 
 
