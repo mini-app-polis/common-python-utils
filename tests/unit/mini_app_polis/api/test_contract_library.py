@@ -32,6 +32,7 @@ from mini_app_polis.api.contract import (
     LibraryFilesAbsentResult,
     LibraryFilesSynced,
     LibraryFilesSyncedResult,
+    LibraryFileTags,
 )
 
 _META = {"count": 1, "total": 1, "version": "test"}
@@ -494,3 +495,48 @@ def test_listing_can_ask_for_the_files_to_trash(
             {"present": "true", "trash_requested": "true"},
         )
     ]
+
+
+# ── Tags and the identify note, for the owner's unidentified page ────────
+
+
+def test_an_unidentified_file_may_carry_its_tags_and_why(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, calls = _client(
+        monkeypatch,
+        {
+            "data": _file_row(
+                identification_status="unidentified",
+                catalog_id=None,
+                tags={"title": "Temple", "artist": "T. Gold"},
+                identify_note="fingerprint: no confident match",
+            ),
+            "meta": _META,
+        },
+    )
+
+    row = client.register_library_file(
+        _register(
+            identification_status="unidentified",
+            catalog_id=None,
+            tags=LibraryFileTags(title="Temple", artist="T. Gold", bpm="124"),
+            identify_note="fingerprint: no confident match",
+        )
+    )
+
+    sent = calls[0][2]
+    assert sent["tags"] == {"title": "Temple", "artist": "T. Gold", "bpm": "124"}
+    assert sent["identify_note"] == "fingerprint: no confident match"
+    assert row.tags == LibraryFileTags(title="Temple", artist="T. Gold")
+    assert row.identify_note == "fingerprint: no confident match"
+
+
+def test_tags_answered_with_a_field_this_version_lacks_still_read() -> None:
+    row = LibraryFile.model_validate(_file_row(tags={"title": "x", "mood": "warm"}))
+    assert row.tags is not None and row.tags.title == "x"
+
+
+def test_a_row_without_tags_reads_as_none() -> None:
+    row = LibraryFile.model_validate(_file_row())
+    assert row.tags is None and row.identify_note is None
