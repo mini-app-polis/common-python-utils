@@ -83,7 +83,7 @@ jobs:
 
       - name: Set up Python
         if: steps.config.outputs.ready == 'true'
-        run: uv python install 3.11
+        run: uv python install 3.14
 
       - name: Install dependencies
         if: steps.config.outputs.ready == 'true'
