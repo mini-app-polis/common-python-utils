@@ -1,3 +1,10 @@
+## [8.10.1](https://github.com/mini-app-polis/common-python-utils/compare/v8.10.0...v8.10.1) (2026-11-08)
+
+
+### Bug Fixes
+
+* **google:** a failed call no longer keeps its callers' frames, and their file bytes, alive ([378e174](https://github.com/mini-app-polis/common-python-utils/commit/378e174a4c5a26265bf7eec1ceb75c19bc971e12))
+
 # [8.10.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.9.0...v8.10.0) (2026-11-07)
 
 
