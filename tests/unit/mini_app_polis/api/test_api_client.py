@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -752,3 +753,66 @@ def test_no_read_starts_past_the_run_deadline() -> None:
             client.get("/v1/sets")
 
     mock_http_client.get.assert_not_called()
+
+
+class _CallerLocal:
+    """Stands in for what a caller's frame holds while it calls the API."""
+
+
+def _frees_callers_frames(call: Any) -> bool:
+    """Whether ``call(held)``, raising, leaves ``held`` alive with no
+    garbage collection: a failed call must not keep its callers' frames."""
+    import gc
+    import weakref
+
+    held = _CallerLocal()
+    ref = weakref.ref(held)
+    gc.disable()
+    try:
+        with contextlib.suppress(KaianoApiError):
+            call(held)
+        del held
+        return ref() is None
+    finally:
+        gc.enable()
+
+
+def test_a_failed_get_frees_the_callers_frames() -> None:
+    response = MagicMock()
+    response.status_code = 404
+    response.text = "not found"
+    mock_http_client = MagicMock()
+    mock_http_client.get.return_value = response
+
+    def call(held: _CallerLocal) -> None:
+        assert held is not None
+        KaianoApiClient(
+            base_url="https://example.com", api_key="k_test", max_retries=1
+        ).get("/v1/missing")
+
+    with patch("mini_app_polis.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+        assert _frees_callers_frames(call)
+
+
+def test_a_post_that_cannot_connect_frees_the_callers_frames() -> None:
+    mock_http_client = MagicMock()
+
+    # A new error each call: a mock handed one instance keeps it, and with
+    # it the traceback of the call that raised it.
+    def refuse(*_args: Any, **_kwargs: Any) -> None:
+        raise httpx.ConnectError("refused")
+
+    mock_http_client.post.side_effect = refuse
+
+    def call(held: _CallerLocal) -> None:
+        assert held is not None
+        KaianoApiClient(
+            base_url="https://example.com", api_key="k_test", max_retries=1
+        ).post("/v1/x", payload={})
+
+    # A real context manager: a mocked __exit__ would record the traceback
+    # it is handed, and keep the frames alive itself.
+    with patch("mini_app_polis.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value = contextlib.nullcontext(mock_http_client)
+        assert _frees_callers_frames(call)

@@ -218,45 +218,52 @@ class SpotifyAPI:
         # Inside mini_app_polis.deadline.run_deadline: no attempt starts past
         # the deadline, and a wait that would cross it re-raises instead.
         last_error: Exception | None = None
-        for attempt in range(1, max_retries + 1):
-            _ensure_time_left(context, last_error)
-            try:
-                return fn()
-            except requests.exceptions.ReadTimeout as e:
-                last_error = e
-                log.warning(
-                    f"Spotify timeout while {context} (attempt {attempt}/{max_retries}): {e}"
-                )
-                if attempt < max_retries and not _wait_crosses_deadline(
-                    _backoff_seconds(attempt)
-                ):
-                    _sleep_backoff(attempt)
-                    continue
-                raise
-            except SpotifyException as e:
-                last_error = e
-                if (
-                    e.http_status == 429
-                    and attempt < max_retries
-                    and not _wait_crosses_deadline(_rate_limit_seconds(e))
-                ):
+        # Cleared on the way out: a caught exception left in a local closes a
+        # cycle through this frame that keeps every caller's frame, and its
+        # locals, alive until a full garbage collection (see
+        # mini_app_polis.google._retry.execute_with_retry).
+        try:
+            for attempt in range(1, max_retries + 1):
+                _ensure_time_left(context, last_error)
+                try:
+                    return fn()
+                except requests.exceptions.ReadTimeout as e:
+                    last_error = e
                     log.warning(
-                        f"Rate limited by Spotify API while {context}. Respecting Retry-After."
+                        f"Spotify timeout while {context} (attempt {attempt}/{max_retries}): {e}"
                     )
-                    _sleep_for_rate_limit(e)
-                    continue
-                if (
-                    e.http_status != 429
-                    and _is_retryable_spotify_exception(e)
-                    and attempt < max_retries
-                    and not _wait_crosses_deadline(_backoff_seconds(attempt))
-                ):
-                    log.warning(
-                        f"Retryable Spotify error while {context} (attempt {attempt}/{max_retries}): {e}"
-                    )
-                    _sleep_backoff(attempt)
-                    continue
-                raise
+                    if attempt < max_retries and not _wait_crosses_deadline(
+                        _backoff_seconds(attempt)
+                    ):
+                        _sleep_backoff(attempt)
+                        continue
+                    raise
+                except SpotifyException as e:
+                    last_error = e
+                    if (
+                        e.http_status == 429
+                        and attempt < max_retries
+                        and not _wait_crosses_deadline(_rate_limit_seconds(e))
+                    ):
+                        log.warning(
+                            f"Rate limited by Spotify API while {context}. Respecting Retry-After."
+                        )
+                        _sleep_for_rate_limit(e)
+                        continue
+                    if (
+                        e.http_status != 429
+                        and _is_retryable_spotify_exception(e)
+                        and attempt < max_retries
+                        and not _wait_crosses_deadline(_backoff_seconds(attempt))
+                    ):
+                        log.warning(
+                            f"Retryable Spotify error while {context} (attempt {attempt}/{max_retries}): {e}"
+                        )
+                        _sleep_backoff(attempt)
+                        continue
+                    raise
+        finally:
+            last_error = None
 
     # --- Public facade methods ---
 

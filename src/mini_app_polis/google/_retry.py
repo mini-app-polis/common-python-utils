@@ -197,52 +197,61 @@ def execute_with_retry(
     delay = retry.base_delay_s
     last_error: Exception | None = None
 
-    for attempt in range(1, retry.max_retries + 1):
-        _ensure_time_left(context, last_error)
-        try:
-            return fn()
+    # An exception kept in a local after its except block ends closes a
+    # cycle: exception -> traceback -> this frame -> last_error -> the
+    # exception. The traceback's frames keep every caller's frame alive,
+    # with all their locals (a file's bytes, say), until a full garbage
+    # collection, which may not come before memory runs out. Clearing it
+    # on the way out lets reference counting free them at once.
+    try:
+        for attempt in range(1, retry.max_retries + 1):
+            _ensure_time_left(context, last_error)
+            try:
+                return fn()
 
-        except HttpError as e:
-            last_error = e
-            if (not is_retryable_http_error(e)) or attempt == retry.max_retries:
-                if expected_error is not None and expected_error(e):
+            except HttpError as e:
+                last_error = e
+                if (not is_retryable_http_error(e)) or attempt == retry.max_retries:
+                    if expected_error is not None and expected_error(e):
+                        raise
+                    log.error(
+                        f"❌ Google API HttpError while {context} "
+                        f"(attempt {attempt}/{retry.max_retries}): {e}"
+                    )
                     raise
-                log.error(
-                    f"❌ Google API HttpError while {context} "
-                    f"(attempt {attempt}/{retry.max_retries}): {e}"
-                )
-                raise
 
-            if not _sleep_with_backoff(
-                delay_s=delay,
-                max_delay_s=retry.max_delay_s,
-                attempt=attempt,
-                context=context,
-            ):
-                raise
-            delay *= 2
+                if not _sleep_with_backoff(
+                    delay_s=delay,
+                    max_delay_s=retry.max_delay_s,
+                    attempt=attempt,
+                    context=context,
+                ):
+                    raise
+                delay *= 2
 
-        except Exception as e:
-            # Non-HTTP exceptions: retry only when likely transient (timeouts, transport errors).
-            last_error = e
+            except Exception as e:
+                # Non-HTTP exceptions: retry only when likely transient (timeouts, transport errors).
+                last_error = e
 
-            if (not is_retryable_non_http_error(e)) or attempt == retry.max_retries:
-                log.error(
-                    f"❌ Non-HTTP error while {context} "
-                    f"(attempt {attempt}/{retry.max_retries}): {e}"
-                )
-                raise
+                if (not is_retryable_non_http_error(e)) or attempt == retry.max_retries:
+                    log.error(
+                        f"❌ Non-HTTP error while {context} "
+                        f"(attempt {attempt}/{retry.max_retries}): {e}"
+                    )
+                    raise
 
-            if not _sleep_with_backoff(
-                delay_s=delay,
-                max_delay_s=retry.max_delay_s,
-                attempt=attempt,
-                context=context,
-            ):
-                raise
-            delay *= 2
+                if not _sleep_with_backoff(
+                    delay_s=delay,
+                    max_delay_s=retry.max_delay_s,
+                    attempt=attempt,
+                    context=context,
+                ):
+                    raise
+                delay *= 2
 
-    # Defensive: should be unreachable
-    if last_error:
-        raise last_error
-    raise RuntimeError(f"Unknown error while {context}")
+        # Defensive: should be unreachable
+        if last_error:
+            raise last_error
+        raise RuntimeError(f"Unknown error while {context}")
+    finally:
+        last_error = None

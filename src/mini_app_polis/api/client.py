@@ -320,27 +320,36 @@ class KaianoApiClient:
         url = f"{self.base_url}{path}"
         last_exc: Exception | None = None
 
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                with httpx.Client(timeout=self.timeout) as client:
-                    response = client.post(url, json=payload, headers=self._headers())
+        # Cleared on the way out: a caught exception left in a local closes a
+        # cycle through this frame that keeps every caller's frame, and its
+        # locals, alive until a full garbage collection (see
+        # mini_app_polis.google._retry.execute_with_retry).
+        try:
+            for attempt in range(1, self.max_retries + 1):
+                try:
+                    with httpx.Client(timeout=self.timeout) as client:
+                        response = client.post(
+                            url, json=payload, headers=self._headers()
+                        )
 
-                if response.status_code >= 400:
-                    raise error_for(response.status_code, response.text, path)
+                    if response.status_code >= 400:
+                        raise error_for(response.status_code, response.text, path)
 
-                return response.json()
+                    return response.json()
 
-            except httpx.TransportError as exc:
-                last_exc = exc
-                if attempt == self.max_retries:
-                    break
-                continue
+                except httpx.TransportError as exc:
+                    last_exc = exc
+                    if attempt == self.max_retries:
+                        break
+                    continue
 
-        raise ApiUnavailable(
-            status_code=0,
-            message=f"Connection failed after {self.max_retries} attempts: {last_exc}",
-            path=path,
-        )
+            raise ApiUnavailable(
+                status_code=0,
+                message=f"Connection failed after {self.max_retries} attempts: {last_exc}",
+                path=path,
+            )
+        finally:
+            last_exc = None
 
     def notify(
         self,
@@ -421,66 +430,76 @@ class KaianoApiClient:
         url = f"{self.base_url}{path}"
         last_exc: Exception | None = None
         last_error: Exception | None = None
+        err: KaianoApiError | None = None
         query = params or {}
         request_headers = {**self._headers(), **(headers or {})}
         attempts = 0
 
-        for attempt in range(1, self.max_retries + 1):
-            _ensure_time_left(f"reading {path}", last_error)
-            attempts = attempt
-            final = attempt == self.max_retries
-            try:
-                with httpx.Client(timeout=timeout or self.timeout) as client:
-                    # `params` is passed only when there is something to
-                    # pass. httpx *replaces* a URL's query string whenever
-                    # the kwarg is supplied at all, so the previous
-                    # unconditional `params=query` — where query was `{}`
-                    # for every caller that had no params — silently
-                    # discarded any query string written into `path`.
-                    #
-                    # A caller asking for `/v1/evaluations?repo=x&limit=1`
-                    # got `/v1/evaluations`: no filter, default limit, the
-                    # newest row across every repo. It returned 200 with
-                    # plausible data, so nothing looked wrong anywhere.
-                    if query:
-                        response = client.get(
-                            url, params=query, headers=request_headers
-                        )
-                    else:
-                        response = client.get(url, headers=request_headers)
-            except httpx.TransportError as exc:
-                last_exc = last_error = exc
-                wait = _backoff_s(attempt, None)
-                if final or _wait_crosses_deadline(wait):
-                    break
+        # Cleared on the way out: a caught exception left in a local closes a
+        # cycle through this frame that keeps every caller's frame, and its
+        # locals, alive until a full garbage collection (see
+        # mini_app_polis.google._retry.execute_with_retry).
+        try:
+            for attempt in range(1, self.max_retries + 1):
+                _ensure_time_left(f"reading {path}", last_error)
+                attempts = attempt
+                final = attempt == self.max_retries
+                try:
+                    with httpx.Client(timeout=timeout or self.timeout) as client:
+                        # `params` is passed only when there is something to
+                        # pass. httpx *replaces* a URL's query string whenever
+                        # the kwarg is supplied at all, so the previous
+                        # unconditional `params=query` — where query was `{}`
+                        # for every caller that had no params — silently
+                        # discarded any query string written into `path`.
+                        #
+                        # A caller asking for `/v1/evaluations?repo=x&limit=1`
+                        # got `/v1/evaluations`: no filter, default limit, the
+                        # newest row across every repo. It returned 200 with
+                        # plausible data, so nothing looked wrong anywhere.
+                        if query:
+                            response = client.get(
+                                url, params=query, headers=request_headers
+                            )
+                        else:
+                            response = client.get(url, headers=request_headers)
+                except httpx.TransportError as exc:
+                    last_exc = last_error = exc
+                    wait = _backoff_s(attempt, None)
+                    if final or _wait_crosses_deadline(wait):
+                        break
+                    _sleep(wait)
+                    continue
+
+                if response.status_code < 400:
+                    return response
+                err = last_error = error_for(response.status_code, response.text, path)
+                wait = _backoff_s(attempt, _retry_after_s(response))
+                if (
+                    final
+                    or not (
+                        isinstance(err, ApiUnavailable) or response.status_code == 429
+                    )
+                    or _wait_crosses_deadline(wait)
+                ):
+                    raise err
+                _log.warning(
+                    "GET %s answered %d; attempt %d of %d, retrying in %.1fs",
+                    path,
+                    response.status_code,
+                    attempt,
+                    self.max_retries,
+                    wait,
+                )
                 _sleep(wait)
-                continue
 
-            if response.status_code < 400:
-                return response
-            err = last_error = error_for(response.status_code, response.text, path)
-            wait = _backoff_s(attempt, _retry_after_s(response))
-            if (
-                final
-                or not (isinstance(err, ApiUnavailable) or response.status_code == 429)
-                or _wait_crosses_deadline(wait)
-            ):
-                raise err
-            _log.warning(
-                "GET %s answered %d; attempt %d of %d, retrying in %.1fs",
-                path,
-                response.status_code,
-                attempt,
-                self.max_retries,
-                wait,
-            )
-            _sleep(wait)
-
-        raise ApiUnavailable(
-            status_code=0,
-            message=f"Connection failed after {attempts} attempts: {last_exc}",
-            path=path,
-        ) from last_exc
+            raise ApiUnavailable(
+                status_code=0,
+                message=f"Connection failed after {attempts} attempts: {last_exc}",
+                path=path,
+            ) from last_exc
+        finally:
+            last_exc = last_error = err = None
 
     # ── Typed methods ─────────────────────────────────────────────────────
     #
