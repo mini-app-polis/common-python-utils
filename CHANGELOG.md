@@ -1,3 +1,11 @@
+## [9.0.1](https://github.com/mini-app-polis/common-python-utils/compare/v9.0.0...v9.0.1) (2026-11-08)
+
+
+### Bug Fixes
+
+* **deps:** bump the minor-and-patch group with 5 updates ([e939b6a](https://github.com/mini-app-polis/common-python-utils/commit/e939b6a7e0fdb2f26365722cdb85af011c1818ec))
+* **deps:** bump types-requests from 2.33.0.20261006 to 2.33.0.20261030 ([3b229f0](https://github.com/mini-app-polis/common-python-utils/commit/3b229f0a5f7714deddf2f90638c1400abfb21611))
+
 # [9.0.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.10.1...v9.0.0) (2026-11-08)
 
 
