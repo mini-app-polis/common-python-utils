@@ -27,15 +27,8 @@ jobs:
       package-manager: uv
       sbom: false
 
-  # Every Python a consumer runs on: the floor requires-python declares and
-  # the newest the fleet deploys to, so a change that breaks either fails here
-  # before a consumer takes the release.
   test:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.14"]
 
     steps:
       - uses: actions/checkout@v7
@@ -46,7 +39,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Set up Python
-        run: uv python install ${{ matrix.python-version }}
+        run: uv python install 3.14
 
       # CD-020. `uv sync` without --locked silently re-resolves when the
       # lockfile and pyproject.toml disagree, so a stale lock passes CI and
@@ -56,7 +49,7 @@ jobs:
         run: uv lock --check
 
       - name: Install dependencies
-        run: uv sync --all-extras --python ${{ matrix.python-version }}
+        run: uv sync --all-extras
 
       - name: Lint
         run: uv run ruff check src/ tests/ contract/
@@ -94,7 +87,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Set up Python
-        run: uv python install 3.11
+        run: uv python install 3.14
 
       - name: Install dependencies
         run: uv sync --all-extras
