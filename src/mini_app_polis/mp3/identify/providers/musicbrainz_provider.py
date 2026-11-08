@@ -60,83 +60,92 @@ class MusicBrainzRecordingProvider:
             )
 
         last_err: Exception | None = None
-        for attempt in range(1, self.retries + 1):
-            try:
-                self._throttle()
-                rec = musicbrainzngs.get_recording_by_id(
-                    track_id.id,
-                    includes=["artists", "releases", "isrcs", "tags"],
-                )
-                r: dict[str, Any] = (
-                    rec.get("recording", {}) if isinstance(rec, dict) else {}
-                )
-
-                title = r.get("title")
-                artist = None
-                album = None
-                isrc = None
-                year = None
-                genre = None
-
-                # primary artist credit
+        # Cleared on the way out: a caught exception left in a local closes a
+        # cycle through this frame that keeps every caller's frame, and its
+        # locals, alive until a full garbage collection (see
+        # mini_app_polis.google._retry.execute_with_retry).
+        try:
+            for attempt in range(1, self.retries + 1):
                 try:
-                    ac = r.get("artist-credit") or []
-                    if ac and isinstance(ac, list):
-                        a0 = ac[0]
-                        if isinstance(a0, dict):
-                            artist = (a0.get("artist") or {}).get("name") or a0.get(
-                                "name"
-                            )
-                except Exception:
+                    self._throttle()
+                    rec = musicbrainzngs.get_recording_by_id(
+                        track_id.id,
+                        includes=["artists", "releases", "isrcs", "tags"],
+                    )
+                    r: dict[str, Any] = (
+                        rec.get("recording", {}) if isinstance(rec, dict) else {}
+                    )
+
+                    title = r.get("title")
                     artist = None
-
-                # release / album + year
-                try:
-                    releases = r.get("release-list") or []
-                    if releases:
-                        rel0 = releases[0]
-                        if isinstance(rel0, dict):
-                            album = rel0.get("title")
-                            date = rel0.get("date")
-                            if date and isinstance(date, str) and len(date) >= 4:
-                                year = date[:4]
-                except Exception:
-                    pass
-
-                # isrc
-                try:
-                    isrcs = r.get("isrc-list") or []
-                    if isrcs:
-                        isrc = str(isrcs[0])
-                except Exception:
+                    album = None
                     isrc = None
-
-                # tags -> genre
-                try:
-                    tags = r.get("tag-list") or []
-                    genre = self._best_genre(tags)
-                except Exception:
+                    year = None
                     genre = None
 
-                return {
-                    "title": title,
-                    "artist": artist,
-                    "album": album,
-                    "year": year,
-                    "isrc": isrc,
-                    "genre": genre,
-                    "raw": {"musicbrainz_recording": r},
-                    "_provider": "musicbrainz",
-                    "_mbid": track_id.id,
-                }
+                    # primary artist credit
+                    try:
+                        ac = r.get("artist-credit") or []
+                        if ac and isinstance(ac, list):
+                            a0 = ac[0]
+                            if isinstance(a0, dict):
+                                artist = (a0.get("artist") or {}).get("name") or a0.get(
+                                    "name"
+                                )
+                    except Exception:
+                        artist = None
 
-            except Exception as e:
-                last_err = e
-                if attempt < self.retries:
-                    time.sleep(self.retry_sleep_s * attempt)
-                else:
-                    raise RuntimeError(
-                        f"MusicBrainz fetch failed for {track_id.id}: {last_err!r}"
-                    ) from last_err
+                    # release / album + year
+                    try:
+                        releases = r.get("release-list") or []
+                        if releases:
+                            rel0 = releases[0]
+                            if isinstance(rel0, dict):
+                                album = rel0.get("title")
+                                date = rel0.get("date")
+                                if date and isinstance(date, str) and len(date) >= 4:
+                                    year = date[:4]
+                    except Exception:
+                        pass
 
-        raise RuntimeError(f"MusicBrainz fetch failed for {track_id.id}: {last_err!r}")
+                    # isrc
+                    try:
+                        isrcs = r.get("isrc-list") or []
+                        if isrcs:
+                            isrc = str(isrcs[0])
+                    except Exception:
+                        isrc = None
+
+                    # tags -> genre
+                    try:
+                        tags = r.get("tag-list") or []
+                        genre = self._best_genre(tags)
+                    except Exception:
+                        genre = None
+
+                    return {
+                        "title": title,
+                        "artist": artist,
+                        "album": album,
+                        "year": year,
+                        "isrc": isrc,
+                        "genre": genre,
+                        "raw": {"musicbrainz_recording": r},
+                        "_provider": "musicbrainz",
+                        "_mbid": track_id.id,
+                    }
+
+                except Exception as e:
+                    last_err = e
+                    if attempt < self.retries:
+                        time.sleep(self.retry_sleep_s * attempt)
+                    else:
+                        raise RuntimeError(
+                            f"MusicBrainz fetch failed for {track_id.id}: {last_err!r}"
+                        ) from last_err
+
+            raise RuntimeError(
+                f"MusicBrainz fetch failed for {track_id.id}: {last_err!r}"
+            )
+        finally:
+            last_err = None

@@ -1,3 +1,6 @@
+import contextlib
+
+
 def test_is_retryable_http_error_statuses(as_http_error):
     from mini_app_polis.google._retry import is_retryable_http_error
 
@@ -214,3 +217,40 @@ def test_execute_with_retry_expected_error_does_not_stop_retries(
     )
     assert result == "ok"
     assert calls["n"] == 2
+
+
+def test_execute_with_retry_failure_frees_the_callers_frames(as_http_error):
+    """A call that fails leaves nothing of its callers behind: their frames,
+    and the locals in them (a file's bytes, say), are freed by reference
+    counting as soon as the error is handled, without waiting for a garbage
+    collection. A worker taking in many files ran out of memory when every
+    failed file's bytes stayed alive."""
+    import gc
+    import weakref
+
+    from googleapiclient.errors import HttpError
+
+    from mini_app_polis.google._retry import RetryConfig, execute_with_retry
+
+    class FileBytes:
+        pass
+
+    def caller(held: FileBytes) -> None:
+        def fn():
+            raise as_http_error(status=403, message="insufficientFilePermissions")
+
+        assert held is not None
+        execute_with_retry(
+            fn, context="moving a file", retry=RetryConfig(max_retries=1)
+        )
+
+    held = FileBytes()
+    ref = weakref.ref(held)
+    gc.disable()
+    try:
+        with contextlib.suppress(HttpError):
+            caller(held)
+        del held
+        assert ref() is None
+    finally:
+        gc.enable()
