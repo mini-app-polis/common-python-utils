@@ -1,3 +1,13 @@
+# [9.0.0](https://github.com/mini-app-polis/common-python-utils/compare/v8.10.1...v9.0.0) (2026-11-08)
+
+
+* feat!: require Python 3.14 ([3cf056d](https://github.com/mini-app-polis/common-python-utils/commit/3cf056d79ac827e896dfc27afcad696fb988f726))
+
+
+### BREAKING CHANGES
+
+* requires-python is now >=3.14; consumers on Python 3.11 can no longer install this package.
+
 ## [8.10.1](https://github.com/mini-app-polis/common-python-utils/compare/v8.10.0...v8.10.1) (2026-11-08)
 
 
