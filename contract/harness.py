@@ -174,6 +174,9 @@ NOT_EXERCISED: dict[str, str] = {
     "mark_library_files_synced": (
         "the contract-suite machine holds no catalog.library.write scope"
     ),
+    "report_library_file_edited": (
+        "the contract-suite machine holds no catalog.library.write scope"
+    ),
     "report_duplicate_groups": (
         "the contract-suite machine holds no catalog.library.write scope"
     ),
@@ -203,6 +206,7 @@ NOT_DEPLOYED: dict[str, str] = {
     "report_reconcile_differences": "new: the API serves it after its next deploy",
     "read_reconcile_approvals": "new: the API serves it after its next deploy",
     "seed_reconcile_approvals": "new: the API serves it after its next deploy",
+    "report_library_file_edited": "new: the API serves it after its next deploy",
 }
 
 
