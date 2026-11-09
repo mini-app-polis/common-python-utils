@@ -1,3 +1,10 @@
+## [9.0.2](https://github.com/mini-app-polis/common-python-utils/compare/v9.0.1...v9.0.2) (2026-11-09)
+
+
+### Bug Fixes
+
+* **pipeline-status:** a run that reaches its deadline is a planned stop, not a crash ([a5d3357](https://github.com/mini-app-polis/common-python-utils/commit/a5d33577b26391eba661793999353631fdffade0))
+
 ## [9.0.1](https://github.com/mini-app-polis/common-python-utils/compare/v9.0.0...v9.0.1) (2026-11-08)
 
 
