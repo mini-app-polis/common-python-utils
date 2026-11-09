@@ -13,6 +13,7 @@ from unittest.mock import patch
 import pytest
 
 from mini_app_polis import pipeline_status as ps
+from mini_app_polis.deadline import RunDeadlineReached
 
 
 def _headline(report: ps.RunReport) -> str:
@@ -416,6 +417,20 @@ def test_running_out_of_time_is_a_planned_stop_said_once(sent):
     )
     assert "unhandled_exception" not in call["text"]
     assert ps.STOPPED_EARLY not in call["text"]
+
+
+def test_reaching_the_run_deadline_is_a_planned_stop_too(sent):
+    with (
+        pytest.raises(RunDeadlineReached),
+        ps.run_report("library-backfill", repo="deejay-cog") as r,
+    ):
+        r.ok(2)
+        raise RunDeadlineReached("Run deadline reached while listing files")
+
+    (call,) = sent
+    assert call["severity"] == "WARN"
+    assert call["text"].splitlines()[0].startswith("Stopped early")
+    assert "unhandled_exception" not in call["text"]
 
 
 def test_counters_carry_their_labels_and_sections(sent):

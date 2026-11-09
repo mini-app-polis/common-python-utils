@@ -18,7 +18,7 @@ from mini_app_polis.api.contract import (
     TaskSweepMessage,
     TranscriptionRunMessage,
 )
-from mini_app_polis.deadline import remaining_seconds
+from mini_app_polis.deadline import RunDeadlineReached, remaining_seconds
 from mini_app_polis.lambda_worker import (
     RunOutOfTime,
     UnprocessableMessage,
@@ -264,3 +264,12 @@ def test_imports_no_google_or_aws_client() -> None:
 
 def test_refining_kind_carries_its_contract_model() -> None:
     assert TaskRefineMessage.message_type() == "task.refine"
+
+
+def test_a_run_past_its_deadline_is_named_for_redelivery() -> None:
+    def handle(record: dict[str, Any]) -> None:
+        raise RunDeadlineReached("Run deadline reached while listing files")
+
+    assert process_records(_event("late"), handle) == {
+        "batchItemFailures": [{"itemIdentifier": "late"}]
+    }
