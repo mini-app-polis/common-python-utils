@@ -26,11 +26,13 @@ there is nothing to name per run and nothing to sweep when one dies.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlsplit
 
+import httpx
 from pydantic import BaseModel
 
 from mini_app_polis.api import KaianoApiClient, KaianoApiError
@@ -196,20 +198,6 @@ NOT_EXERCISED: dict[str, str] = {
 }
 
 
-#: Endpoints in the catalog that the development API does not serve yet. An
-#: endpoint whose models the API takes from this library has to be released
-#: here first, and until the API is deployed an unauthenticated probe gets a
-#: 404, not the 401 the access check expects. Listed here, an endpoint is
-#: neither probed nor exercised; take it off once the development API has it,
-#: and exercise it in test_contract.py.
-NOT_DEPLOYED: dict[str, str] = {
-    "report_reconcile_differences": "new: the API serves it after its next deploy",
-    "read_reconcile_approvals": "new: the API serves it after its next deploy",
-    "seed_reconcile_approvals": "new: the API serves it after its next deploy",
-    "report_library_file_edited": "new: the API serves it after its next deploy",
-}
-
-
 class ContractConfigError(RuntimeError):
     """The suite is not configured, or a guard refused the configuration."""
 
@@ -293,6 +281,44 @@ def preflight(client: KaianoApiClient) -> dict[str, Any]:
             f"(principal: {principal!r}). Refusing to write as another caller."
         )
     return body
+
+
+_PATH_PARAMETER = re.compile(r"\{[^}]*\}")
+
+
+def _route(method: str, path: str) -> tuple[str, str]:
+    """A route as the catalog and the API's schema both name it, whatever
+    each calls its path parameters."""
+    return method.upper(), _PATH_PARAMETER.sub("{}", path)
+
+
+def not_deployed(config: ContractConfig) -> dict[str, str]:
+    """The catalog endpoints the development API does not serve yet, each
+    with why, read from the API's own schema (``/openapi.json``).
+
+    The API takes its models from this library, so an endpoint is released
+    here before the API can serve it. Until then it is neither probed nor
+    exercised; the API's next dev deploy runs this suite again, and from
+    then on it is checked like every other endpoint. A route the API drops
+    is not caught here, so the API checks in its own CI that it serves every
+    endpoint in this catalog.
+    """
+    response = httpx.get(f"{config.api_url}/openapi.json", timeout=30.0)
+    if response.status_code != 200:
+        raise ContractConfigError(
+            f"Could not read the routes {config.api_url} serves: /openapi.json "
+            f"answered {response.status_code}."
+        )
+    served = {
+        _route(method, path)
+        for path, operations in response.json().get("paths", {}).items()
+        for method in operations
+    }
+    return {
+        e.name: f"not served by {config.host} yet: checked after its next deploy"
+        for e in ENDPOINTS
+        if _route(e.method, e.path) not in served
+    }
 
 
 @dataclass(frozen=True)

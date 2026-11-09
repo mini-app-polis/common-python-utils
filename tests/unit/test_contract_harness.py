@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 import pytest
 from contract.conftest import result_note
 from contract.harness import (
@@ -19,11 +20,16 @@ from contract.harness import (
     Ledger,
     LedgerClient,
     load_config,
+    not_deployed,
     preflight,
 )
 
 from mini_app_polis.api import KaianoApiClient, KaianoApiError
-from mini_app_polis.api.contract import ENDPOINTS_BY_NAME, NotificationResult
+from mini_app_polis.api.contract import (
+    ENDPOINTS,
+    ENDPOINTS_BY_NAME,
+    NotificationResult,
+)
 
 DEV_URL = "https://dev-api.kaianolevine.com"
 DEV_KEY = "dev_abc123"
@@ -134,6 +140,68 @@ def test_preflight_accepts_the_contract_suite_machine() -> None:
 
 
 # ── The ledger ────────────────────────────────────────────────────────────
+
+
+# ── What the development API serves ───────────────────────────────────────
+
+
+def _serving(
+    monkeypatch: pytest.MonkeyPatch, paths: dict[str, Any], status: int = 200
+) -> None:
+    def get(url: str, timeout: float) -> httpx.Response:
+        assert url == f"{DEV_URL}/openapi.json" and timeout > 0
+        return httpx.Response(status, json={"paths": paths})
+
+    monkeypatch.setattr(httpx, "get", get)
+
+
+def _schema(*names: str) -> dict[str, Any]:
+    """The schema of an API serving the named catalog endpoints, with its
+    own names for path parameters."""
+    paths: dict[str, Any] = {}
+    for name in names:
+        endpoint = ENDPOINTS_BY_NAME[name]
+        path = endpoint.path.replace("{", "{api_")
+        paths.setdefault(path, {})[endpoint.method.lower()] = {}
+    return paths
+
+
+def test_an_endpoint_the_api_serves_is_not_skipped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _serving(monkeypatch, _schema(*(e.name for e in ENDPOINTS)))
+
+    assert not_deployed(ContractConfig(DEV_URL, DEV_KEY)) == {}
+
+
+def test_an_endpoint_the_api_does_not_serve_yet_is_skipped_with_why(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    served = [e.name for e in ENDPOINTS if e.name != "report_library_file_edited"]
+    _serving(monkeypatch, _schema(*served))
+
+    skipped = not_deployed(ContractConfig(DEV_URL, DEV_KEY))
+
+    assert list(skipped) == ["report_library_file_edited"]
+    assert "dev-api.kaianolevine.com" in skipped["report_library_file_edited"]
+
+
+def test_a_route_served_under_another_method_does_not_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    endpoint = ENDPOINTS_BY_NAME["list_library_files"]
+    _serving(monkeypatch, {endpoint.path: {"delete": {}}})
+
+    assert "list_library_files" in not_deployed(ContractConfig(DEV_URL, DEV_KEY))
+
+
+def test_routes_that_cannot_be_read_stop_the_suite(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _serving(monkeypatch, {}, status=404)
+
+    with pytest.raises(ContractConfigError, match="openapi.json"):
+        not_deployed(ContractConfig(DEV_URL, DEV_KEY))
 
 
 def test_not_exercised_names_only_catalog_endpoints() -> None:
