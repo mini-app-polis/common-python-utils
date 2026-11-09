@@ -1,3 +1,10 @@
+# [9.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.1.0...v9.2.0) (2026-11-09)
+
+
+### Features
+
+* **contract:** record the owned fields a library file was last synced with ([d26e11e](https://github.com/mini-app-polis/common-python-utils/commit/d26e11ec479bf9b6395bc8a7ea1f49d390c8de60))
+
 # [9.1.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.0.2...v9.1.0) (2026-11-09)
 
 
