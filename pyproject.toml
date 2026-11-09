@@ -77,15 +77,6 @@ activity = ["sqlalchemy>=2.0,<3"]
 # the declaration, and so `uv sync --all-extras` installs it for the tests.
 # Same range as the APIs' own pin, so both sides resolve together.
 testing = ["fastapi>=0.110,<1"]
-dev = [
-  "pytest>=9.0.3,<10.0.0",
-  "pytest-cov>=6.2.1,<8.0.0",
-  "pre-commit>=4.2.0,<5.0.0",
-  "coverage>=7.10.1,<8.0.0",
-  "mypy>=1.11.2,<3.0.0",
-  "ruff>=0.8.0",
-  "types-requests>=2.32.0,<3.0.0",
-]
 
 [project.urls]
 Homepage = "https://github.com/mini-app-polis/common-python-utils"
@@ -102,6 +93,20 @@ Issues = "https://github.com/mini-app-polis/common-python-utils/issues"
 # minor is a fleet sweep: bump this everywhere, then re-lock, in commits of
 # their own.
 required-version = ">=0.13.0,<0.14"
+
+[dependency-groups]
+# Installed by every `uv sync` and `uv run` (uv's default group), so a
+# rebuilt .venv always has the pre-commit hook's tools; deploys leave it
+# out with --no-dev.
+dev = [
+  "pytest>=9.0.3,<10.0.0",
+  "pytest-cov>=6.2.1,<8.0.0",
+  "pre-commit>=4.2.0,<5.0.0",
+  "coverage>=7.10.1,<8.0.0",
+  "mypy>=1.11.2,<3.0.0",
+  "ruff>=0.8.0",
+  "types-requests>=2.32.0,<3.0.0",
+]
 
 [build-system]
 requires = ["hatchling"]
