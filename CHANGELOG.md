@@ -1,3 +1,10 @@
+# [9.1.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.0.2...v9.1.0) (2026-11-09)
+
+
+### Features
+
+* **api:** list_library_files pages after a row's id ([34f8e09](https://github.com/mini-app-polis/common-python-utils/commit/34f8e0935bf5447d93871d9ea94ce5705aab09e4))
+
 ## [9.0.2](https://github.com/mini-app-polis/common-python-utils/compare/v9.0.1...v9.0.2) (2026-11-09)
 
 
