@@ -1408,13 +1408,18 @@ class RunReport:
         )
 
 
-def _out_of_time(exc: BaseException) -> bool:
-    """Whether ``exc`` is the worker's planned stop before its timeout.
+#: The planned stops before a timeout: the worker's ``RunOutOfTime``, and
+#: ``RunDeadlineReached``, a call refused past the run's deadline.
+_OUT_OF_TIME_NAMES = frozenset({"RunOutOfTime", "RunDeadlineReached"})
 
-    Matched by name: importing the worker module here would make every
-    report depend on it.
+
+def _out_of_time(exc: BaseException) -> bool:
+    """Whether ``exc`` is a planned stop before the run's timeout.
+
+    Matched by name: importing the worker or deadline module here would
+    make every report depend on it.
     """
-    return type(exc).__name__ == "RunOutOfTime"
+    return type(exc).__name__ in _OUT_OF_TIME_NAMES
 
 
 @contextmanager

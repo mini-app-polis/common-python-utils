@@ -53,7 +53,7 @@ from pydantic import ValidationError
 
 from mini_app_polis import logger as logger_mod
 from mini_app_polis.api.contract.queue import QueueMessage
-from mini_app_polis.deadline import run_deadline
+from mini_app_polis.deadline import RunDeadlineReached, run_deadline
 
 __all__ = [
     "DEFAULT_DEADLINE_MARGIN_SECONDS",
@@ -236,7 +236,9 @@ def process_records(
                             "lambda_worker: could not report unprocessable message %s",
                             message_id,
                         )
-        except RunOutOfTime as exc:
+        except (RunOutOfTime, RunDeadlineReached) as exc:
+            # A planned stop, not a crash: named for redelivery, logged
+            # without a traceback.
             failed[message_id] = None
             with suppress(Exception):
                 log.error("lambda_worker: run %s out of time: %s", message_id, exc)
