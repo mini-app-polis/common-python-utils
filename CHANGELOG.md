@@ -1,3 +1,10 @@
+# [9.3.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.2.0...v9.3.0) (2026-11-09)
+
+
+### Features
+
+* **contract:** report a library file's tags edited outside the pipeline, and let a rollback forget its synced values ([b4810bc](https://github.com/mini-app-polis/common-python-utils/commit/b4810bc9e675461758aab759e067ac9f81db2ecf))
+
 # [9.2.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.1.0...v9.2.0) (2026-11-09)
 
 
