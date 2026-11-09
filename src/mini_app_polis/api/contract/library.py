@@ -217,6 +217,14 @@ class LibraryFilesSynced(BaseModel):
             "By Drive id: the owned fields as the catalog showed them at this sync."
         ),
     )
+    forget: bool = Field(
+        default=False,
+        description=(
+            "Clear the named files' ``synced`` instead: a rollback put back "
+            "what they held before a write, so the next sync records them "
+            "afresh rather than reading them as edited in the file."
+        ),
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -225,6 +233,74 @@ class LibraryFilesSyncedResult(BaseModel):
     """How many registered files the call marked synced."""
 
     marked: int = Field(..., ge=0, description="Files whose last sync was set.")
+
+
+#: A field a library file's tags carry for its catalog entry.
+LibraryOwnedField = Literal["title", "artist", "year", "genre", "bpm", "label"]
+
+#: What became of a field edited in a file: ``sent_up`` to its catalog
+#: entry; ``overwritten``, since the catalog changed it too and the catalog
+#: wins; ``held``, not taken up for the reason given (the file keeps its
+#: value); ``reanalysed``, a BPM a player re-measured, not an edit.
+LibraryEditOutcome = Literal["sent_up", "overwritten", "held", "reanalysed"]
+
+
+class LibraryFileEdited(BaseModel):
+    """A linked file's owned fields as read from it after it changed outside
+    the pipeline (VirtualDJ can write tags back).
+
+    The API compares each field with the value recorded at the file's last
+    sync and with its entry now. A field the file changed and the catalog
+    did not goes up to the entry, as a catalog revision; one the catalog
+    changed too stays the catalog's. The file's recorded values take what
+    it now holds for each field sent up, so the next sync carries the edit
+    to the entry's other files; a field held, re-measured or overwritten
+    keeps its recorded value. A file none of whose fields went up or were
+    overwritten is marked synced, so it is not read again until it changes.
+    """
+
+    drive_file_id: str = Field(..., min_length=1, description="The Drive file's id.")
+    tags: LibraryFileTags = Field(
+        ...,
+        description=(
+            "Its owned fields as read: the title with the file's own release "
+            "label, as the sync writes it."
+        ),
+    )
+    preview: bool = Field(
+        default=False,
+        description=(
+            "Change nothing: answer with what would become of each field (a dry run)."
+        ),
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class LibraryFieldEdit(BaseModel):
+    """One field a file holds differently from its last sync."""
+
+    field: LibraryOwnedField = Field(..., description="The field.")
+    synced: str | None = Field(
+        default=None, description="Its value as recorded at the last sync."
+    )
+    file: str | None = Field(default=None, description="Its value in the file.")
+    catalog: str | None = Field(
+        default=None, description="Its value as the entry shows it now."
+    )
+    outcome: LibraryEditOutcome = Field(..., description="What became of it.")
+    why: str | None = Field(default=None, description="Why it was held, when it was.")
+
+
+class LibraryFileEditResult(BaseModel):
+    """What became of each field a file changed; empty when it changed none
+    (only its other frames, or its audio's metadata)."""
+
+    drive_file_id: str = Field(..., description="The Drive file's id.")
+    catalog_id: uuid.UUID = Field(..., description="The entry it is linked to.")
+    fields: list[LibraryFieldEdit] = Field(
+        default_factory=list, description="Each field the file changed."
+    )
 
 
 class LibraryEntryCreate(BaseModel):

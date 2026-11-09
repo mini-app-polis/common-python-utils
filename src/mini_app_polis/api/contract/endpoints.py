@@ -50,6 +50,8 @@ from .library import (
     LibraryEntryCreate,
     LibraryEntryCreated,
     LibraryFile,
+    LibraryFileEdited,
+    LibraryFileEditResult,
     LibraryFileRegister,
     LibraryFilesAbsentRequest,
     LibraryFilesAbsentResult,
@@ -204,6 +206,16 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         path="/v1/catalog/library/files/synced",
         request=LibraryFilesSynced,
         response=LibraryFilesSyncedResult,
+        scope="catalog.library.write",
+    ),
+    # A linked file's tags changed outside the pipeline (VirtualDJ): the
+    # fields it changed and the catalog did not go up to its entry.
+    Endpoint(
+        name="report_library_file_edited",
+        method="POST",
+        path="/v1/catalog/library/files/edited",
+        request=LibraryFileEdited,
+        response=LibraryFileEditResult,
         scope="catalog.library.write",
     ),
     # The duplicate report: groups of library files that look like copies
