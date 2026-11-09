@@ -620,6 +620,7 @@ class KaianoApiClient:
         trash_requested: bool | None = None,
         limit: int | None = None,
         offset: int | None = None,
+        after: uuid.UUID | None = None,
     ) -> list[LibraryFile]:
         """``GET /v1/catalog/library/files`` — one page of registered files.
 
@@ -628,7 +629,9 @@ class KaianoApiClient:
         the owner asked for them to go to Drive's trash. Unset
         filters are not sent, so the API's own defaults apply (``limit``
         100, at most 500). Page with ``offset`` until a page comes back
-        shorter than ``limit``.
+        shorter than ``limit``, or with ``after``, the ``id`` of the last
+        row of the page before: rows that join or leave the filter earlier
+        in the order then neither repeat nor skip a row.
         """
         params = {
             key: value
@@ -642,6 +645,7 @@ class KaianoApiClient:
                 ),
                 "limit": limit,
                 "offset": offset,
+                "after": str(after) if after else None,
             }.items()
             if value is not None
         }

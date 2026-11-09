@@ -261,6 +261,20 @@ def test_listing_sends_only_the_filters_given(monkeypatch: pytest.MonkeyPatch) -
     assert [r.drive_file_id for r in rows] == ["drive-1"]
 
 
+def test_listing_after_a_row_sends_its_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    client, calls = _client(monkeypatch, {"data": [], "meta": _META})
+    last = uuid.UUID("00000000-0000-0000-0000-0000000000aa")
+
+    assert client.list_library_files(after=last, limit=200) == []
+    assert calls == [
+        (
+            "GET",
+            "/v1/catalog/library/files",
+            {"limit": 200, "after": str(last)},
+        )
+    ]
+
+
 def test_listing_with_no_filters_sends_none(monkeypatch: pytest.MonkeyPatch) -> None:
     client, calls = _client(monkeypatch, {"data": [], "meta": _META})
 
