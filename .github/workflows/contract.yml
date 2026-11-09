@@ -87,7 +87,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.config.outputs.ready == 'true'
-        run: uv sync --locked --extra dev
+        run: uv sync --locked
 
       - name: Run the contract suite
         if: steps.config.outputs.ready == 'true'
