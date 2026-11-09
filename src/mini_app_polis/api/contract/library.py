@@ -29,8 +29,9 @@ LIBRARY_ABSENT_MAX_FILES = 500
 
 
 class LibraryFileTags(BaseModel):
-    """A library file's own tags as last read, shown to the owner for a file
-    the nightly run could not identify."""
+    """A library file's owned tag fields: its own tags as last read (shown
+    to the owner for a file the nightly run could not identify), or the
+    values the library sync recorded for it."""
 
     title: str | None = Field(default=None, description="Its title tag.")
     artist: str | None = Field(default=None, description="Its artist tag.")
@@ -91,7 +92,11 @@ class LibraryFileRegister(BaseModel):
     )
     synced_at: dt.datetime | None = Field(
         default=None,
-        description="When the catalog's values were last written to the file.",
+        description=(
+            "When the catalog's values were last written to the file. Sending "
+            "it clears the file's ``synced``, so the next library sync records "
+            "them afresh before it writes anything."
+        ),
     )
     tags: LibraryFileTags | None = Field(
         default=None,
@@ -149,6 +154,14 @@ class LibraryFile(BaseModel):
     tags: LibraryFileTags | None = Field(
         default=None, description="Its own tags as last registered."
     )
+    synced: LibraryFileTags | None = Field(
+        default=None,
+        description=(
+            "The owned fields as the catalog showed them when the library "
+            "sync last recorded the file; None until it has. The sync writes "
+            "only the fields whose value moved since (ADR-0008)."
+        ),
+    )
     identify_note: str | None = Field(
         default=None, description="Why the nightly run could not identify it."
     )
@@ -183,8 +196,10 @@ class LibraryFilesSynced(BaseModel):
     """Files whose owned fields now carry the catalog's values: each one's
     ``last_synced`` becomes ``synced_at``.
 
-    An id the registry does not hold is ignored, so a retried call does no
-    harm.
+    ``values`` holds, by Drive id, the owned fields as the catalog showed
+    them at this sync; each becomes that file's ``synced``. A file the call
+    names but ``values`` leaves out keeps the ``synced`` it had. An id the
+    registry does not hold is ignored, so a retried call does no harm.
     """
 
     drive_file_ids: list[str] = Field(
@@ -195,6 +210,12 @@ class LibraryFilesSynced(BaseModel):
     )
     synced_at: dt.datetime = Field(
         ..., description="When the catalog's values were written to them."
+    )
+    values: dict[str, LibraryFileTags] = Field(
+        default_factory=dict,
+        description=(
+            "By Drive id: the owned fields as the catalog showed them at this sync."
+        ),
     )
 
     model_config = ConfigDict(extra="forbid")
