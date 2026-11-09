@@ -59,13 +59,13 @@ from mini_app_polis.api.contract import (
 
 from .harness import (
     MACHINE_NAME,
-    NOT_DEPLOYED,
     NOT_EXERCISED,
     ContractConfig,
     ContractConfigError,
     Ledger,
     LedgerClient,
     load_config,
+    not_deployed,
     preflight,
 )
 
@@ -85,9 +85,18 @@ def config() -> ContractConfig:
 
 
 @pytest.fixture(scope="module")
-def ledger() -> Ledger:
+def unserved(config: ContractConfig) -> dict[str, str]:
+    """The catalog endpoints the development API does not serve yet."""
+    try:
+        return not_deployed(config)
+    except ContractConfigError as exc:
+        pytest.exit(str(exc), returncode=2)
+
+
+@pytest.fixture(scope="module")
+def ledger(unserved: dict[str, str]) -> Ledger:
     ledger = Ledger()
-    for name, reason in {**NOT_EXERCISED, **NOT_DEPLOYED}.items():
+    for name, reason in {**NOT_EXERCISED, **unserved}.items():
         ledger.skip(name, reason)
     return ledger
 
@@ -107,11 +116,11 @@ def api(config: ContractConfig, ledger: Ledger) -> Iterator[LedgerClient]:
 
 @pytest.mark.parametrize(
     "endpoint",
-    [e for e in ENDPOINTS if e.scope is not None and e.name not in NOT_DEPLOYED],
+    [e for e in ENDPOINTS if e.scope is not None],
     ids=lambda e: e.name,
 )
 def test_refuses_an_unauthenticated_caller_in_the_error_envelope(
-    config: ContractConfig, api: LedgerClient, endpoint
+    config: ContractConfig, api: LedgerClient, unserved: dict[str, str], endpoint
 ) -> None:
     """A scoped endpoint answers 401, in the envelope, before reading the body.
 
@@ -119,6 +128,8 @@ def test_refuses_an_unauthenticated_caller_in_the_error_envelope(
     nothing here reaches a handler, and the run endpoints are safe to probe
     even though development has no queues.
     """
+    if endpoint.name in unserved:
+        pytest.skip(unserved[endpoint.name])
     response = httpx.request(
         endpoint.method,
         f"{config.api_url}{endpoint.path}",
