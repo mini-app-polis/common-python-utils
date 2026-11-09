@@ -82,6 +82,8 @@ from .contract import (
     LibraryEntryCreate,
     LibraryEntryCreated,
     LibraryFile,
+    LibraryFileEdited,
+    LibraryFileEditResult,
     LibraryFileRegister,
     LibraryFilesAbsentRequest,
     LibraryFilesAbsentResult,
@@ -689,6 +691,17 @@ class KaianoApiClient:
         return cast(
             LibraryFilesSyncedResult,
             self._call("mark_library_files_synced", payload),
+        )
+
+    def report_library_file_edited(
+        self, payload: LibraryFileEdited
+    ) -> LibraryFileEditResult:
+        """``POST /v1/catalog/library/files/edited`` — a linked file's owned
+        fields as read after it changed outside the pipeline; each field it
+        changed and the catalog did not goes up to its entry."""
+        return cast(
+            LibraryFileEditResult,
+            self._call("report_library_file_edited", payload),
         )
 
     def report_duplicate_groups(

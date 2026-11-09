@@ -27,7 +27,10 @@ from mini_app_polis.api.contract import (
     DuplicateReportResult,
     LibraryEntryCreate,
     LibraryEntryCreated,
+    LibraryFieldEdit,
     LibraryFile,
+    LibraryFileEdited,
+    LibraryFileEditResult,
     LibraryFileRegister,
     LibraryFilesAbsentRequest,
     LibraryFilesAbsentResult,
@@ -453,6 +456,87 @@ def test_marking_synced_posts_the_ids_and_the_time(
         )
     ]
     assert result == LibraryFilesSyncedResult(marked=1)
+
+
+def test_a_rollback_can_ask_for_the_recorded_values_to_be_forgotten(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, calls = _client(monkeypatch, {"data": {"marked": 1}, "meta": _META})
+    when = dt.datetime(2026, 11, 7, 4, 41, tzinfo=dt.UTC)
+
+    client.mark_library_files_synced(
+        LibraryFilesSynced(drive_file_ids=["a"], synced_at=when, forget=True)
+    )
+
+    assert calls[0][2] == {
+        "drive_file_ids": ["a"],
+        "synced_at": "2026-11-07T04:41:00Z",
+        "forget": True,
+    }
+
+
+def test_a_file_edited_outside_the_pipeline_is_reported_under_the_library_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    endpoint = ENDPOINTS_BY_NAME["report_library_file_edited"]
+    assert (endpoint.method, endpoint.path, endpoint.scope) == (
+        "POST",
+        "/v1/catalog/library/files/edited",
+        "catalog.library.write",
+    )
+    answer = {
+        "drive_file_id": "drive-1",
+        "catalog_id": str(_ENTRY),
+        "fields": [
+            {
+                "field": "genre",
+                "synced": "House",
+                "file": "Tech House",
+                "catalog": "House",
+                "outcome": "sent_up",
+            }
+        ],
+    }
+    client, calls = _client(monkeypatch, {"data": answer, "meta": _META})
+
+    result = client.report_library_file_edited(
+        LibraryFileEdited(
+            drive_file_id="drive-1",
+            tags=LibraryFileTags(title="Temple", genre="Tech House"),
+        )
+    )
+
+    assert calls == [
+        (
+            "POST",
+            "/v1/catalog/library/files/edited",
+            {
+                "drive_file_id": "drive-1",
+                "tags": {"title": "Temple", "genre": "Tech House"},
+            },
+        )
+    ]
+    assert isinstance(result, LibraryFileEditResult)
+    assert result.fields == [
+        LibraryFieldEdit(
+            field="genre",
+            synced="House",
+            file="Tech House",
+            catalog="House",
+            outcome="sent_up",
+        )
+    ]
+
+
+def test_an_edit_report_names_only_owned_fields_and_known_outcomes() -> None:
+    with pytest.raises(ValidationError):
+        LibraryFieldEdit(field="comment", outcome="sent_up")  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        LibraryFieldEdit(field="genre", outcome="ignored")  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        LibraryFileEdited.model_validate(
+            {"drive_file_id": "a", "tags": {}, "path": "x"}
+        )
 
 
 def _group(key: str = "same_md5:abc") -> dict[str, Any]:
