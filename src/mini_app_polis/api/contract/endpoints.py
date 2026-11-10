@@ -40,6 +40,7 @@ from .evaluations import (
     PipelineEvaluationItem,
     PipelineEvaluationWriteResult,
 )
+from .flags import FeatureFlagItem
 from .library import (
     CatalogDisplay,
     CatalogDisplayRequest,
@@ -580,6 +581,14 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         path="/v1/sets",
         request=None,
         response=list[SetListItem],
+        scope=None,
+    ),
+    Endpoint(
+        name="list_flags",
+        method="GET",
+        path="/v1/flags",
+        request=None,
+        response=list[FeatureFlagItem],
         scope=None,
     ),
     Endpoint(

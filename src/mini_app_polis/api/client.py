@@ -77,6 +77,7 @@ from .contract import (
     DuplicateReport,
     DuplicateReportResult,
     Envelope,
+    FeatureFlagItem,
     IngestResponseData,
     IngestSet,
     LibraryEntryCreate,
@@ -1084,6 +1085,13 @@ class KaianoApiClient:
             list[PipelineEvaluationItem],
             self._call("list_evaluations", params=params),
         )
+
+    def list_flags(self) -> list[FeatureFlagItem]:
+        """``GET /v1/flags`` — every feature flag, with its state and value.
+
+        A flag's ``value`` is None when it is a plain on/off flag.
+        """
+        return cast(list[FeatureFlagItem], self._call("list_flags"))
 
     def record_rotation_event(self, payload: RotationEventCreate) -> RotationEvent:
         """``POST /v1/secrets/rotation-events`` — record one rotation.

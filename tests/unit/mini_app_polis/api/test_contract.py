@@ -10,13 +10,14 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from mini_app_polis.api import KaianoApiClient
+from mini_app_polis.api import KaianoApiClient, KaianoApiError
 from mini_app_polis.api.contract import (
     ENDPOINTS,
     ENDPOINTS_BY_NAME,
     NOTIFY_DELIVERY_FAILED,
     NOTIFY_FORWARDED,
     NOTIFY_QUEUED,
+    FeatureFlagItem,
     IngestSet,
     IngestTrack,
     NotificationResult,
@@ -877,3 +878,58 @@ def test_a_stored_finding_without_the_version_still_reads() -> None:
     )
     assert item.repo_version is None
     assert item.repo_commit is None
+
+
+# ── Feature flags ─────────────────────────────────────────────────────────
+
+
+def _flag(**fields: Any) -> dict[str, Any]:
+    return {
+        "id": str(uuid.uuid4()),
+        "owner_id": "kaiano",
+        "name": "flags.deejay_cog.library_scan",
+        "enabled": True,
+        "description": "library-scan step mode",
+        "created_at": "2026-11-10T00:00:00Z",
+        "updated_at": "2026-11-10T00:00:00Z",
+        **fields,
+    }
+
+
+def test_list_flags_reads_a_flags_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    client, calls = _client(
+        monkeypatch, {"data": [_flag(value="dry-run")], "meta": _META}
+    )
+
+    (flag,) = client.list_flags()
+
+    assert calls == [("GET", "/v1/flags", None)]
+    assert isinstance(flag, FeatureFlagItem)
+    assert flag.name == "flags.deejay_cog.library_scan"
+    assert flag.enabled is True
+    assert flag.value == "dry-run"
+    assert flag.description == "library-scan step mode"
+
+
+@pytest.mark.parametrize("fields", [{"value": None}, {}], ids=["null", "absent"])
+def test_list_flags_reads_a_flag_without_a_value_as_none(
+    monkeypatch: pytest.MonkeyPatch, fields: dict[str, Any]
+) -> None:
+    client, _ = _client(monkeypatch, {"data": [_flag(**fields)], "meta": _META})
+
+    (flag,) = client.list_flags()
+
+    assert flag.value is None
+
+
+def test_list_flags_raises_the_apis_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse(self, path, params=None):  # noqa: ARG001
+        raise KaianoApiError(status_code=500, message="boom", path=path)
+
+    monkeypatch.setattr(KaianoApiClient, "get", refuse)
+    client = KaianoApiClient(base_url="https://example.com", api_key="k")
+
+    with pytest.raises(KaianoApiError) as raised:
+        client.list_flags()
+
+    assert raised.value.status_code == 500

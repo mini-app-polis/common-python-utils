@@ -153,6 +153,14 @@ def test_lists_evaluations_without_authentication(
     Envelope[list[PipelineEvaluationItem]].model_validate(response.json())
 
 
+def test_lists_feature_flags(api: LedgerClient) -> None:
+    """deejay-cog reads each step's mode from its flag at the start of a run."""
+    flags = api.list_flags()
+
+    assert flags
+    assert all(flag.name for flag in flags)
+
+
 # ── deejay-cog ────────────────────────────────────────────────────────────
 
 
