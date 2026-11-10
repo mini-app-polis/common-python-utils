@@ -1,3 +1,10 @@
+# [9.4.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.3.0...v9.4.0) (2026-11-10)
+
+
+### Features
+
+* **api:** read feature flags through KaianoApiClient.list_flags ([5ec71c9](https://github.com/mini-app-polis/common-python-utils/commit/5ec71c98cbcb0220c238c6cf2ccdaf322b919af7))
+
 # [9.3.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.2.0...v9.3.0) (2026-11-09)
 
 
