@@ -1,3 +1,10 @@
+# [9.5.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.4.0...v9.5.0) (2026-11-10)
+
+
+### Features
+
+* **api:** approve reconcile differences for the file, sending its value up to the catalog ([7ace36c](https://github.com/mini-app-polis/common-python-utils/commit/7ace36c6622e2f6a10bae35bddf75b4e3046867c))
+
 # [9.4.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.3.0...v9.4.0) (2026-11-10)
 
 
