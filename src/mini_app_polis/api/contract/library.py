@@ -257,6 +257,14 @@ class LibraryFileEdited(BaseModel):
     to the entry's other files; a field held, re-measured or overwritten
     keeps its recorded value. A file none of whose fields went up or were
     overwritten is marked synced, so it is not read again until it changes.
+
+    ``keep_file`` names fields where the owner decided the file is right (a
+    reconcile difference approved for the file): each goes up to the entry
+    whatever the last sync recorded and whatever the catalog holds, unless it
+    is held for the usual reasons (a title or artist that does not split
+    cleanly, a genre off the vocabulary, a one-character label). A file never
+    synced sends up only its ``keep_file`` fields, and its recorded values
+    are left for the sync to record.
     """
 
     drive_file_id: str = Field(..., min_length=1, description="The Drive file's id.")
@@ -265,6 +273,13 @@ class LibraryFileEdited(BaseModel):
         description=(
             "Its owned fields as read: the title with the file's own release "
             "label, as the sync writes it."
+        ),
+    )
+    keep_file: list[LibraryOwnedField] = Field(
+        default_factory=list,
+        description=(
+            "Fields whose file value goes up to the entry whatever the last "
+            "sync and the catalog hold (the owner chose the file's value)."
         ),
     )
     preview: bool = Field(
@@ -526,6 +541,27 @@ ReconcileField = Literal[
     "title", "artist", "year", "genre", "bpm", "label", "catalog_id"
 ]
 
+#: The kinds that can be approved for the file: the file's value goes up to
+#: the catalog instead of the catalog's being written over the file. Not
+#: the kinds where the file has no value (``year_filled``, ``genre_filled``),
+#: not ``fill_up`` (already the file's value going up), and not ``other``,
+#: which is approved file by file.
+RECONCILE_FILE_WINS_KINDS: frozenset[str] = frozenset(
+    {
+        "case_punctuation",
+        "featured_moved",
+        "artist_joiner",
+        "version_brackets",
+        "genre_remapped",
+        "year_earlier",
+        "year_later",
+        "year_differs",
+        "bpm_rounding",
+        "bpm_differs",
+        "label_differs",
+    }
+)
+
 #: The most files one reconcile report may name as compared.
 RECONCILE_REPORT_MAX_FILES = 500
 
@@ -584,8 +620,16 @@ class ReconcileReportResult(BaseModel):
 
 
 class ReconcileApprovalsSet(BaseModel):
-    """What the owner approved for the reconcile's write runs: whole kinds,
-    and ``other`` differences one file and field at a time."""
+    """What the owner approved for the reconcile's write runs, in two
+    directions.
+
+    For the catalog (``kinds``, ``files``): the catalog's value is written
+    over the file. For the file (``file_wins_kinds``, ``file_wins_files``):
+    the file's value goes up to the catalog entry and the file is not
+    written. Either way the file and the entry then match. Whole kinds, or
+    ``other`` differences one file and field at a time; a kind, or a file's
+    field, is approved in one direction only.
+    """
 
     kinds: list[ReconcileKind] = Field(
         default_factory=list, description="The approved kinds (never 'other')."
@@ -594,6 +638,20 @@ class ReconcileApprovalsSet(BaseModel):
         default_factory=dict,
         description="Approved 'other' differences: Drive file id to its fields.",
     )
+    file_wins_kinds: list[ReconcileKind] = Field(
+        default_factory=list,
+        description=(
+            "Kinds approved for the file: its value goes up to the catalog "
+            "(only RECONCILE_FILE_WINS_KINDS)."
+        ),
+    )
+    file_wins_files: dict[str, list[ReconcileField]] = Field(
+        default_factory=dict,
+        description=(
+            "'other' differences approved for the file, by Drive file id and "
+            "field (never catalog_id)."
+        ),
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -601,6 +659,20 @@ class ReconcileApprovalsSet(BaseModel):
     def _other_is_by_file(self) -> ReconcileApprovalsSet:
         if "other" in self.kinds:
             raise ValueError("'other' is approved file by file, under files")
+        refused = sorted(set(self.file_wins_kinds) - RECONCILE_FILE_WINS_KINDS)
+        if refused:
+            raise ValueError(f"kinds that cannot be approved for the file: {refused}")
+        both = sorted(set(self.kinds) & set(self.file_wins_kinds))
+        if both:
+            raise ValueError(f"kinds approved in both directions: {both}")
+        for file_id, fields in self.file_wins_files.items():
+            if "catalog_id" in fields:
+                raise ValueError("catalog_id cannot be approved for the file")
+            twice = sorted(set(fields) & set(self.files.get(file_id, [])))
+            if twice:
+                raise ValueError(
+                    f"file {file_id} has fields approved in both directions: {twice}"
+                )
         return self
 
 
