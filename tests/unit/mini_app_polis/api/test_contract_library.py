@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 from pydantic import ValidationError
@@ -16,6 +16,7 @@ from mini_app_polis.api.contract import (
     DUPLICATE_REPORT_MAX_GROUPS,
     ENDPOINTS_BY_NAME,
     LIBRARY_ABSENT_MAX_FILES,
+    RECONCILE_FILE_WINS_KINDS,
     RECONCILE_REPORT_MAX_FILES,
     CatalogDisplay,
     CatalogDisplayRequest,
@@ -37,8 +38,10 @@ from mini_app_polis.api.contract import (
     LibraryFilesSynced,
     LibraryFilesSyncedResult,
     LibraryFileTags,
+    ReconcileApprovals,
     ReconcileApprovalsSet,
     ReconcileDifference,
+    ReconcileKind,
     ReconcileReport,
     ReconcileReportResult,
 )
@@ -735,6 +738,73 @@ def test_other_is_approved_file_by_file_not_as_a_kind() -> None:
         ReconcileApprovalsSet.model_validate({"kinds": ["other"]})
     with pytest.raises(ValidationError):
         ReconcileApprovalsSet.model_validate({"files": {"a": ["subgenre"]}})
+
+
+def test_a_kind_can_be_approved_for_the_file() -> None:
+    approvals = ReconcileApprovalsSet(
+        kinds=["case_punctuation"],
+        files={"a": ["title"]},
+        file_wins_kinds=["year_later", "bpm_differs"],
+        file_wins_files={"a": ["artist"], "b": ["year"]},
+    )
+    assert approvals.file_wins_kinds == ["year_later", "bpm_differs"]
+    assert ReconcileApprovalsSet().file_wins_files == {}
+
+
+@pytest.mark.parametrize("kind", ["other", "fill_up", "year_filled", "genre_filled"])
+def test_kinds_where_the_file_has_nothing_to_send_up_cannot_be_approved_for_it(
+    kind: str,
+) -> None:
+    with pytest.raises(ValidationError, match="approved"):
+        ReconcileApprovalsSet.model_validate({"file_wins_kinds": [kind]})
+
+
+def test_every_file_wins_kind_is_a_reconcile_kind() -> None:
+    assert set(get_args(ReconcileKind)) >= RECONCILE_FILE_WINS_KINDS
+
+
+def test_a_kind_or_field_is_approved_in_one_direction_only() -> None:
+    with pytest.raises(ValidationError, match="both directions"):
+        ReconcileApprovalsSet(kinds=["year_later"], file_wins_kinds=["year_later"])
+    with pytest.raises(ValidationError, match="both directions"):
+        ReconcileApprovalsSet(
+            files={"a": ["title"]}, file_wins_files={"a": ["title", "artist"]}
+        )
+    # The same field of different files may go either way.
+    ReconcileApprovalsSet(files={"a": ["title"]}, file_wins_files={"b": ["title"]})
+
+
+def test_a_files_link_cannot_be_approved_for_the_file() -> None:
+    with pytest.raises(ValidationError, match="catalog_id"):
+        ReconcileApprovalsSet(file_wins_files={"a": ["catalog_id"]})
+
+
+def test_approvals_read_back_carry_both_directions() -> None:
+    read = ReconcileApprovals.model_validate(
+        {
+            "kinds": ["fill_up"],
+            "files": {},
+            "file_wins_kinds": ["year_later"],
+            "file_wins_files": {"a": ["bpm"]},
+            "updated_by": "user_1",
+        }
+    )
+    assert read.file_wins_kinds == ["year_later"]
+    assert read.file_wins_files == {"a": ["bpm"]}
+
+
+def test_an_edit_report_can_name_fields_to_keep_from_the_file() -> None:
+    edited = LibraryFileEdited(
+        drive_file_id="a",
+        tags=LibraryFileTags(title="Song", year="2014"),
+        keep_file=["year", "bpm"],
+    )
+    assert edited.keep_file == ["year", "bpm"]
+    assert LibraryFileEdited(drive_file_id="a", tags=LibraryFileTags()).keep_file == []
+    with pytest.raises(ValidationError):
+        LibraryFileEdited.model_validate(
+            {"drive_file_id": "a", "tags": {}, "keep_file": ["catalog_id"]}
+        )
 
 
 def test_reporting_differences_posts_them(monkeypatch: pytest.MonkeyPatch) -> None:
