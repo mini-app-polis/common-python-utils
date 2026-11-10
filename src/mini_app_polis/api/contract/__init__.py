@@ -52,6 +52,7 @@ from .evaluations import (
     PipelineEvaluationItem,
     PipelineEvaluationWriteResult,
 )
+from .flags import FeatureFlagItem
 from .library import (
     CATALOG_DISPLAY_MAX_IDS,
     DUPLICATE_REPORT_MAX_GROUPS,
@@ -246,6 +247,7 @@ from .wcs_wiki import (
 )
 
 __all__ = [
+    "FeatureFlagItem",
     "AgentResultAccepted",
     "AgentRun",
     "AgentRunCreate",
