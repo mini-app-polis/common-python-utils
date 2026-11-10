@@ -149,12 +149,15 @@ jobs:
         run: |
           echo "::error::miniapppolis-common-utils $VERSION is published, but the fleet was not asked to take it. Run commons-update in mini-app-polis/.github by hand (package miniapppolis-common-utils, version $VERSION)."
 
-  # Conformance is graded when the repository changes, and this is where
-  # that is said. The evaluation runs after this job ends, so what the job
-  # reports is whether the request landed — never what was found.
+  # Conformance is graded on every change once CI passes, before it is
+  # released (CD-031), so a docs or chore commit that cuts no release is
+  # graded too. Nothing waits for the answer: the job reports whether the
+  # request landed, never what was found.
   evaluate:
-    needs: release
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [test, security]
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
     uses: mini-app-polis/.github/.github/workflows/evaluate.yml@v3
+    with:
+      ref: dev
     secrets:
       api-key: ${{ secrets.CI_VALIDATOR_API_KEY }}
