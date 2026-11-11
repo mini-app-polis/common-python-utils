@@ -104,3 +104,20 @@ def test_deejay_cog_can_be_asked_to_retag_music() -> None:
     assert DeejayRunRequest(mode="library-reconcile").mode == "library-reconcile"
     with pytest.raises(ValidationError):
         DeejayRunRequest(mode="retag-everything")  # type: ignore[arg-type]
+
+
+def test_a_match_is_a_published_entry_unless_marked_an_owner_edit() -> None:
+    plain = CatalogMatch(id=_ENTRY, title="Temple", artist="Thomas Gold")
+    assert plain.owner_edit is False and plain.cut_from_id is None
+
+    cut = CatalogMatch.model_validate(
+        {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "title": "Temple <Intro Cut>",
+            "artist": "Thomas Gold",
+            "owner_edit": True,
+            "cut_from_id": _ENTRY,
+        }
+    )
+    assert cut.owner_edit is True
+    assert str(cut.cut_from_id) == _ENTRY
