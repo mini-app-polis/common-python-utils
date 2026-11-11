@@ -23,6 +23,7 @@ from .agent_runs import (
 )
 from .deejay import (
     CATALOG_LOOKUP_MAX_TRACKS,
+    CatalogLibrary,
     CatalogLookupRequest,
     CatalogMatch,
     IngestResponseData,
@@ -108,6 +109,7 @@ from .queue import (
     EvaluationRepositoryPayload,
     JobMessage,
     QueueMessage,
+    QueueRequest,
     RotationIncidentMessage,
     RotationIncidentPayload,
     RotationJobMessage,
@@ -314,6 +316,7 @@ __all__ = [
     "PipelineEvaluationWriteResult",
     "QUEUE_MESSAGE_VERSION",
     "QueueMessage",
+    "QueueRequest",
     "RotationConfig",
     "RotationEvent",
     "RotationEventCreate",
@@ -341,6 +344,7 @@ __all__ = [
     "SecretChangeKind",
     "SetListItem",
     "CATALOG_LOOKUP_MAX_TRACKS",
+    "CatalogLibrary",
     "CatalogLookupRequest",
     "CatalogMatch",
     "CATALOG_DISPLAY_MAX_IDS",

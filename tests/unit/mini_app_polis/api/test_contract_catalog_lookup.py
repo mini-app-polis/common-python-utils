@@ -121,3 +121,17 @@ def test_a_match_is_a_published_entry_unless_marked_an_owner_edit() -> None:
     )
     assert cut.owner_edit is True
     assert str(cut.cut_from_id) == _ENTRY
+
+
+def test_a_match_is_of_the_main_library_unless_it_says_fx() -> None:
+    plain = CatalogMatch(id=_ENTRY, title="Temple", artist="Thomas Gold")
+    assert plain.library == "main"
+
+    fx = CatalogMatch.model_validate(
+        {"id": _ENTRY, "title": "Airhorn", "artist": "FX", "library": "fx"}
+    )
+    assert fx.library == "fx"
+    with pytest.raises(ValidationError):
+        CatalogMatch.model_validate(
+            {"id": _ENTRY, "title": "Airhorn", "artist": "FX", "library": "other"}
+        )

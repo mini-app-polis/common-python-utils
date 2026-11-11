@@ -164,6 +164,10 @@ single definition. A response that doesn't match raises pydantic's
 fields, so a field the API adds doesn't break a cog pinned to an older
 release. A test enforces this.
 
+A link from a library file to a catalog entry of the other library (main, or
+fx for FX Music) is refused with a 409 the client raises as
+`OtherLibraryError`, a `KaianoApiError`.
+
 **Retries.** A GET is retried on a lost connection, on a gateway's 502, 503
 or 504, and on 429. Each wait is longer than the last (about 2 s, then 4 s,
 jittered), or as long as the response's `Retry-After`, and never more than
@@ -461,6 +465,9 @@ earlier still. `RunOutOfTime` is a `BaseException`, so a flow's
 `UnprocessableMessage` for a body that is not a message of the kinds given.
 `process_records` never raises, and names each failed record once. The message
 kinds are in `mini_app_polis.api.contract` (`QueueMessage`, `JobMessage`).
+A message the API queued for a request also carries `request` (a
+`QueueRequest`: its own id, when it was asked for, and who asked); one from a
+schedule has none, and is written without the key.
 
 A run report carries the cog's build when the cog passes its own version:
 `run_report(..., version=__version__)` stamps `(version=X.Y.Z)` on the text.

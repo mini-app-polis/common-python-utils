@@ -18,7 +18,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .deejay import CatalogMatch
+from .deejay import CatalogLibrary, CatalogMatch
 
 #: Whether a file's song is known. ``identified`` files are linked to a
 #: catalog entry; ``unidentified`` ones are listed for the owner to identify.
@@ -325,7 +325,8 @@ class LibraryEntryCreate(BaseModel):
     library and has no plays. When the catalog already has an entry a play
     of the song would be filed under (the set import's own matching, across
     every owner, as ``POST /v1/catalog/lookup`` finds it), that entry is the
-    answer and nothing is made.
+    answer and nothing is made. Only entries of ``library`` are matched, and
+    a new entry belongs to it.
     """
 
     title: str = Field(..., min_length=1, description="The song's title.")
@@ -345,6 +346,10 @@ class LibraryEntryCreate(BaseModel):
             "Save nothing: answer with the entry the call would make, written "
             "out by the same parsing and display rules, or the existing entry."
         ),
+    )
+    library: CatalogLibrary = Field(
+        default="main",
+        description="The library the entry is of: main, or fx for a song in FX Music.",
     )
 
     model_config = ConfigDict(extra="forbid")

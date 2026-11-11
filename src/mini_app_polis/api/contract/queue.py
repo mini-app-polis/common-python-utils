@@ -18,9 +18,16 @@ producer bug, not a message for someone else.
 
 from __future__ import annotations
 
+import datetime as dt
 from typing import Annotated, Any, ClassVar, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+)
 
 from .agent_runs import AgentRun
 from .refinings import RefiningJobRequest, RefiningProposal
@@ -34,11 +41,26 @@ QUEUE_MESSAGE_VERSION = 1
 P = TypeVar("P")
 
 
+class QueueRequest(BaseModel):
+    """The request that asked for a message: its own id, when, and who asked.
+
+    The API adds it to a message queued from a route, so two triggers of one
+    job are two messages, and a run report can say who asked.
+    """
+
+    id: str = Field(..., description="This request's own id.")
+    requested_at: dt.datetime = Field(..., description="When it was asked for.")
+    caller: str | None = Field(
+        default=None, description="Who asked, when the API knows."
+    )
+
+
 class QueueMessage(BaseModel, Generic[P]):
     """One message on a job queue: ``{type, version, payload}``.
 
     A subclass names one kind: its ``type`` as a ``Literal``, its payload
-    model, and the version it speaks as ``VERSION``.
+    model, and the version it speaks as ``VERSION``. A message queued from a
+    request also carries ``request``; one from a schedule has none.
     """
 
     VERSION: ClassVar[int] = QUEUE_MESSAGE_VERSION
@@ -49,6 +71,18 @@ class QueueMessage(BaseModel, Generic[P]):
         description="Schema version of the envelope and its payload.",
     )
     payload: P = Field(..., description="The job.")
+    request: QueueRequest | None = Field(
+        default=None, description="The request that asked for it, if any."
+    )
+
+    @model_serializer(mode="wrap")
+    def _no_request_left_out(self, handler: SerializerFunctionWrapHandler) -> Any:
+        """A message with no request is written without the key, so its body
+        is the ``{type, version, payload}`` it was before the field existed."""
+        data = handler(self)
+        if self.request is None and isinstance(data, dict):
+            data.pop("request", None)
+        return data
 
     @classmethod
     def message_type(cls) -> str:
@@ -276,6 +310,7 @@ __all__ = [
     "EvaluationRepositoryPayload",
     "JobMessage",
     "QueueMessage",
+    "QueueRequest",
     "RotationIncidentMessage",
     "RotationIncidentPayload",
     "RotationJobMessage",

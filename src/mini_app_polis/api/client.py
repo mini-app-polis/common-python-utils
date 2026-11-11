@@ -600,6 +600,8 @@ class KaianoApiClient:
 
         The file is present again and its ``last_seen`` is now. Optional
         fields not set on ``payload`` are not sent, so they keep their value.
+        Raises :class:`OtherLibraryError` when ``catalog_id`` is an entry of
+        the other library.
         """
         return cast(LibraryFile, self._call("register_library_file", payload))
 
@@ -722,7 +724,8 @@ class KaianoApiClient:
         When the catalog already has the song's entry, that entry comes back
         with ``created`` false and nothing is made. With ``preview`` set,
         nothing is saved: a song the catalog lacks comes back as the entry
-        that would be made, with ``previewed`` true.
+        that would be made, with ``previewed`` true. Only entries of
+        ``payload.library`` (main unless set) are matched or made.
         """
         return cast(LibraryEntryCreated, self._call("create_library_entry", payload))
 

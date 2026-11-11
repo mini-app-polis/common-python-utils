@@ -6,11 +6,12 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 from typing import Any, get_args
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
 
-from mini_app_polis.api import KaianoApiClient
+from mini_app_polis.api import KaianoApiClient, KaianoApiError, OtherLibraryError
 from mini_app_polis.api.contract import (
     CATALOG_DISPLAY_MAX_IDS,
     DUPLICATE_REPORT_MAX_GROUPS,
@@ -856,3 +857,94 @@ def test_a_display_is_a_published_entry_unless_marked_an_owner_edit() -> None:
         _display(title="Temple <Intro Cut>", owner_edit=True, cut_from_id=str(source))
     )
     assert cut.owner_edit is True and cut.cut_from_id == source
+
+
+# ── The entry's library: main or fx ───────────────────────────────────────
+
+
+def test_an_fx_entry_is_asked_for_by_its_library_and_a_default_one_is_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    answer = {
+        "data": {
+            "entry": {
+                "id": str(_ENTRY),
+                "title": "Airhorn",
+                "artist": "FX",
+                "library": "fx",
+            },
+            "created": True,
+        },
+        "meta": _META,
+    }
+    client, calls = _client(monkeypatch, answer)
+
+    out = client.create_library_entry(
+        LibraryEntryCreate(title="Airhorn", artist="FX", library="fx")
+    )
+    client.create_library_entry(
+        LibraryEntryCreate(title="Temple", artist="Thomas Gold")
+    )
+
+    assert [body for _, _, body in calls] == [
+        {"title": "Airhorn", "artist": "FX", "library": "fx"},
+        {"title": "Temple", "artist": "Thomas Gold"},
+    ]
+    assert out.entry.library == "fx"
+    assert LibraryEntryCreate(title="Temple", artist="Thomas Gold").library == "main"
+    with pytest.raises(ValidationError):
+        LibraryEntryCreate(title="Temple", artist="Thomas Gold", library="other")
+
+
+def _post_answering(status: int, body: str) -> tuple[KaianoApiClient, Any]:
+    response = MagicMock()
+    response.status_code = status
+    response.text = body
+    http = MagicMock()
+    http.post.return_value = response
+    patcher = patch("mini_app_polis.api.client.httpx.Client")
+    client_cls = patcher.start()
+    client_cls.return_value.__enter__.return_value = http
+    return KaianoApiClient(base_url="https://x", api_key="k"), patcher
+
+
+_OTHER_LIBRARY = (
+    '{"error": {"code": "other_library", '
+    '"message": "The file is in the fx library; the entry is not"}}'
+)
+
+
+def test_registering_a_link_to_the_other_library_raises_other_library_error() -> None:
+    client, patcher = _post_answering(409, _OTHER_LIBRARY)
+    try:
+        with pytest.raises(OtherLibraryError) as raised:
+            client.register_library_file(_register())
+    finally:
+        patcher.stop()
+
+    assert isinstance(raised.value, KaianoApiError)
+    assert raised.value.status_code == 409
+    assert raised.value.path == "/v1/catalog/library/files"
+
+
+def test_linking_a_file_to_the_other_library_raises_other_library_error() -> None:
+    client, patcher = _post_answering(409, _OTHER_LIBRARY)
+    try:
+        with pytest.raises(OtherLibraryError):
+            client.post(
+                "/v1/catalog/library/files/drive-1/link", {"catalog_id": str(_ENTRY)}
+            )
+    finally:
+        patcher.stop()
+
+
+def test_another_conflict_is_not_an_other_library_error() -> None:
+    body = '{"error": {"code": "conflict", "message": "Approvals already set"}}'
+    client, patcher = _post_answering(409, body)
+    try:
+        with pytest.raises(KaianoApiError) as raised:
+            client.register_library_file(_register())
+    finally:
+        patcher.stop()
+
+    assert type(raised.value) is KaianoApiError
