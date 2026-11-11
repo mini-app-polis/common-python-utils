@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -172,6 +173,12 @@ class CatalogLookupRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+#: The library a catalog entry belongs to: ``main``, or ``fx`` for FX Music
+#: (the fx and bumper music for events). A library file links only to an
+#: entry of its own library.
+CatalogLibrary = Literal["main", "fx"]
+
+
 class CatalogMatch(BaseModel):
     """The catalog entry a track belongs to, with the fields a tag carries."""
 
@@ -192,4 +199,8 @@ class CatalogMatch(BaseModel):
     cut_from_id: uuid.UUID | None = Field(
         default=None,
         description="For an owner edit, the published entry it was cut from, if known.",
+    )
+    library: CatalogLibrary = Field(
+        default="main",
+        description="The library the entry belongs to: main, or fx for FX Music.",
     )

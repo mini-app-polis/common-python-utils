@@ -34,6 +34,26 @@ class ApiUnavailable(KaianoApiError):
     """
 
 
+class OtherLibraryError(KaianoApiError):
+    """The API refused to link a library file to an entry of the other library.
+
+    A file links only to an entry of its own library (main, or fx for FX
+    Music); a link across them is a 409 with the code ``other_library``. A
+    subclass, so ``except KaianoApiError`` still catches it.
+    """
+
+
+def _error_code(body: str) -> str | None:
+    """The ``code`` of the API's ``{"error": {...}}`` envelope, if it is one."""
+    try:
+        parsed = json.loads(body)
+    except ValueError:
+        return None
+    error = parsed.get("error") if isinstance(parsed, dict) else None
+    code = error.get("code") if isinstance(error, dict) else None
+    return code if isinstance(code, str) else None
+
+
 def is_edge_not_found(status_code: int, body: str) -> bool:
     """Whether a response is Railway's edge saying no deployment is serving."""
     if status_code != 404:
@@ -85,11 +105,14 @@ def summarize_body(body: str) -> str:
 
 
 def error_for(status_code: int, body: str, path: str) -> KaianoApiError:
-    """The exception for a non-2xx response: unavailable, or the API's refusal.
+    """The exception for a non-2xx response: unavailable, or the API's refusal
+    (:class:`OtherLibraryError` for a link across libraries).
 
     The message is :func:`summarize_body` of the body, never a whole HTML page.
     """
     message = summarize_body(body)
     if status_code in _UNAVAILABLE_STATUSES or is_edge_not_found(status_code, body):
         return ApiUnavailable(status_code=status_code, message=message, path=path)
+    if status_code == 409 and _error_code(body) == "other_library":
+        return OtherLibraryError(status_code=status_code, message=message, path=path)
     return KaianoApiError(status_code=status_code, message=message, path=path)

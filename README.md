@@ -164,6 +164,10 @@ single definition. A response that doesn't match raises pydantic's
 fields, so a field the API adds doesn't break a cog pinned to an older
 release. A test enforces this.
 
+A link from a library file to a catalog entry of the other library (main, or
+fx for FX Music) is refused with a 409 the client raises as
+`OtherLibraryError`, a `KaianoApiError`.
+
 **Retries.** A GET is retried on a lost connection, on a gateway's 502, 503
 or 504, and on 429. Each wait is longer than the last (about 2 s, then 4 s,
 jittered), or as long as the response's `Retry-After`, and never more than

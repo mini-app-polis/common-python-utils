@@ -1,4 +1,4 @@
 from .client import KaianoApiClient
-from .errors import ApiUnavailable, KaianoApiError
+from .errors import ApiUnavailable, KaianoApiError, OtherLibraryError
 
-__all__ = ["ApiUnavailable", "KaianoApiClient", "KaianoApiError"]
+__all__ = ["ApiUnavailable", "KaianoApiClient", "KaianoApiError", "OtherLibraryError"]
