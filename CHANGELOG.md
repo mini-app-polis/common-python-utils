@@ -1,3 +1,11 @@
+# [9.7.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.6.0...v9.7.0) (2026-11-11)
+
+
+### Features
+
+* **contract:** carry an entry's library and raise OtherLibraryError for a cross-library link ([fbbc8e9](https://github.com/mini-app-polis/common-python-utils/commit/fbbc8e92d651152d740ba7dee1165c3c1298c613))
+* **contract:** queue messages carry the request that asked for them ([d12b0ef](https://github.com/mini-app-polis/common-python-utils/commit/d12b0efb90cac35dad35a9dda23a940ac59f2dc7))
+
 # [9.6.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.5.0...v9.6.0) (2026-11-11)
 
 
