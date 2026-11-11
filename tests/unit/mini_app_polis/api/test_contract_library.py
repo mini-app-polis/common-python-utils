@@ -845,3 +845,14 @@ def test_reading_approvals_gets_them(monkeypatch: pytest.MonkeyPatch) -> None:
     assert (method, path) == ("GET", "/v1/catalog/library/reconcile/approvals")
     assert approvals.kinds == ["fill_up"]
     assert approvals.files == {"a": ["title"]}
+
+
+def test_a_display_is_a_published_entry_unless_marked_an_owner_edit() -> None:
+    plain = CatalogDisplay.model_validate(_display())
+    assert plain.owner_edit is False and plain.cut_from_id is None
+
+    source = uuid.UUID("00000000-0000-4000-8000-000000000000")
+    cut = CatalogDisplay.model_validate(
+        _display(title="Temple <Intro Cut>", owner_edit=True, cut_from_id=str(source))
+    )
+    assert cut.owner_edit is True and cut.cut_from_id == source

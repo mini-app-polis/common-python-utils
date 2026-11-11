@@ -185,3 +185,11 @@ class CatalogMatch(BaseModel):
     genre: str | None = Field(default=None, description="The genre.")
     bpm: float | None = Field(default=None, description="Beats per minute.")
     release_year: int | None = Field(default=None, description="The release year.")
+    owner_edit: bool = Field(
+        default=False,
+        description="Whether the entry's version is an owner edit, not a published one.",
+    )
+    cut_from_id: uuid.UUID | None = Field(
+        default=None,
+        description="For an owner edit, the published entry it was cut from, if known.",
+    )

@@ -481,6 +481,14 @@ class CatalogDisplay(BaseModel):
     subgenre: str | None = Field(default=None, description="The subgenre.")
     bpm: float | None = Field(default=None, description="BPM, as the rules round it.")
     label: str | None = Field(default=None, description="The record label.")
+    owner_edit: bool = Field(
+        default=False,
+        description="Whether the entry's version is an owner edit, not a published one.",
+    )
+    cut_from_id: uuid.UUID | None = Field(
+        default=None,
+        description="For an owner edit, the published entry it was cut from, if known.",
+    )
     changed_at: dt.datetime = Field(
         ...,
         description=(
