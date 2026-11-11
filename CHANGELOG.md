@@ -1,3 +1,10 @@
+# [9.6.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.5.0...v9.6.0) (2026-11-11)
+
+
+### Features
+
+* **contract:** mark owner-edit entries in catalog matches and displays ([3586fbd](https://github.com/mini-app-polis/common-python-utils/commit/3586fbdd0f47324328804b46072f91f93e3fe3ae))
+
 # [9.5.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.4.0...v9.5.0) (2026-11-10)
 
 
