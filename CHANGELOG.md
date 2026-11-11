@@ -1,3 +1,10 @@
+# [9.8.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.7.0...v9.8.0) (2026-11-11)
+
+
+### Features
+
+* **mp3:** tag FLAC, Ogg, M4A, WAV and AIFF files with AudioTagger ([da84e3d](https://github.com/mini-app-polis/common-python-utils/commit/da84e3d650c558117d47a8b80aff4bccf62cb672))
+
 # [9.7.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.6.0...v9.7.0) (2026-11-11)
 
 
