@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 from typing import Any
 
@@ -15,6 +16,7 @@ from mini_app_polis.api.contract import (
     EvaluationRepositoryMessage,
     JobMessage,
     QueueMessage,
+    QueueRequest,
     RotationIncidentMessage,
     RotationJobMessage,
     RotationSweepMessage,
@@ -313,3 +315,68 @@ def test_an_incident_job_carries_its_id_and_a_plain_job_does_not() -> None:
     # job with none must not send it, not even as null.
     assert "incident_id" not in plain.model_dump(mode="json")["payload"]
     assert "incident_id" not in json.loads(plain.model_dump_json())["payload"]
+
+
+# -- the request that asked for a message ----------------------------------------
+
+_REQUEST = {
+    "id": "5f0c2b7e9d8a4c3b8e1f2a3b4c5d6e7f",
+    "requested_at": "2026-11-11T09:30:00.123456+00:00",
+    "caller": "owner",
+}
+
+
+def test_a_message_carries_the_request_that_asked_for_it() -> None:
+    body = json.dumps(
+        {
+            "type": "deejay.run",
+            "version": 1,
+            "payload": {"mode": "retag-music"},
+            "request": _REQUEST,
+        }
+    )
+    message = parse_message(body, DeejayRunMessage)
+
+    assert isinstance(message.request, QueueRequest)
+    assert message.request.id == _REQUEST["id"]
+    assert message.request.requested_at == dt.datetime(
+        2026, 11, 11, 9, 30, 0, 123456, tzinfo=dt.UTC
+    )
+    assert message.request.caller == "owner"
+    assert message.model_dump(mode="json")["request"]["id"] == _REQUEST["id"]
+
+
+def test_a_request_may_name_no_caller() -> None:
+    message = ADAPTER.validate_python(
+        {
+            "type": "deejay.run",
+            "version": 1,
+            "payload": {"mode": "retag-music"},
+            "request": {**_REQUEST, "caller": None},
+        }
+    )
+    assert isinstance(message, DeejayRunMessage)
+    assert message.request is not None and message.request.caller is None
+
+
+def test_a_message_without_a_request_parses_and_is_written_without_one() -> None:
+    message = ADAPTER.validate_python(
+        {"type": "deejay.run", "version": 1, "payload": {"mode": "retag-music"}}
+    )
+    assert message.request is None
+    assert "request" not in message.model_dump(mode="json")
+    assert "request" not in json.loads(message.model_dump_json())
+
+
+def test_a_request_without_its_id_or_time_is_refused() -> None:
+    for missing in ("id", "requested_at"):
+        request = {k: v for k, v in _REQUEST.items() if k != missing}
+        with pytest.raises(ValidationError):
+            ADAPTER.validate_python(
+                {
+                    "type": "deejay.run",
+                    "version": 1,
+                    "payload": {"mode": "retag-music"},
+                    "request": request,
+                }
+            )

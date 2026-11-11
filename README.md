@@ -465,6 +465,9 @@ earlier still. `RunOutOfTime` is a `BaseException`, so a flow's
 `UnprocessableMessage` for a body that is not a message of the kinds given.
 `process_records` never raises, and names each failed record once. The message
 kinds are in `mini_app_polis.api.contract` (`QueueMessage`, `JobMessage`).
+A message the API queued for a request also carries `request` (a
+`QueueRequest`: its own id, when it was asked for, and who asked); one from a
+schedule has none, and is written without the key.
 
 A run report carries the cog's build when the cog passes its own version:
 `run_report(..., version=__version__)` stamps `(version=X.Y.Z)` on the text.
