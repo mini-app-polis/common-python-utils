@@ -69,7 +69,7 @@ modules it imports.
 | `lambda_worker.py` | `from mini_app_polis.lambda_worker import deadline, parse_message, process_records` | A Lambda queue consumer's glue: stop before the timeout (`RunOutOfTime`), read a `{type, version, payload}` message, name failed records in `batchItemFailures` |
 | `llm/` | `from mini_app_polis.llm import build_llm, LLMMessage` | OpenAI + Anthropic clients (optional extra) |
 | `logger.py` | `from mini_app_polis import logger` | The fleet's logger: level from `LOGGING_LEVEL`, JSON on Railway, credential-printing libraries held at INFO |
-| `mp3/` | `from mini_app_polis.mp3 import ...` | AcoustID identification, tagging, renaming |
+| `mp3/` | `from mini_app_polis.mp3 import ...` | AcoustID identification, tagging, renaming; `mp3.tag.AudioTagger` tags MP3, FLAC, Ogg Vorbis, Ogg Opus, M4A, WAV and AIFF |
 | `music/` | `from mini_app_polis.music import normalize_for_matching` | Music data normalization utilities |
 | `pipeline_status.py` | `from mini_app_polis.pipeline_status import RunReport, post_findings` | Run reports to the runs channel and graded findings to the API |
 | `request_metrics.py` | `from mini_app_polis.request_metrics import RequestMetricsMiddleware` | ASGI middleware publishing an API's request latency and error counts to CloudWatch |
@@ -253,6 +253,34 @@ Task bodies are Asana rich text, not markdown, and Asana returns 400 on
 malformed markup. Compose them with `rich_text_body` / `link` /
 `escape_rich_text` rather than by hand — transcripts and model output
 contain `<` and `&` often enough that escaping is a correctness concern.
+
+### Audio tags (requires `mp3` extra)
+
+`Mp3Tagger` reads and writes MP3 tags. `AudioTagger` reads and writes the
+same fields, into the same `TagSnapshot`, in every format in
+`SUPPORTED_FORMATS`: MP3, FLAC, Ogg Vorbis, Ogg Opus, M4A (MP4 audio), and
+the ID3 chunk of WAV and AIFF. The format is taken from the file's contents,
+not its name. Only the tag block is rewritten: a file is never converted and
+its audio is left as it is. On an MP3, `AudioTagger` writes exactly what
+`Mp3Tagger` writes.
+
+```python
+from mini_app_polis.mp3.tag import AudioTagger, UnsupportedFile
+
+tagger = AudioTagger()
+result = tagger.write("cut.flac", {"title": "Bow", "artist": "DJ", "year": "2025"})
+if isinstance(result, UnsupportedFile):
+    # Left alone: result.reason is PARTIAL_DOWNLOAD (a .part file),
+    # NOT_AUDIO, UNREADABLE or UNSUPPORTED_FORMAT; result.detail says more.
+    ...
+snapshot = tagger.read("cut.flac")  # TagSnapshot, or UnsupportedFile
+fmt = tagger.detect("cut.flac")  # AudioFormat.FLAC, or UnsupportedFile
+```
+
+A file it cannot tag gets an `UnsupportedFile` back, never an exception, and
+is not written; a path that does not exist raises `FileNotFoundError`.
+`ensure_virtualdj_compat=True` re-saves an MP3's tag as ID3v2.3 for
+VirtualDJ, as with `Mp3Tagger`, and does nothing for other formats.
 
 ### LLM (requires `llm` extra)
 
