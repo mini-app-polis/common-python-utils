@@ -1,3 +1,10 @@
+## [9.9.1](https://github.com/mini-app-polis/common-python-utils/compare/v9.9.0...v9.9.1) (2026-11-12)
+
+
+### Bug Fixes
+
+* **mp3:** stop reading the date key music_tag never has ([21c6fc5](https://github.com/mini-app-polis/common-python-utils/commit/21c6fc56fb4177a9789f883c7623cb12b4773da9))
+
 # [9.9.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.8.0...v9.9.0) (2026-11-12)
 
 
