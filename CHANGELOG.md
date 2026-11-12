@@ -1,3 +1,10 @@
+# [9.9.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.8.0...v9.9.0) (2026-11-12)
+
+
+### Features
+
+* **mp3:** rule profiles (main, fx) applied through AudioTagger, and BPM and label in every format ([9b0dfb6](https://github.com/mini-app-polis/common-python-utils/commit/9b0dfb6ccbfc86490d16a4f061075d9968ede4d2))
+
 # [9.8.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.7.0...v9.8.0) (2026-11-11)
 
 
