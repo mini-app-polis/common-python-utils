@@ -212,6 +212,9 @@ _BACKOFF_MAX_S = 30.0
 #: Patched in tests.
 _sleep = time.sleep
 
+#: POST paths retried on a 429: upserts keyed by Drive id, so a repeat is safe.
+_RETRY_ON_429_POSTS = frozenset({"/v1/catalog/library/files"})
+
 
 def _retry_after_s(response: httpx.Response) -> float | None:
     """The wait a response asks for, in seconds, or None if it names none."""
@@ -322,6 +325,8 @@ class KaianoApiClient:
         """
         url = f"{self.base_url}{path}"
         last_exc: Exception | None = None
+        rate_limited: KaianoApiError | None = None
+        err: KaianoApiError | None = None
 
         # Cleared on the way out: a caught exception left in a local closes a
         # cycle through this frame that keeps every caller's frame, and its
@@ -329,6 +334,8 @@ class KaianoApiClient:
         # mini_app_polis.google._retry.execute_with_retry).
         try:
             for attempt in range(1, self.max_retries + 1):
+                if rate_limited is not None:
+                    _ensure_time_left(f"writing {path}", rate_limited)
                 try:
                     with httpx.Client(timeout=self.timeout) as client:
                         response = client.post(
@@ -336,7 +343,25 @@ class KaianoApiClient:
                         )
 
                     if response.status_code >= 400:
-                        raise error_for(response.status_code, response.text, path)
+                        err = error_for(response.status_code, response.text, path)
+                        if (
+                            response.status_code != 429
+                            or path not in _RETRY_ON_429_POSTS
+                        ):
+                            raise err
+                        wait = _backoff_s(attempt, _retry_after_s(response))
+                        if attempt == self.max_retries or _wait_crosses_deadline(wait):
+                            raise err
+                        rate_limited = err
+                        _log.warning(
+                            "POST %s answered 429; attempt %d of %d, retrying in %.1fs",
+                            path,
+                            attempt,
+                            self.max_retries,
+                            wait,
+                        )
+                        _sleep(wait)
+                        continue
 
                     return response.json()
 
@@ -352,7 +377,7 @@ class KaianoApiClient:
                 path=path,
             )
         finally:
-            last_exc = None
+            last_exc = rate_limited = err = None
 
     def notify(
         self,
