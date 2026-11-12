@@ -48,7 +48,7 @@ else:
 SUPPORTED_FORMATS: frozenset[AudioFormat] = frozenset(AudioFormat)
 
 #: Name endings of downloads still in progress.
-PARTIAL_DOWNLOAD_SUFFIXES = (".part",)
+PARTIAL_DOWNLOAD_SUFFIXES = (".part", ".crdownload", ".partial")
 
 
 class AudioTagger:

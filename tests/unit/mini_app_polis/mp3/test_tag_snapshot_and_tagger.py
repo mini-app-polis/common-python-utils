@@ -383,6 +383,15 @@ def tag_io(monkeypatch):
     monkeypatch.setattr(mod, "TDRC", _Frame)
     monkeypatch.setattr(mod, "ID3NoHeaderError", type("E", (Exception,), {}))
     monkeypatch.setattr(mod, "log", log)
+    # BPM and label go through mutagen by format, not music_tag (see
+    # test_audio_tagger.py on real files); recorded here, never read.
+    mod.extras_written = []
+    monkeypatch.setattr(mod, "read_extras", lambda _path: {})
+    monkeypatch.setattr(
+        mod,
+        "write_extras",
+        lambda _path, values: mod.extras_written.append(dict(values)),
+    )
     return mod, mod.MusicTagIO(), files, log
 
 
@@ -401,7 +410,8 @@ def test_music_tag_io_read_joins_lists_and_logs_unreadable_keys(tag_io):
 
     snap = io.read("a.mp3")
 
-    assert snap.tags == {"tracktitle": "Song", "artist": "A1, A2", "bpm": "120"}
+    # bpm is not read through music_tag (it never has the key).
+    assert snap.tags == {"tracktitle": "Song", "artist": "A1, A2"}
     assert snap.has_artwork is False
     (msg,) = log.error.call_args.args
     assert "failed reading genre" in msg
@@ -452,14 +462,24 @@ def test_music_tag_io_write_maps_aliases_and_skips_unset_values(tag_io):
 
 def test_music_tag_io_write_logs_a_rejected_field_and_still_saves(tag_io):
     _, io, files, log = tag_io
-    f = files["a.mp3"] = _TagFile(bad_writes={"bpm"})
+    f = files["a.mp3"] = _TagFile(bad_writes={"genre"})
 
-    io.write("a.mp3", {"title": "Song", "bpm": "fast"})
+    io.write("a.mp3", {"title": "Song", "genre": "x"})
 
     assert dict(f) == {"tracktitle": "Song"}
     assert f.saves == 1
     (msg,) = log.error.call_args.args
-    assert "failed setting bpm='fast'" in msg
+    assert "failed setting genre='x'" in msg
+
+
+def test_music_tag_io_writes_bpm_and_label_by_format_not_music_tag(tag_io):
+    mod, io, files, _ = tag_io
+    f = files["a.mp3"] = _TagFile()
+
+    io.write("a.mp3", {"title": "Song", "bpm": 124.0, "label": "Spinnin"})
+
+    assert dict(f) == {"tracktitle": "Song"}
+    assert mod.extras_written == [{"bpm": 124.0, "label": "Spinnin"}]
 
 
 def test_music_tag_io_write_without_compat_leaves_id3_alone(tag_io):
