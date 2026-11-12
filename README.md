@@ -172,7 +172,9 @@ fx for FX Music) is refused with a 409 the client raises as
 or 504, and on 429. Each wait is longer than the last (about 2 s, then 4 s,
 jittered), or as long as the response's `Retry-After`, and never more than
 30 s. Retrying immediately is what turned one slow wiki export into three
-concurrent builds of it. A POST is retried only on a lost connection. Inside
+concurrent builds of it. A POST is retried only on a lost connection, except
+`POST /v1/catalog/library/files` (an upsert keyed by Drive id), which is also
+retried on 429 with the same waits. Inside
 `run_deadline`, the client follows the same rules as the library's other
 retry loops.
 
@@ -301,8 +303,8 @@ files; a profile holds no folder ids.
 from mini_app_polis.mp3.tag import MAIN, apply_profile
 
 result = apply_profile("song.flac", MAIN, catalog_values, dry_run=True)
-result.to_file      # values the catalog would write over the file
-result.to_catalog   # (FX) the file's values to send up
+result.to_file  # values the catalog would write over the file
+result.to_catalog  # (FX) the file's values to send up
 result.unsupported  # set when the file cannot be tagged; it is left alone
 ```
 

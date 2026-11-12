@@ -612,6 +612,67 @@ def test_a_lost_connection_is_retried_after_a_wait(sleeps: list[float]) -> None:
     assert len(sleeps) == 1
 
 
+# ── POST retried on 429 for the library-files upsert only ───────────────
+
+_LIBRARY_FILES = "/v1/catalog/library/files"
+
+
+def _post_with(
+    path: str, responses: list[Any], **client_kwargs: Any
+) -> tuple[Any, MagicMock]:
+    mock_http_client = MagicMock()
+    mock_http_client.post.side_effect = responses
+    with patch("mini_app_polis.api.client.httpx.Client") as mock_client_cls:
+        mock_client_cls.return_value.__enter__.return_value = mock_http_client
+        client = KaianoApiClient(
+            base_url="https://example.com", api_key="k_test", **client_kwargs
+        )
+        try:
+            out: Any = client.post(path, payload={})
+        except KaianoApiError as exc:
+            out = exc
+    return out, mock_http_client
+
+
+def test_library_file_post_waits_retry_after_on_429(sleeps: list[float]) -> None:
+    out, http = _post_with(
+        _LIBRARY_FILES, [_response(429, "slow", {"Retry-After": "7"}), _response(200)]
+    )
+
+    assert out == {"ok": True}
+    assert http.post.call_count == 2
+    assert sleeps == [7.0]
+
+
+def test_library_file_post_backs_off_on_429_without_retry_after(
+    sleeps: list[float],
+) -> None:
+    out, http = _post_with(_LIBRARY_FILES, [_response(429, "slow"), _response(200)])
+
+    assert out == {"ok": True}
+    assert http.post.call_count == 2
+    assert len(sleeps) == 1
+    assert 1.0 <= sleeps[0] <= 2.0
+
+
+def test_library_file_post_gives_up_after_max_retries(sleeps: list[float]) -> None:
+    out, http = _post_with(_LIBRARY_FILES, [_response(429, "slow")] * 3)
+
+    assert isinstance(out, KaianoApiError)
+    assert out.status_code == 429
+    assert http.post.call_count == 3
+    assert len(sleeps) == 2
+
+
+def test_another_post_is_not_retried_on_429(sleeps: list[float]) -> None:
+    out, http = _post_with("/v1/other", [_response(429, "slow"), _response(200)])
+
+    assert isinstance(out, KaianoApiError)
+    assert out.status_code == 429
+    assert http.post.call_count == 1
+    assert sleeps == []
+
+
 # ── conditional reads ───────────────────────────────────────────────────
 
 
