@@ -234,6 +234,8 @@ METADATA = {
     "isrc": "USAAA2100001",
     "track_number": 3,
     "disc_number": 1,
+    "bpm": 124.0,
+    "label": "Test Label",
 }
 
 EXPECTED = {
@@ -247,6 +249,8 @@ EXPECTED = {
     "isrc": "USAAA2100001",
     "tracknumber": "3",
     "discnumber": "1",
+    "bpm": "124",
+    "label": "Test Label",
 }
 
 
@@ -355,6 +359,18 @@ def _xlsx(path: Path) -> None:
         (
             "SONG.MP3.PART",
             lambda p: shutil.copyfile(FIXTURES / "tone.mp3", p),
+            UnsupportedReason.PARTIAL_DOWNLOAD,
+            "",
+        ),
+        (
+            "song.mp3.crdownload",
+            lambda p: shutil.copyfile(FIXTURES / "tone.mp3", p),
+            UnsupportedReason.PARTIAL_DOWNLOAD,
+            "",
+        ),
+        (
+            "song.m4a.partial",
+            lambda p: shutil.copyfile(FIXTURES / "tone.m4a", p),
             UnsupportedReason.PARTIAL_DOWNLOAD,
             "",
         ),

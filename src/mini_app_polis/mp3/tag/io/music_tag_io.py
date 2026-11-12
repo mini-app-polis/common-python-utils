@@ -31,6 +31,95 @@ except Exception as e:  # pragma: no cover
 else:
     _mutagen_err = None
 
+# Any rather than Any | None: each is checked through _mutagen_file first.
+_mutagen_file: Any
+MP4FreeForm: Any
+ID3Tags: Any
+MP4Tags: Any
+TBPM: Any
+TPUB: Any
+try:
+    from mutagen import File as _mutagen_file
+    from mutagen.id3 import ID3 as ID3Tags
+    from mutagen.id3 import TBPM, TPUB
+    from mutagen.mp4 import MP4FreeForm, MP4Tags
+except Exception:  # pragma: no cover
+    _mutagen_file = MP4FreeForm = ID3Tags = MP4Tags = TBPM = TPUB = None
+
+#: The fields music_tag does not read or write in any format, kept per
+#: format's own key instead: ID3 (MP3, WAV, AIFF) TBPM/TPUB, Vorbis comments
+#: (FLAC, Ogg Vorbis, Ogg Opus) BPM/LABEL, MP4 tmpo and a LABEL freeform atom.
+EXTRA_FIELDS = ("bpm", "label")
+_MP4_LABEL = "----:com.apple.iTunes:LABEL"
+
+
+def _bpm_text(value: Any) -> str:
+    """A BPM as text: a whole number without its ".0"."""
+    s = str(value).strip()
+    try:
+        f = float(s)
+    except ValueError:
+        return s
+    return str(int(f)) if f.is_integer() else s
+
+
+def read_extras(path: str) -> dict[str, str]:
+    """BPM and label from the file's own tag block, by its format's keys."""
+    if _mutagen_file is None:  # pragma: no cover
+        return {}
+    m = _mutagen_file(path)
+    tags = getattr(m, "tags", None)
+    if tags is None:
+        return {}
+    out: dict[str, str] = {}
+    if isinstance(tags, ID3Tags):
+        for key, frame in (("bpm", "TBPM"), ("label", "TPUB")):
+            if frame in tags and str(tags[frame]).strip():
+                out[key] = str(tags[frame]).strip()
+    elif isinstance(tags, MP4Tags):
+        if tags.get("tmpo"):
+            out["bpm"] = str(tags["tmpo"][0])
+        if tags.get(_MP4_LABEL):
+            out["label"] = bytes(tags[_MP4_LABEL][0]).decode("utf-8").strip()
+    else:
+        for key, name in (("bpm", "BPM"), ("label", "LABEL")):
+            values = tags.get(name) or tags.get(name.lower())
+            if values and str(values[0]).strip():
+                out[key] = str(values[0]).strip()
+    if "bpm" in out:
+        out["bpm"] = _bpm_text(out["bpm"])
+    return out
+
+
+def write_extras(path: str, values: Mapping[str, Any]) -> None:
+    """Write BPM and label, where given, by the file's format's own keys."""
+    wanted = {k: v for k, v in values.items() if k in EXTRA_FIELDS and v is not None}
+    if not wanted or _mutagen_file is None:
+        return
+    m = _mutagen_file(path)
+    if m is None:
+        return
+    if m.tags is None:
+        m.add_tags()
+    tags = m.tags
+    if isinstance(tags, ID3Tags):
+        if "bpm" in wanted:
+            tags.setall("TBPM", [TBPM(encoding=3, text=[_bpm_text(wanted["bpm"])])])
+        if "label" in wanted:
+            tags.setall("TPUB", [TPUB(encoding=3, text=[str(wanted["label"])])])
+    elif isinstance(tags, MP4Tags):
+        if "bpm" in wanted:
+            tags["tmpo"] = [round(float(wanted["bpm"]))]
+        if "label" in wanted:
+            tags[_MP4_LABEL] = [MP4FreeForm(str(wanted["label"]).encode("utf-8"))]
+    else:
+        if "bpm" in wanted:
+            tags["BPM"] = [_bpm_text(wanted["bpm"])]
+        if "label" in wanted:
+            tags["LABEL"] = [str(wanted["label"])]
+    m.save()
+
+
 try:
     import mini_app_polis.logger as logger_mod
 except Exception:  # pragma: no cover
@@ -118,7 +207,6 @@ class MusicTagIO:
             "isrc",
             "tracknumber",
             "discnumber",
-            "bpm",
         ]
 
         tags: dict[str, str] = {}
@@ -132,6 +220,11 @@ class MusicTagIO:
                         tags[k] = str(v)
             except Exception as e:
                 log.error(f"[TAG-READ] {path}: failed reading {k}: {e!r}")
+
+        try:
+            tags.update(read_extras(path))
+        except Exception as e:
+            log.error(f"[TAG-READ] {path}: failed reading bpm/label: {e!r}")
 
         has_artwork = False
         try:
@@ -152,7 +245,8 @@ class MusicTagIO:
 
         Supported keys (case-sensitive):
           - title, artist, album, album_artist, year, genre, comment, isrc,
-            track_number, disc_number, bpm
+            track_number, disc_number, bpm, label (bpm and label by each
+            format's own key: see EXTRA_FIELDS)
 
         Extra keys are ignored.
         """
@@ -181,7 +275,6 @@ class MusicTagIO:
             "isrc": _get("isrc"),
             "tracknumber": _get("track_number", "tracknumber"),
             "discnumber": _get("disc_number", "discnumber"),
-            "bpm": _get("bpm"),
         }
 
         for key, val in mapping.items():
@@ -193,6 +286,10 @@ class MusicTagIO:
                 log.error(f"[TAG-WRITE] {path}: failed setting {key}={val!r}: {e!r}")
 
         f.save()
+        try:
+            write_extras(path, {"bpm": _get("bpm"), "label": _get("label")})
+        except Exception as e:
+            log.error(f"[TAG-WRITE] {path}: failed setting bpm/label: {e!r}")
         if ensure_virtualdj_compat:
             self._save_virtualdj_id3_compat(
                 path, str(mapping.get("year") or "") or None

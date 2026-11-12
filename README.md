@@ -282,6 +282,34 @@ is not written; a path that does not exist raises `FileNotFoundError`.
 `ensure_virtualdj_compat=True` re-saves an MP3's tag as ID3v2.3 for
 VirtualDJ, as with `Mp3Tagger`, and does nothing for other formats.
 
+BPM and the record label (`bpm`, `label`) are written and read by each
+format's own key: ID3 `TBPM`/`TPUB` (MP3, WAV, AIFF), Vorbis comments
+`BPM`/`LABEL` (FLAC, Ogg Vorbis, Ogg Opus) and MP4 `tmpo` plus a `LABEL`
+freeform atom (M4A). Downloads still in progress (`.part`, `.crdownload`,
+`.partial`) are never opened.
+
+#### Rule profiles
+
+A `RuleProfile` names the fields a library's files carry, whose display
+rules write them out, and whether the file or the catalog wins when they
+differ (deejay-cog ADR-0010). `MAIN`: the catalog wins, and the owned fields
+are written as the catalog shows them. `FX`: the file wins, and its values go
+up to the catalog instead. An app chooses which profile applies to which
+files; a profile holds no folder ids.
+
+```python
+from mini_app_polis.mp3.tag import MAIN, apply_profile
+
+result = apply_profile("song.flac", MAIN, catalog_values, dry_run=True)
+result.to_file      # values the catalog would write over the file
+result.to_catalog   # (FX) the file's values to send up
+result.unsupported  # set when the file cannot be tagged; it is left alone
+```
+
+Neither profile ever empties a value: a catalog value that is missing never
+clears a tag, and an empty file field never clears an entry's value.
+`dry_run=True` writes nothing.
+
 ### LLM (requires `llm` extra)
 
 ```python
