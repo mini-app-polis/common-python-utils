@@ -428,3 +428,22 @@ def test_a_file_it_cannot_tag_gets_a_typed_answer_and_is_not_touched(
 def test_a_missing_file_raises(tagger, tmp_path):
     with pytest.raises(FileNotFoundError):
         tagger.read(str(tmp_path / "gone.flac"))
+
+
+def test_m4a_iso_timestamp_year_reads_as_its_year(tmp_path):
+    """An M4A ©day holding an ISO timestamp, as some stores write it."""
+    from mutagen.mp4 import MP4
+
+    from mini_app_polis.mp3.tag.io.music_tag_io import MusicTagIO
+
+    path = tmp_path / "tone.m4a"
+    shutil.copyfile(FIXTURES / "tone.m4a", path)
+    mp4 = MP4(path)
+    mp4["\xa9day"] = ["2000-11-30T08:00:00Z"]
+    mp4["\xa9nam"] = ["Song"]
+    mp4.save()
+
+    tags = MusicTagIO().read(str(path)).tags
+
+    assert tags["year"] == "2000"
+    assert tags["tracktitle"] == "Song"

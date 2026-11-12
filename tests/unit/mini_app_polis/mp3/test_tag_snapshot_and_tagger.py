@@ -413,8 +413,75 @@ def test_music_tag_io_read_joins_lists_and_logs_unreadable_keys(tag_io):
     # bpm is not read through music_tag (it never has the key).
     assert snap.tags == {"tracktitle": "Song", "artist": "A1, A2"}
     assert snap.has_artwork is False
-    (msg,) = log.error.call_args.args
-    assert "failed reading genre" in msg
+    msg, key, _err = log.error.call_args.args
+    assert (msg % (key, _err)).startswith("[TAG-READ] failed reading genre")
+    # The path is extra data, not message text, so repeats share a message.
+    assert "a.mp3" not in msg
+    assert log.error.call_args.kwargs["extra"] == {"path": "a.mp3"}
+
+
+def test_music_tag_io_tag_read_message_is_the_same_for_every_file(tag_io):
+    _, io, files, log = tag_io
+    files["/tmp/one.m4a"] = _TagFile({"genre": "x"}, bad_reads={"genre"})
+    files["/tmp/two.m4a"] = _TagFile({"genre": "x"}, bad_reads={"genre"})
+
+    io.read("/tmp/one.m4a")
+    io.read("/tmp/two.m4a")
+
+    first, second = (c.args[0] for c in log.error.call_args_list)
+    assert first == second
+    paths = [c.kwargs["extra"]["path"] for c in log.error.call_args_list]
+    assert paths == ["/tmp/one.m4a", "/tmp/two.m4a"]
+
+
+class _YearItem:
+    """music_tag's untyped MetadataItem: just its values."""
+
+    def __init__(self, *values):
+        self.values = list(values)
+
+
+class _UnparsedYearFile(_TagFile):
+    """A file whose typed year raises, as music_tag does for a timestamp."""
+
+    def __init__(self, raw_year, values=None):
+        super().__init__({"year": "set", **(values or {})}, bad_reads={"year"})
+        self.raw_year = raw_year
+
+    def get(self, key, default=None, typeless=False):
+        if key == "year" and typeless:
+            return _YearItem(self.raw_year)
+        return super().get(key, default)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("2000-11-30T08:00:00Z", "2000"),
+        ("1987-06-01T00:00:00+02:00", "1987"),
+        ("2014-03", "2014"),
+    ],
+)
+def test_music_tag_io_reads_the_year_of_an_unparsed_year_tag(tag_io, raw, expected):
+    _, io, files, log = tag_io
+    files["a.m4a"] = _UnparsedYearFile(raw, {"tracktitle": "Song"})
+
+    snap = io.read("a.m4a")
+
+    assert snap.tags == {"tracktitle": "Song", "year": expected}
+    log.error.assert_not_called()
+
+
+def test_music_tag_io_logs_a_year_tag_with_no_year_in_it(tag_io):
+    _, io, files, log = tag_io
+    files["a.m4a"] = _UnparsedYearFile("sometime")
+
+    snap = io.read("a.m4a")
+
+    assert "year" not in snap.tags
+    msg, key, _err = log.error.call_args.args
+    assert key == "year"
+    assert msg.startswith("[TAG-READ] failed reading")
 
 
 @pytest.mark.parametrize(

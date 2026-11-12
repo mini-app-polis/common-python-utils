@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -146,6 +147,33 @@ TAG_FIELDS = [
 ]
 
 
+#: A year at the start of a tag value: "2000", "2000-11-30", "2000-11-30T08:00:00Z".
+_LEADING_YEAR = re.compile(r"^\s*(\d{4})(?!\d)")
+
+
+def _year_from_raw(f: Any, key: str) -> str:
+    """The year of a ``year`` tag music_tag can't parse, or "".
+
+    music_tag reads a year only as a bare number or a plain date, so an
+    ISO timestamp such as ``2000-11-30T08:00:00Z`` (common in M4A files)
+    raises. The raw value is read untyped and its leading four digits kept.
+    """
+    if key != "year":
+        return ""
+    try:
+        raw = f.get(key, typeless=True)
+    except Exception:
+        return ""
+    values = getattr(raw, "values", None) or [raw]
+    for value in values:
+        if value is None:
+            continue
+        found = _LEADING_YEAR.match(str(value))
+        if found:
+            return found.group(1)
+    return ""
+
+
 class MusicTagIO:
     """Adapter around the `music_tag` library.
 
@@ -218,12 +246,22 @@ class MusicTagIO:
                     else:
                         tags[k] = str(v)
             except Exception as e:
-                log.error(f"[TAG-READ] {path}: failed reading {k}: {e!r}")
+                year = _year_from_raw(f, k)
+                if year:
+                    tags[k] = year
+                    continue
+                # The path goes in extra, not the message, so repeats of one
+                # failure share a message (and one Sentry issue).
+                log.error(
+                    "[TAG-READ] failed reading %s: %r", k, e, extra={"path": path}
+                )
 
         try:
             tags.update(read_extras(path))
         except Exception as e:
-            log.error(f"[TAG-READ] {path}: failed reading bpm/label: {e!r}")
+            log.error(
+                "[TAG-READ] failed reading bpm/label: %r", e, extra={"path": path}
+            )
 
         has_artwork = False
         try:
