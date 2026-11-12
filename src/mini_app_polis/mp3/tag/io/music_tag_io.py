@@ -201,7 +201,6 @@ class MusicTagIO:
             "album",
             "albumartist",
             "year",
-            "date",
             "genre",
             "comment",
             "isrc",
