@@ -1,3 +1,10 @@
+# [9.10.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.9.1...v9.10.0) (2026-11-12)
+
+
+### Features
+
+* **api:** retry POST /v1/catalog/library/files on 429 with GET's backoff ([fa677fd](https://github.com/mini-app-polis/common-python-utils/commit/fa677fd10450673eeaa2e0271cd4489dc968a3c4))
+
 ## [9.9.1](https://github.com/mini-app-polis/common-python-utils/compare/v9.9.0...v9.9.1) (2026-11-12)
 
 
