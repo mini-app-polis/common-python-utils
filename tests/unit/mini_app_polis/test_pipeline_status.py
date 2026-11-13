@@ -404,6 +404,45 @@ def test_a_single_line_longer_than_a_message_is_cut_into_pieces() -> None:
     assert [len(p) for p in pieces] == [4096, 4096, 808]
 
 
+def _items(label: str, n: int, width: int = 90) -> str:
+    return "\n".join([label, *(f"  {label}-{i:02} {'w' * width}" for i in range(n))])
+
+
+def test_a_split_never_ends_a_part_with_a_section_label() -> None:
+    # The limit leaves room for the second section's label after the
+    # first section, but not for its first item.
+    first = _items("catalog wrote", 30)
+    label = "catalog took the file's value"
+    text = f"{first}\n\n{label}\n  Song A\n  Song B"
+    pieces = ps._split_text(text, len(first) + 2 + len(label) + 3)
+    assert len(pieces) == 2
+    assert not pieces[0].endswith("catalog took the file's value")
+    assert pieces[1].splitlines()[:3] == [
+        "catalog took the file's value",
+        "  Song A",
+        "  Song B",
+    ]
+
+
+def test_a_section_running_into_the_next_part_repeats_its_label() -> None:
+    text = "Run complete in 1s.\n\n" + _items("other", 90)
+    pieces = ps._split_text(text, 4096)
+    assert len(pieces) == 3
+    for piece in pieces[1:]:
+        assert piece.splitlines()[0] == "other"
+        assert piece.splitlines()[1].startswith("  other-")
+    assert all(len(p) <= 4096 for p in pieces)
+    items = [line for p in pieces for line in p.splitlines() if line.startswith("  ")]
+    assert len(items) == 90 and len(set(items)) == 90
+
+
+def test_a_part_starting_with_a_new_section_does_not_repeat_the_old_label() -> None:
+    first = _items("alpha", 42)
+    text = f"{first}\n\nbeta\n  one"
+    pieces = ps._split_text(text, len(first) + 2)
+    assert pieces == [first, "beta\n  one"]
+
+
 def test_post_findings_is_deprecated(monkeypatch) -> None:
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
     with (

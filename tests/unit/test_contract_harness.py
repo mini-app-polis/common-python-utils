@@ -7,11 +7,18 @@ every CI run.
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any
 
 import httpx
 import pytest
-from contract.conftest import result_note
+from contract.conftest import (
+    BY_HAND,
+    deployed_commit,
+    result_message,
+    result_note,
+    started_by,
+)
 from contract.harness import (
     MACHINE_NAME,
     NOT_EXERCISED,
@@ -275,3 +282,85 @@ def test_a_refused_result_reads_as_not_forwarded_with_its_reason() -> None:
     note = result_note(_result(forwarded=False, reason="delivery_failed"), "passed")
 
     assert note == "contract suite result not forwarded (delivery_failed): passed"
+
+
+# ---------------------------------------------------------------------------
+# The result message: which commit, and what started the run
+# ---------------------------------------------------------------------------
+
+
+def _version(
+    monkeypatch: pytest.MonkeyPatch, payload: Any, status: int = 200
+) -> list[str]:
+    asked: list[str] = []
+
+    def get(url: str, **_: Any) -> httpx.Response:
+        asked.append(url)
+        return httpx.Response(status, json=payload, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx, "get", get)
+    return asked
+
+
+def test_the_commit_is_read_from_the_apis_version_when_none_was_given(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asked = _version(monkeypatch, {"version": "2.91.0", "commit": "4cc4f8a9e1b2"})
+
+    commit = deployed_commit("https://dev-api.kaianolevine.com/v1")
+
+    assert asked == ["https://dev-api.kaianolevine.com/version"]
+    message = result_message(
+        "dev-api.kaianolevine.com",
+        commit,
+        Counter(passed=3),
+        started_by("pull_request"),
+    )
+    assert message.startswith(
+        "Contract suite passed against dev-api.kaianolevine.com at 4cc4f8a "
+        "(promote pull request): 3 passed"
+    )
+
+
+def test_the_commit_is_unknown_only_when_version_gives_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _version(monkeypatch, {"version": "2.91.0", "commit": None})
+
+    message = result_message(
+        "dev-api.kaianolevine.com",
+        deployed_commit("https://dev-api.kaianolevine.com"),
+        Counter(failed=1),
+        started_by("workflow_dispatch"),
+    )
+
+    assert "at an unknown commit (by hand)" in message
+    assert message.startswith("Contract suite failed")
+
+
+def test_a_failing_version_call_never_stops_the_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def get(url: str, **_: Any) -> httpx.Response:
+        raise httpx.ConnectError("down", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx, "get", get)
+    assert deployed_commit("https://dev-api.kaianolevine.com") == ""
+    _version(monkeypatch, {"commit": "abc"}, status=503)
+    assert deployed_commit("https://dev-api.kaianolevine.com") == ""
+    _version(monkeypatch, ["not", "an", "object"])
+    assert deployed_commit("https://dev-api.kaianolevine.com") == ""
+
+
+@pytest.mark.parametrize(
+    ("event", "words"),
+    [
+        ("pull_request", "promote pull request"),
+        ("repository_dispatch", "dev API deploy"),
+        ("workflow_dispatch", BY_HAND),
+        ("", BY_HAND),
+    ],
+)
+def test_the_message_says_what_started_the_run(event: str, words: str) -> None:
+    message = result_message("h", "4cc4f8a", Counter(passed=1), started_by(event))
+    assert f"at 4cc4f8a ({words}):" in message

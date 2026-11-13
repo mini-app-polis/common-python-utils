@@ -521,26 +521,50 @@ def _split_text(text: str, limit: int = DESCRIPTION_LIMIT) -> list[str]:
     short, so nothing under the cut (the counts, most of all) goes missing.
     Each piece ends at a line break; a single line longer than ``limit`` is
     the only thing ever cut mid-line.
+
+    Sections (:func:`render_sections`: a label, then its items indented
+    under it) are kept readable across a cut: a piece never ends with a
+    label whose items start in the next one (the label moves on with
+    them), and a section that runs on into the next piece repeats its
+    label there.
     """
     if len(text) <= limit:
         return [text]
     pieces: list[str] = []
-    current = ""
+    current: list[str] = []
+    #: The label of the section the last item added belongs to.
+    label: str | None = None
+
+    def size(lines: list[str]) -> int:
+        return len("\n".join(lines))
+
+    def flush() -> None:
+        body = "\n".join(current).strip("\n")
+        if body.strip():
+            pieces.append(body)
+        current.clear()
+
     for line in text.split("\n"):
         while len(line) > limit:
-            if current:
-                pieces.append(current.rstrip("\n"))
-                current = ""
+            flush()
             pieces.append(line[:limit])
             line = line[limit:]
-        candidate = f"{current}\n{line}" if current else line
-        if len(candidate) > limit:
-            pieces.append(current.rstrip("\n"))
-            current = line
-        else:
-            current = candidate
-    if current.strip():
-        pieces.append(current.rstrip("\n"))
+        item = line.startswith(_INDENT) and bool(line.strip())
+        if line.strip() and not line.startswith(_INDENT):
+            label = line
+        if size([*current, line]) > limit:
+            carried: list[str] = []
+            if item and current and current[-1] == label:
+                # The label would end this piece with its items in the next.
+                carried = [current.pop()]
+            flush()
+            if item and not carried and label is not None:
+                carried = [label]  # the section runs on: repeat its label
+            if size([*carried, line]) > limit:
+                carried = []
+            current.extend(carried)
+        current.append(line)
+    flush()
     return [p for p in pieces if p.strip()]
 
 
