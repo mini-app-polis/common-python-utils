@@ -6,6 +6,7 @@ from mini_app_polis.api.errors import (
     ApiUnavailable,
     KaianoApiError,
     error_for,
+    is_edge_rate_limited,
     summarize_body,
 )
 
@@ -71,3 +72,19 @@ def test_edge_not_found_still_reads_the_raw_body() -> None:
     # Classification looks at the body itself, not the summary.
     body = '{"status": "error", "code": 404, "message": "Application not found"}'
     assert isinstance(error_for(404, body, "/v1/x"), ApiUnavailable)
+
+
+def test_an_html_429_is_the_edge_rate_limit() -> None:
+    assert is_edge_rate_limited(
+        429, "<!DOCTYPE html><html><title>Access denied</title></html>"
+    )
+
+
+def test_the_apis_json_429_is_not_the_edge() -> None:
+    assert not is_edge_rate_limited(429, '{"error": {"code": "rate_limited"}}')
+    assert not is_edge_rate_limited(429, "")
+    assert not is_edge_rate_limited(429, "slow")
+
+
+def test_an_html_page_with_another_status_is_not_the_edge_rate_limit() -> None:
+    assert not is_edge_rate_limited(403, CLOUDFLARE_502)

@@ -155,7 +155,7 @@ from .contract import (
     WcsWikiThinWrite,
     WcsWikiThinWriteResult,
 )
-from .errors import ApiUnavailable, KaianoApiError, error_for
+from .errors import ApiUnavailable, KaianoApiError, error_for, is_edge_rate_limited
 
 _log = _logging.getLogger(__name__)
 
@@ -212,7 +212,9 @@ _BACKOFF_MAX_S = 30.0
 #: Patched in tests.
 _sleep = time.sleep
 
-#: POST paths retried on a 429: upserts keyed by Drive id, so a repeat is safe.
+#: POST paths retried on the API's own 429: upserts keyed by Drive id, so a
+#: repeat is safe. A 429 from Cloudflare's edge is retried on any path: the
+#: request never reached the API (errors.is_edge_rate_limited).
 _RETRY_ON_429_POSTS = frozenset({"/v1/catalog/library/files"})
 
 
@@ -319,7 +321,10 @@ class KaianoApiClient:
         """
         Make a synchronous POST request to the API.
 
-        Retries up to max_retries times on connection errors.
+        Retries up to max_retries times on connection errors, and with GET's
+        backoff on a 429: on any path when Cloudflare's edge answered it (the
+        request never reached the API), and on the API's own 429 only for
+        the paths in ``_RETRY_ON_429_POSTS``.
         Raises KaianoApiError on non-2xx responses, ApiUnavailable when the
         API cannot be reached.
         """
@@ -344,9 +349,11 @@ class KaianoApiClient:
 
                     if response.status_code >= 400:
                         err = error_for(response.status_code, response.text, path)
-                        if (
-                            response.status_code != 429
-                            or path not in _RETRY_ON_429_POSTS
+                        if response.status_code != 429 or (
+                            path not in _RETRY_ON_429_POSTS
+                            and not is_edge_rate_limited(
+                                response.status_code, response.text
+                            )
                         ):
                             raise err
                         wait = _backoff_s(attempt, _retry_after_s(response))

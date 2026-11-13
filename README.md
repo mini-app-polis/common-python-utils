@@ -172,9 +172,11 @@ fx for FX Music) is refused with a 409 the client raises as
 or 504, and on 429. Each wait is longer than the last (about 2 s, then 4 s,
 jittered), or as long as the response's `Retry-After`, and never more than
 30 s. Retrying immediately is what turned one slow wiki export into three
-concurrent builds of it. A POST is retried only on a lost connection, except
-`POST /v1/catalog/library/files` (an upsert keyed by Drive id), which is also
-retried on 429 with the same waits. Inside
+concurrent builds of it. A POST is retried on a lost connection, and with
+the same waits on a 429 that is Cloudflare's HTML page rather than the API's
+JSON: the edge's rate limit blocked it before it reached the API, so sending
+it again is safe on any path. The API's own 429 is retried only for
+`POST /v1/catalog/library/files` (an upsert keyed by Drive id). Inside
 `run_deadline`, the client follows the same rules as the library's other
 retry loops.
 
