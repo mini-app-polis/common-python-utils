@@ -1,3 +1,11 @@
+## [9.10.2](https://github.com/mini-app-polis/common-python-utils/compare/v9.10.1...v9.10.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* **deps:** patch vulnerable dependencies (opentelemetry-api) ([148864d](https://github.com/mini-app-polis/common-python-utils/commit/148864d822805f24be6dc8a19ee835c9de94212b))
+* **pipeline_status:** label every part of a split run report and repeat the counts on each ([50a665f](https://github.com/mini-app-polis/common-python-utils/commit/50a665ff4ba30abd8c84deaf38cf1e06a1b4d9c2))
+
 ## [9.10.1](https://github.com/mini-app-polis/common-python-utils/compare/v9.10.0...v9.10.1) (2026-11-12)
 
 
