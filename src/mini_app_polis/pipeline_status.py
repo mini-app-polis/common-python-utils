@@ -395,6 +395,15 @@ def render_sections(sections: Iterable[tuple[str, list[str]]]) -> str:
     return "\n\n".join(blocks)
 
 
+def _counts_text(
+    extras: dict[str, Any],
+    labels: dict[str, str] | None = None,
+    sections: dict[str, str] | None = None,
+) -> str:
+    """The non-zero ``extras`` as sections of plain words."""
+    return render_sections(counter_sections(extras, labels, sections))
+
+
 def _merge_extras_into_text(
     text: str,
     extras: dict[str, Any],
@@ -402,7 +411,7 @@ def _merge_extras_into_text(
     sections: dict[str, str] | None = None,
 ) -> str:
     """``text``, then the non-zero ``extras`` as sections of plain words."""
-    rendered = render_sections(counter_sections(extras, labels, sections))
+    rendered = _counts_text(extras, labels, sections)
     if not rendered:
         return text
     return f"{text}\n\n{rendered}" if text else rendered
@@ -549,13 +558,15 @@ def _build_continuation(
 
     Its footer names no severity, so the API does not read it as another
     run: one report is one cog-run signal, however many messages it takes.
+    Only a part with more after it says it continues.
     """
+    lead = "continued · " if part < parts else ""
     embed: dict[str, Any] = {
         "title": (f"{_environment_prefix()}{repo} · {flow_name} ({part}/{parts})")[
             :256
         ],
         "color": _SEVERITY_COLORS.get(severity, _DEFAULT_COLOR),
-        "footer": {"text": f"continued · run {run_id[:8]}"[:2048]},
+        "footer": {"text": f"{lead}run {run_id[:8]}"[:2048]},
         "description": text[:DESCRIPTION_LIMIT],
     }
     return {"embeds": [embed], "username": repo[:80]}
@@ -571,23 +582,29 @@ def _build_message(
     source: str,
     dimension: str,
     suggestion: str | None,
+    parts: int = 1,
 ) -> dict[str, Any]:
     """Render one run report as a Discord message body.
 
     Everything a person needs to decide whether to go look, and nothing
     else. The run id is in the footer rather than the body because it is
     what you search the logs for once you have decided to.
+
+    ``parts`` is how many messages the report takes; this is the first, so
+    with more than one it is labelled ``(1/N)`` and says it continues.
     """
     del source, dimension  # carried by the caller; not shown on the message
+    label = f" (1/{parts})" if parts > 1 else ""
+    more = " · continued" if parts > 1 else ""
     embed: dict[str, Any] = {
         # Prefix, not a footer field: the footer is where the metadata
         # lives and is the part of an embed people skim past. The one
         # thing that must not be missed is that this did not come from
         # production.
-        "title": f"{_environment_prefix()}{repo} · {flow_name}"[:256],
+        "title": f"{_environment_prefix()}{repo} · {flow_name}{label}"[:256],
         "color": _SEVERITY_COLORS.get(severity, _DEFAULT_COLOR),
         # Severity first: the API's cog-run detector reads it from here.
-        "footer": {"text": f"{severity} · run {run_id[:8]}"[:2048]},
+        "footer": {"text": f"{severity}{more} · run {run_id[:8]}"[:2048]},
     }
     if text:
         embed["description"] = text[:DESCRIPTION_LIMIT]
@@ -889,6 +906,7 @@ def post_run_finding(
     if severity == "SUCCESS" and text is None:
         text = "Run completed successfully."
 
+    counts = _counts_text(extras, counter_labels, counter_sections)
     text_final = _merge_extras_into_text(
         text or "", extras, counter_labels, counter_sections
     ).strip()
@@ -925,6 +943,9 @@ def post_run_finding(
 
     run_id = run_id or get_run_id()
     text_final = stamp_version(text_final, version)
+    body = stamp_version((text or "").strip(), version)
+    if not body:
+        body, counts = counts, ""
 
     if severity not in NOTIFY_SEVERITIES and not notable:
         # An idle scheduled tick: nothing was waiting, nothing was done.
@@ -941,6 +962,13 @@ def post_run_finding(
         return DeliveryReport(suppressed=1)
 
     pieces = _split_text(text_final)
+    if len(pieces) > 1 and counts:
+        # The counts go on every part, so each says what the run did; the
+        # body is split in the room they leave. Counts too long to share a
+        # message with anything stay at the end of the text, as they were.
+        room = DESCRIPTION_LIMIT - len(counts) - 2
+        if room >= DESCRIPTION_LIMIT // 2:
+            pieces = [f"{p}\n\n{counts}" for p in _split_text(body, room)]
     messages = [
         _build_message(
             repo=repo,
@@ -951,6 +979,7 @@ def post_run_finding(
             source=source,
             dimension=dimension,
             suggestion=suggestion,
+            parts=len(pieces),
         ),
         *(
             _build_continuation(

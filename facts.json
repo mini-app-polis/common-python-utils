@@ -2,10 +2,10 @@
   "repo": "common-python-utils",
   "facts": {
     "test_functions": {
-      "value": 1184,
+      "value": 1185,
       "description": "Test functions in the test suites (def test_*, each parametrized function once)",
       "source": "matches: tests/**/test_*.py, contract/**/test_*.py /(?m)^\\s*(?:async\\s+)?def test_\\w+/",
-      "as_of": "2026-11-12"
+      "as_of": "2026-11-13"
     }
   }
 }
