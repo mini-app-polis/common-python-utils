@@ -356,9 +356,39 @@ def test_only_the_first_message_of_a_split_report_declares_its_severity(
         for call in cap.deliver.call_args_list
     ]
     assert footers[0].startswith("ERROR")
-    assert all(f == "continued · run abcdef12" for f in footers[1:])
-    titles = [call.args[0]["embeds"][0]["title"] for call in cap.deliver.call_args_list]
-    assert titles[1].endswith(f"(2/{len(titles)})")
+    assert all(f == "continued · run abcdef12" for f in footers[1:-1])
+    assert footers[-1] == "run abcdef12"
+
+
+def _split_report(n_lines: int, monkeypatch) -> list[dict]:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    text = "\n".join(f"line {i} {'y' * 200}" for i in range(n_lines))
+    with captured() as cap:
+        ps.post_run_finding(
+            "f",
+            "WARN",
+            text=text,
+            repo="my-cog",
+            run_id="abcdef123456",
+            tasks_checked=42,
+        )
+    return [call.args[0]["embeds"][0] for call in cap.deliver.call_args_list]
+
+
+@pytest.mark.parametrize(("n_lines", "parts"), [(25, 2), (45, 3)])
+def test_every_part_of_a_split_report_is_labelled_and_repeats_the_counts(
+    monkeypatch, n_lines, parts
+) -> None:
+    embeds = _split_report(n_lines, monkeypatch)
+    assert len(embeds) == parts
+    for index, embed in enumerate(embeds, start=1):
+        assert embed["title"].endswith(f"({index}/{parts})")
+        assert "42 tasks checked" in embed["description"]
+        assert len(embed["description"]) <= ps.DESCRIPTION_LIMIT
+        continues = index < parts
+        assert ("continued" in embed["footer"]["text"]) is continues
+    assert embeds[0]["footer"]["text"].startswith("WARN")
+    assert not any(e["footer"]["text"].startswith("WARN") for e in embeds[1:])
 
 
 def test_a_split_report_is_not_delivered_when_any_part_fails(monkeypatch) -> None:
