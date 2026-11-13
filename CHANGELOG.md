@@ -1,3 +1,11 @@
+## [9.10.4](https://github.com/mini-app-polis/common-python-utils/compare/v9.10.3...v9.10.4) (2026-11-13)
+
+
+### Bug Fixes
+
+* **contract:** read the API's commit from /version and say what started the run ([dbcbad6](https://github.com/mini-app-polis/common-python-utils/commit/dbcbad693b4a442e875dd25f7e3a483ecc838c52))
+* **pipeline-status:** keep a section's heading with its rows when a run report is split ([35adb15](https://github.com/mini-app-polis/common-python-utils/commit/35adb15dd3b3dd26709e3f150b55d81d017397aa))
+
 ## [9.10.3](https://github.com/mini-app-polis/common-python-utils/compare/v9.10.2...v9.10.3) (2026-11-13)
 
 
