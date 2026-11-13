@@ -77,6 +77,25 @@ _TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 _RAY_ID = re.compile(r"Ray ID:\s*(?:<[^>]+>\s*)*([0-9a-f]{12,})", re.IGNORECASE)
 
 
+def _is_html(text: str) -> bool:
+    """Whether a stripped body is an HTML page, not the API's JSON."""
+    return "<html" in text[:500].lower() or text[:15].lower().startswith("<!doctype")
+
+
+def is_edge_rate_limited(status_code: int, body: str) -> bool:
+    """Whether a 429 is Cloudflare's page rather than the API's own answer.
+
+    Cloudflare's api-per-ip-burst rule blocks with a 429 and an HTML page,
+    before the request reaches the API, so the request did nothing and
+    sending it again is safe on any path. The API's own 429 is a JSON
+    envelope and means it did see the request.
+    """
+    if status_code != 429:
+        return False
+    text = body.strip()
+    return bool(text) and text[0] not in "{[" and _is_html(text)
+
+
 def summarize_body(body: str) -> str:
     """A response body short enough for an exception, a log line or a report.
 
@@ -91,7 +110,7 @@ def summarize_body(body: str) -> str:
         return "(empty body)"
     if text[0] in "{[":
         return text
-    if "<html" in text[:500].lower() or text[:15].lower().startswith("<!doctype"):
+    if _is_html(text):
         found = _TITLE.search(text)
         title = " ".join(html.unescape(found.group(1)).split()) if found else ""
         ray = _RAY_ID.search(text)

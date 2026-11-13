@@ -673,6 +673,75 @@ def test_another_post_is_not_retried_on_429(sleeps: list[float]) -> None:
     assert sleeps == []
 
 
+# ── POST retried on Cloudflare's edge 429 on any path ───────────────────
+
+_EDGE_429 = (
+    "<!DOCTYPE html><html><head><title>Access denied | api.kaianolevine.com"
+    " used Cloudflare to restrict access</title></head><body>"
+    "Ray ID: <strong>8e1f2a3b4c5d6e7f</strong></body></html>"
+)
+_EDGE_403 = _EDGE_429.replace("Access denied", "Attention Required!")
+_API_429 = '{"error": {"code": "rate_limited", "message": "slow down"}}'
+
+
+def test_any_post_is_retried_after_an_edge_429(sleeps: list[float]) -> None:
+    out, http = _post_with(
+        "/v1/notify",
+        [_response(429, _EDGE_429, {"Retry-After": "3"}), _response(200)],
+    )
+
+    assert out == {"ok": True}
+    assert http.post.call_count == 2
+    assert sleeps == [3.0]
+
+
+def test_an_edge_429_post_backs_off_like_get(sleeps: list[float]) -> None:
+    out, http = _post_with("/v1/notify", [_response(429, _EDGE_429), _response(200)])
+
+    assert out == {"ok": True}
+    assert len(sleeps) == 1
+    assert 1.0 <= sleeps[0] <= 2.0
+
+
+def test_an_edge_429_post_gives_up_after_max_retries(sleeps: list[float]) -> None:
+    out, http = _post_with("/v1/notify", [_response(429, _EDGE_429)] * 3)
+
+    assert isinstance(out, KaianoApiError)
+    assert out.status_code == 429
+    assert "Cloudflare ray 8e1f2a3b4c5d6e7f" in out.message
+    assert http.post.call_count == 3
+    assert len(sleeps) == 2
+
+
+def test_the_apis_own_429_is_not_retried_on_another_post(
+    sleeps: list[float],
+) -> None:
+    out, http = _post_with("/v1/notify", [_response(429, _API_429), _response(200)])
+
+    assert isinstance(out, KaianoApiError)
+    assert out.status_code == 429
+    assert http.post.call_count == 1
+    assert sleeps == []
+
+
+def test_the_apis_own_429_is_still_retried_on_library_files(
+    sleeps: list[float],
+) -> None:
+    out, http = _post_with(_LIBRARY_FILES, [_response(429, _API_429), _response(200)])
+
+    assert out == {"ok": True}
+    assert http.post.call_count == 2
+
+
+def test_an_edge_403_post_is_not_retried(sleeps: list[float]) -> None:
+    out, http = _post_with("/v1/notify", [_response(403, _EDGE_403), _response(200)])
+
+    assert isinstance(out, KaianoApiError)
+    assert out.status_code == 403
+    assert http.post.call_count == 1
+    assert sleeps == []
+
+
 # ── conditional reads ───────────────────────────────────────────────────
 
 
