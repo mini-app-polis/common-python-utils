@@ -1,3 +1,10 @@
+## [9.10.3](https://github.com/mini-app-polis/common-python-utils/compare/v9.10.2...v9.10.3) (2026-11-13)
+
+
+### Bug Fixes
+
+* **api:** retry any POST that Cloudflare's edge rate limit blocked with an HTML 429 ([6d0b122](https://github.com/mini-app-polis/common-python-utils/commit/6d0b12293c9d9adca19b015c3d6626469d0534fe))
+
 ## [9.10.2](https://github.com/mini-app-polis/common-python-utils/compare/v9.10.1...v9.10.2) (2026-11-13)
 
 
