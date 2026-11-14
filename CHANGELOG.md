@@ -1,3 +1,10 @@
+# [9.11.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.10.4...v9.11.0) (2026-11-14)
+
+
+### Features
+
+* **api:** list each library file's fields with an open reconcile difference ([8f01051](https://github.com/mini-app-polis/common-python-utils/commit/8f01051e13b3cefceb2bac38de4536a1babc81c3))
+
 ## [9.10.4](https://github.com/mini-app-polis/common-python-utils/compare/v9.10.3...v9.10.4) (2026-11-13)
 
 
