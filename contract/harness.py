@@ -185,6 +185,9 @@ NOT_EXERCISED: dict[str, str] = {
     "report_reconcile_differences": (
         "the contract-suite machine holds no catalog.library.write scope"
     ),
+    "list_reconcile_open_fields": (
+        "the contract-suite machine holds no catalog.library.write scope"
+    ),
     "read_reconcile_approvals": (
         "the contract-suite machine holds no catalog.library.write scope"
     ),
