@@ -100,6 +100,7 @@ from .contract import (
     PipelineEvaluationWriteResult,
     ReconcileApprovals,
     ReconcileApprovalsSet,
+    ReconcileOpenFields,
     ReconcileReport,
     ReconcileReportResult,
     RefiningBudgetSpentMarked,
@@ -780,6 +781,19 @@ class KaianoApiClient:
         return cast(
             ReconcileReportResult,
             self._call("report_reconcile_differences", payload),
+        )
+
+    def list_reconcile_open_fields(
+        self, *, library_root_id: str | None = None
+    ) -> list[ReconcileOpenFields]:
+        """``GET /v1/catalog/library/reconcile/differences`` — each present
+        file with an open reconcile difference, and the fields that differ
+        (only ``library_root_id``'s files when given). The library sync
+        leaves those fields to the reconcile."""
+        params = {} if library_root_id is None else {"library_root_id": library_root_id}
+        return cast(
+            list[ReconcileOpenFields],
+            self._call("list_reconcile_open_fields", params=params),
         )
 
     def read_reconcile_approvals(self) -> ReconcileApprovals:

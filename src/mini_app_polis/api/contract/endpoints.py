@@ -60,6 +60,7 @@ from .library import (
     LibraryFilesSyncedResult,
     ReconcileApprovals,
     ReconcileApprovalsSet,
+    ReconcileOpenFields,
     ReconcileReport,
     ReconcileReportResult,
 )
@@ -265,6 +266,14 @@ ENDPOINTS: tuple[Endpoint, ...] = (
         path="/v1/catalog/library/reconcile/differences",
         request=ReconcileReport,
         response=ReconcileReportResult,
+        scope="catalog.library.write",
+    ),
+    Endpoint(
+        name="list_reconcile_open_fields",
+        method="GET",
+        path="/v1/catalog/library/reconcile/differences",
+        request=None,
+        response=list[ReconcileOpenFields],
         scope="catalog.library.write",
     ),
     Endpoint(

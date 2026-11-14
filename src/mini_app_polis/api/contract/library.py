@@ -632,6 +632,22 @@ class ReconcileReportResult(BaseModel):
     )
 
 
+class ReconcileOpenFields(BaseModel):
+    """One file's fields with an open reconcile difference.
+
+    Those fields are the reconcile's until the owner settles them: the
+    library sync neither sends them up as edits nor writes over them.
+    """
+
+    drive_file_id: str = Field(..., min_length=1, description="The Drive file's id.")
+    fields: list[ReconcileField] = Field(
+        ..., min_length=1, description="Its fields with an open difference."
+    )
+
+    # A response: fields this library does not know yet are ignored.
+    model_config = ConfigDict(extra="ignore")
+
+
 class ReconcileApprovalsSet(BaseModel):
     """What the owner approved for the reconcile's write runs, in two
     directions.
