@@ -89,6 +89,7 @@ from .library import (
     ReconcileDifference,
     ReconcileField,
     ReconcileKind,
+    ReconcileOpenFields,
     ReconcileReport,
     ReconcileReportResult,
 )
@@ -382,6 +383,7 @@ __all__ = [
     "ReconcileField",
     "ReconcileKind",
     "ReconcileReport",
+    "ReconcileOpenFields",
     "ReconcileReportResult",
     "SpotifyPlaylistIngest",
     "SpotifyPlaylistsIngest",

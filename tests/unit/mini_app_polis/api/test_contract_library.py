@@ -43,6 +43,7 @@ from mini_app_polis.api.contract import (
     ReconcileApprovalsSet,
     ReconcileDifference,
     ReconcileKind,
+    ReconcileOpenFields,
     ReconcileReport,
     ReconcileReportResult,
 )
@@ -712,6 +713,41 @@ def test_the_reconcile_endpoints_are_under_the_library_scope() -> None:
         endpoint = ENDPOINTS_BY_NAME[name]
         assert (endpoint.method, endpoint.path, endpoint.request) == shape
         assert endpoint.scope == "catalog.library.write"
+
+
+def test_the_open_fields_are_listed_under_the_library_scope() -> None:
+    endpoint = ENDPOINTS_BY_NAME["list_reconcile_open_fields"]
+    assert (endpoint.method, endpoint.path, endpoint.request) == (
+        "GET",
+        "/v1/catalog/library/reconcile/differences",
+        None,
+    )
+    assert endpoint.scope == "catalog.library.write"
+
+
+def test_a_file_with_open_fields_names_at_least_one_field() -> None:
+    row = ReconcileOpenFields.model_validate(
+        {"drive_file_id": "a", "fields": ["title", "bpm"], "later": True}
+    )
+    assert row.fields == ["title", "bpm"]
+    with pytest.raises(ValidationError):
+        ReconcileOpenFields.model_validate({"drive_file_id": "a", "fields": []})
+    with pytest.raises(ValidationError):
+        ReconcileOpenFields.model_validate({"drive_file_id": "a", "fields": ["mood"]})
+
+
+def test_listing_open_fields_sends_the_root_only_when_given(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    body = {"data": [{"drive_file_id": "a", "fields": ["title"]}], "meta": _META}
+    client, calls = _client(monkeypatch, body)
+
+    rows = client.list_reconcile_open_fields(library_root_id="root")
+    client.list_reconcile_open_fields()
+
+    path = "/v1/catalog/library/reconcile/differences"
+    assert calls == [("GET", path, {"library_root_id": "root"}), ("GET", path, {})]
+    assert [(r.drive_file_id, r.fields) for r in rows] == [("a", ["title"])]
 
 
 def test_a_reconcile_report_names_every_file_it_has_differences_for() -> None:
