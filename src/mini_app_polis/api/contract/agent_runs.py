@@ -7,7 +7,8 @@ here before the run is started. The record is also the lock: a repository
 with a run in flight is given no second one.
 
 When the run ends, its workflow posts the result: how it ended, what it
-cost, and the pull request it opened. The API records it and queues it for
+cost, the pull request it opened and, for a run that opened one, the
+agent's answer to each of the task's Done when items, in order. The API records it and queues it for
 the task manager, the one writer to the board, which moves the task. A run
 that never reports is marked failed by the task manager, and a run that
 could not be started is marked failed the same way.
@@ -79,6 +80,8 @@ class AgentRun(BaseModel):
     reason: str | None = None
     #: What a run that needs refining asked.
     questions: list[str] = Field(default_factory=list)
+    #: A succeeded run's answer to each Done when item, in the task's order.
+    done_when_answers: list[str] = Field(default_factory=list)
     dispatched_at: datetime
     finished_at: datetime | None = None
 
@@ -98,7 +101,9 @@ class AgentRunResult(BaseModel):
 
     A run that succeeded opened a pull request and names it; one that did
     not opened none. A run that needs refining asks at least one question;
-    no other outcome carries questions.
+    no other outcome carries questions. Only a run that succeeded answers
+    the task's Done when items, one answer per item in the task's order,
+    each with its evidence; a run that gives none still succeeds.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -113,6 +118,9 @@ class AgentRunResult(BaseModel):
     reason: str | None = Field(default=None, max_length=2000)
     #: What the run could not settle, for the owner to answer in refining.
     questions: list[str] = Field(default_factory=list, max_length=10)
+    #: One answer per Done when item, in the task's order, each naming its
+    #: evidence (tests, files, commit). Each is one line.
+    done_when_answers: list[str] = Field(default_factory=list, max_length=30)
 
     @model_validator(mode="after")
     def _pull_request_only_on_success(self) -> AgentRunResult:
@@ -130,6 +138,17 @@ class AgentRunResult(BaseModel):
             raise ValueError(f"a run that ended {self.outcome} asks no questions")
         if any(not q.strip() for q in self.questions):
             raise ValueError("a question is not blank")
+        return self
+
+    @model_validator(mode="after")
+    def _answers_only_on_success(self) -> AgentRunResult:
+        if self.outcome != "succeeded" and self.done_when_answers:
+            raise ValueError(f"a run that ended {self.outcome} answers no Done when")
+        for answer in self.done_when_answers:
+            if not answer.strip():
+                raise ValueError("a Done when answer is not blank")
+            if "\n" in answer or len(answer) > 2000:
+                raise ValueError("a Done when answer is one line, at most 2000 long")
         return self
 
 

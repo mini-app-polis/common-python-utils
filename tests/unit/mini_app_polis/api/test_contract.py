@@ -807,6 +807,67 @@ def test_a_run_that_needs_refining_opened_no_pull_request() -> None:
         )
 
 
+def test_a_run_that_succeeded_answers_each_done_when_item() -> None:
+    from mini_app_polis.api.contract import AgentRun, AgentRunResult
+
+    answers = [
+        "Added the setting; test_setting_is_read in tests/unit/test_config.py.",
+        "README's Settings section names it; commit in the pull request.",
+    ]
+    result = AgentRunResult(
+        run_id=_RUN_ID,
+        outcome="succeeded",
+        pr_url="https://github.com/mini-app-polis/watcher-cog/pull/7",
+        done_when_answers=answers,
+    )
+    assert result.done_when_answers == answers
+    stored = AgentRun.model_validate(
+        {
+            "id": _RUN_ID,
+            "task_gid": "1219804099689049",
+            "repository": "watcher-cog",
+            "model": "claude-sonnet-5-5",
+            "status": "succeeded",
+            "done_when_answers": answers,
+            "dispatched_at": "2026-10-23T16:00:00Z",
+        }
+    )
+    assert stored.done_when_answers == answers
+    assert (
+        AgentRunResult(
+            run_id=_RUN_ID,
+            outcome="succeeded",
+            pr_url="https://github.com/mini-app-polis/watcher-cog/pull/7",
+        ).done_when_answers
+        == []
+    )
+
+
+@pytest.mark.parametrize("answers", [["  "], ["two\nlines"], ["x" * 2001], ["a"] * 31])
+def test_blank_multiline_or_too_many_done_when_answers_are_refused(
+    answers: list[str],
+) -> None:
+    from mini_app_polis.api.contract import AgentRunResult
+
+    with pytest.raises(ValidationError):
+        AgentRunResult(
+            run_id=_RUN_ID,
+            outcome="succeeded",
+            pr_url="https://github.com/mini-app-polis/watcher-cog/pull/7",
+            done_when_answers=answers,
+        )
+
+
+@pytest.mark.parametrize("outcome", ["failed", "capped"])
+def test_done_when_answers_on_another_outcome_are_refused(outcome: str) -> None:
+    from mini_app_polis.api.contract import AgentRunResult
+
+    with pytest.raises(ValidationError):
+        AgentRunResult(
+            run_id=_RUN_ID, outcome=outcome, reason="r", done_when_answers=["Done."]
+        )
+
+
 def test_an_agent_result_refuses_extras_and_bad_ids() -> None:
     from mini_app_polis.api.contract import AgentRunResult
 
