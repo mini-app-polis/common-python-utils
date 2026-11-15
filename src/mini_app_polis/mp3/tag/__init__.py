@@ -9,12 +9,14 @@ Public API:
   UnsupportedFile / UnsupportedReason for a file it cannot tag
 - RuleProfile (the main and fx profiles) and apply_profile, which compares a
   file with its catalog values under a profile and writes or reports
+- role_comment / role_conflict: the FX role comment rule
 """
 
 from .audio_tagger import SUPPORTED_FORMATS, AudioTagger
 from .models import AudioFormat, UnsupportedFile, UnsupportedReason
 from .profiles import (
     FX,
+    FX_ROLES,
     MAIN,
     PROFILE_FIELDS,
     PROFILES,
@@ -24,6 +26,8 @@ from .profiles import (
     Winner,
     apply_profile,
     get_profile,
+    role_comment,
+    role_conflict,
 )
 from .tagger import Mp3Tagger, TagSnapshot
 
@@ -45,4 +49,7 @@ __all__ = [
     "ProfileResult",
     "apply_profile",
     "get_profile",
+    "FX_ROLES",
+    "role_comment",
+    "role_conflict",
 ]
