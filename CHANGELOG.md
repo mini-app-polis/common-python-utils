@@ -1,3 +1,10 @@
+## [9.13.1](https://github.com/mini-app-polis/common-python-utils/compare/v9.13.0...v9.13.1) (2026-11-15)
+
+
+### Bug Fixes
+
+* **deps:** bump the minor-and-patch group with 8 updates ([11da876](https://github.com/mini-app-polis/common-python-utils/commit/11da876bce05e5d27f99f2d3c02ebfd049a7de9a))
+
 # [9.13.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.12.0...v9.13.0) (2026-11-15)
 
 
