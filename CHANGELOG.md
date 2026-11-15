@@ -1,3 +1,10 @@
+# [9.12.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.11.0...v9.12.0) (2026-11-15)
+
+
+### Features
+
+* **mp3:** add the FX role comment rule to the fx profile ([b3d676f](https://github.com/mini-app-polis/common-python-utils/commit/b3d676f3855294aed4c83f3c17729803d1c956c2))
+
 # [9.11.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.10.4...v9.11.0) (2026-11-14)
 
 
