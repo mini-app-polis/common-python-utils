@@ -658,6 +658,12 @@ class ReconcileApprovalsSet(BaseModel):
     written. Either way the file and the entry then match. Whole kinds, or
     ``other`` differences one file and field at a time; a kind, or a file's
     field, is approved in one direction only.
+
+    One file's differences of a kind can also be approved on their own
+    (``kinds_by_file``, ``file_wins_kinds_by_file``): for that file, that
+    approval comes ahead of the kind's, so one file can go the other way
+    from every other file of its kind. A file's kind is approved in one
+    direction only.
     """
 
     kinds: list[ReconcileKind] = Field(
@@ -681,6 +687,22 @@ class ReconcileApprovalsSet(BaseModel):
             "field (never catalog_id)."
         ),
     )
+    kinds_by_file: dict[str, list[ReconcileKind]] = Field(
+        default_factory=dict,
+        description=(
+            "One file's differences of a kind approved for the catalog, ahead "
+            "of the kind's own approval: Drive file id to its kinds (never "
+            "'other', which is approved under files)."
+        ),
+    )
+    file_wins_kinds_by_file: dict[str, list[ReconcileKind]] = Field(
+        default_factory=dict,
+        description=(
+            "One file's differences of a kind approved for the file, ahead of "
+            "the kind's own approval: Drive file id to its kinds (only "
+            "RECONCILE_FILE_WINS_KINDS)."
+        ),
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -701,6 +723,21 @@ class ReconcileApprovalsSet(BaseModel):
             if twice:
                 raise ValueError(
                     f"file {file_id} has fields approved in both directions: {twice}"
+                )
+        for kinds in self.kinds_by_file.values():
+            if "other" in kinds:
+                raise ValueError("'other' is approved file by file, under files")
+        for file_id, kinds in self.file_wins_kinds_by_file.items():
+            refused = sorted(set(kinds) - RECONCILE_FILE_WINS_KINDS)
+            if refused:
+                raise ValueError(
+                    f"file {file_id} has kinds that cannot be approved for the "
+                    f"file: {refused}"
+                )
+            both_ways = sorted(set(kinds) & set(self.kinds_by_file.get(file_id, [])))
+            if both_ways:
+                raise ValueError(
+                    f"file {file_id} has kinds approved in both directions: {both_ways}"
                 )
         return self
 

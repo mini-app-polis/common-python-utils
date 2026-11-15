@@ -811,6 +811,42 @@ def test_a_kind_or_field_is_approved_in_one_direction_only() -> None:
     ReconcileApprovalsSet(files={"a": ["title"]}, file_wins_files={"b": ["title"]})
 
 
+def test_one_files_kind_can_be_approved_apart_from_the_kind() -> None:
+    approvals = ReconcileApprovalsSet(
+        file_wins_kinds=["year_later"],
+        kinds_by_file={"a": ["year_later"]},
+        file_wins_kinds_by_file={"b": ["case_punctuation"]},
+    )
+    assert approvals.kinds_by_file == {"a": ["year_later"]}
+    assert approvals.file_wins_kinds_by_file == {"b": ["case_punctuation"]}
+    assert ReconcileApprovalsSet().kinds_by_file == {}
+    assert ReconcileApprovalsSet().file_wins_kinds_by_file == {}
+
+
+def test_one_files_kind_is_approved_in_one_direction_only() -> None:
+    with pytest.raises(ValidationError, match="both directions"):
+        ReconcileApprovalsSet(
+            kinds_by_file={"a": ["year_later"]},
+            file_wins_kinds_by_file={"a": ["year_later"]},
+        )
+    # The same kind of different files may go either way.
+    ReconcileApprovalsSet(
+        kinds_by_file={"a": ["year_later"]},
+        file_wins_kinds_by_file={"b": ["year_later"]},
+    )
+
+
+def test_one_files_kind_takes_the_same_kinds_as_a_whole_kind() -> None:
+    with pytest.raises(ValidationError, match="under files"):
+        ReconcileApprovalsSet.model_validate({"kinds_by_file": {"a": ["other"]}})
+    with pytest.raises(ValidationError, match="cannot be approved for the file"):
+        ReconcileApprovalsSet.model_validate(
+            {"file_wins_kinds_by_file": {"a": ["year_filled"]}}
+        )
+    with pytest.raises(ValidationError):
+        ReconcileApprovalsSet.model_validate({"kinds_by_file": {"a": ["no_kind"]}})
+
+
 def test_a_files_link_cannot_be_approved_for_the_file() -> None:
     with pytest.raises(ValidationError, match="catalog_id"):
         ReconcileApprovalsSet(file_wins_files={"a": ["catalog_id"]})
@@ -828,6 +864,22 @@ def test_approvals_read_back_carry_both_directions() -> None:
     )
     assert read.file_wins_kinds == ["year_later"]
     assert read.file_wins_files == {"a": ["bpm"]}
+    assert read.kinds_by_file == {}
+
+
+def test_approvals_read_back_carry_each_files_own_kinds() -> None:
+    read = ReconcileApprovals.model_validate(
+        {
+            "kinds": [],
+            "files": {},
+            "file_wins_kinds": ["year_later"],
+            "kinds_by_file": {"a": ["year_later"]},
+            "file_wins_kinds_by_file": {"b": ["bpm_differs"]},
+            "updated_by": "user_1",
+        }
+    )
+    assert read.kinds_by_file == {"a": ["year_later"]}
+    assert read.file_wins_kinds_by_file == {"b": ["bpm_differs"]}
 
 
 def test_an_edit_report_can_name_fields_to_keep_from_the_file() -> None:
