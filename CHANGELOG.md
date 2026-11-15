@@ -1,3 +1,10 @@
+# [9.13.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.12.0...v9.13.0) (2026-11-15)
+
+
+### Features
+
+* **api:** carry agent Done when answers and per-file reconcile kind approvals in the contract ([2b43030](https://github.com/mini-app-polis/common-python-utils/commit/2b430300e244351d0a4a4ee65a103ed1d76a8c56))
+
 # [9.12.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.11.0...v9.12.0) (2026-11-15)
 
 
