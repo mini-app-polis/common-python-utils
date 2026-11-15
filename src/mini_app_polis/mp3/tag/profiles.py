@@ -86,6 +86,61 @@ def get_profile(name: str) -> RuleProfile:
         ) from None
 
 
+#: The roles an FX file's comment can carry (deejay-cog ADR-0010).
+FX_ROLES: tuple[str, ...] = ("Walk On", "Bow", "MC Intro", "Rotation")
+
+_FX_PREFIX = "<FX>"
+
+
+def _following_part(comment: str | None) -> tuple[str, str] | None:
+    """For a comment starting with ``<FX>`` (leading whitespace ignored): the
+    text after it and the name inside the next ``<...>`` part, or "" when no
+    such part follows. None when the comment does not start with ``<FX>``."""
+    text = (comment or "").lstrip()
+    if not text.startswith(_FX_PREFIX):
+        return None
+    rest = text[len(_FX_PREFIX) :]
+    if rest.startswith("<") and (end := rest.find(">")) > 0:
+        return rest, rest[1:end]
+    return rest, ""
+
+
+def role_conflict(comment: str | None, role: str) -> str | None:
+    """The other known role a comment already carries right after ``<FX>``,
+    or None. :func:`role_comment` leaves such a comment unchanged; a caller
+    reports it."""
+    found = _following_part(comment)
+    if found is None:
+        return None
+    name = found[1]
+    return name if name in FX_ROLES and name != role else None
+
+
+def role_comment(comment: str | None, role: str) -> str | None:
+    """The comment with ``<FX><role>`` at its start, or None when nothing
+    changes (deejay-cog ADR-0010).
+
+    Unchanged: it already starts with ``<FX><role>``, or ``<FX>`` is followed
+    by another known role (tell that apart with :func:`role_conflict`).
+    ``<FX>`` followed by anything else gets ``<role>`` inserted after it;
+    any other comment gets ``<FX><role>`` in front, with a space between
+    unless it starts with "<". Leading whitespace is ignored; the rest of
+    the comment is kept as is.
+    """
+    found = _following_part(comment)
+    part = f"<{role}>"
+    if found is not None:
+        rest, name = found
+        if name in FX_ROLES:
+            return None
+        return _FX_PREFIX + part + rest
+    text = (comment or "").lstrip()
+    if not text:
+        return _FX_PREFIX + part
+    sep = "" if text.startswith("<") else " "
+    return _FX_PREFIX + part + sep + text
+
+
 @dataclass(frozen=True)
 class FieldChange:
     """One field where the file and the catalog differ."""
