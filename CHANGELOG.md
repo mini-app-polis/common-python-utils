@@ -1,3 +1,10 @@
+## [9.13.2](https://github.com/mini-app-polis/common-python-utils/compare/v9.13.1...v9.13.2) (2026-11-16)
+
+
+### Bug Fixes
+
+* **google:** retry Drive media download chunks ([cdc1000](https://github.com/mini-app-polis/common-python-utils/commit/cdc10004f8fdb61de0d943330bb9f1af61ed36c6))
+
 ## [9.13.1](https://github.com/mini-app-polis/common-python-utils/compare/v9.13.0...v9.13.1) (2026-11-15)
 
 
