@@ -608,19 +608,27 @@ class DriveFacade:
             retry=self._retry,
         )
 
+    def _download_chunks(self, downloader: MediaIoBaseDownload, file_id: str) -> None:
+        """Fetch every chunk of a media download, retrying each one.
+
+        ``files().get_media`` only builds the request; each ``next_chunk``
+        is a network call. A chunk that fails is not written and the
+        downloader's position is not advanced, so retrying it asks for the
+        same byte range again.
+        """
+        done = False
+        while not done:
+            _status, done = execute_with_retry(
+                downloader.next_chunk,
+                context=f"downloading a chunk of file {file_id}",
+                retry=self._retry,
+            )
+
     def download_file(self, file_id: str, destination_path: str) -> None:
         """Download a Drive file to a local filesystem path."""
-        # Chunked downloads happen client-side, but the initial request creation can fail.
-        request = execute_with_retry(
-            lambda: self._service.files().get_media(fileId=file_id),
-            context=f"creating download request for file {file_id}",
-            retry=self._retry,
-        )
+        request = self._service.files().get_media(fileId=file_id)
         with io.FileIO(destination_path, "wb") as fh:
-            downloader = MediaIoBaseDownload(fh, request)
-            done = False
-            while not done:
-                _status, done = downloader.next_chunk()
+            self._download_chunks(MediaIoBaseDownload(fh, request), file_id)
 
     def export_file(self, file_id: str, *, mime_type: str) -> bytes:
         """Export a Google Workspace file (Docs/Sheets/Slides) as bytes.
@@ -908,18 +916,9 @@ class DriveFacade:
         """Download a .m3u file and return its lines."""
 
         try:
-            # The initial request creation can fail; download itself is chunked.
-            request = execute_with_retry(
-                lambda: self._service.files().get_media(fileId=file_id),
-                context=f"creating download request for file {file_id}",
-                retry=self._retry,
-            )
-
+            request = self._service.files().get_media(fileId=file_id)
             fh = io.BytesIO()
-            downloader = MediaIoBaseDownload(fh, request)
-            done = False
-            while not done:
-                _status, done = downloader.next_chunk()
+            self._download_chunks(MediaIoBaseDownload(fh, request), file_id)
 
             return fh.getvalue().decode(encoding).splitlines()
         except Exception as e:
@@ -1042,19 +1041,11 @@ class DriveFacade:
             retry=self._retry,
         )
 
-        request = execute_with_retry(
-            lambda: self._service.files().get_media(
-                fileId=file_id, supportsAllDrives=True
-            ),
-            context=f"creating download request for file {file_id}",
-            retry=self._retry,
+        request = self._service.files().get_media(
+            fileId=file_id, supportsAllDrives=True
         )
-
         fh = io.BytesIO()
-        downloader = MediaIoBaseDownload(fh, request)
-        done = False
-        while not done:
-            _status, done = downloader.next_chunk()
+        self._download_chunks(MediaIoBaseDownload(fh, request), file_id)
 
         return DownloadedFile(
             file_id=file_id,
