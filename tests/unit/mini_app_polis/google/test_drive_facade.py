@@ -1276,6 +1276,127 @@ def test_download_file_bytes_defaults_missing_metadata(monkeypatch):
     assert (out.name, out.mime_type, out.data) == ("", "application/octet-stream", b"")
 
 
+class _FlakyChunkedDownload(_ChunkedDownload):
+    """Like _ChunkedDownload, but the second chunk fails once with ``error``."""
+
+    error: Exception
+
+    def __init__(self, fh, request):
+        super().__init__(fh, request)
+        self.attempts = 0
+
+    def next_chunk(self):
+        self.attempts += 1
+        if self.attempts == 2:
+            raise self.error
+        return super().next_chunk()
+
+
+def test_download_file_bytes_retries_a_chunk_that_fails_with_a_5xx(
+    monkeypatch, as_http_error
+):
+    from mini_app_polis.google import drive as drive_mod
+    from mini_app_polis.google._retry import RetryConfig
+
+    monkeypatch.setattr("mini_app_polis.google._retry.time.sleep", lambda _s: None)
+    monkeypatch.setattr(drive_mod, "log", MagicMock())
+    downloads: list[_FlakyChunkedDownload] = []
+
+    class _Download(_FlakyChunkedDownload):
+        error = as_http_error(status=500, message="Unknown Error")
+
+        def __init__(self, fh, request):
+            super().__init__(fh, request)
+            downloads.append(self)
+
+    monkeypatch.setattr(drive_mod, "MediaIoBaseDownload", _Download)
+    svc = _mock_service()
+    files = svc.files.return_value
+    files.get.return_value.execute.return_value = {"name": "song.mp3"}
+    files.get_media.return_value = {"data": b"ID3abc"}
+
+    out = drive_mod.DriveFacade(
+        svc, retry=RetryConfig(max_retries=3, base_delay_s=0.1)
+    ).download_file_bytes("f")
+
+    assert out.data == b"ID3abc"
+    (download,) = downloads
+    assert download.attempts == 3
+    files.get_media.assert_called_once_with(fileId="f", supportsAllDrives=True)
+
+
+def test_download_file_retries_a_chunk_that_fails_with_a_5xx(
+    monkeypatch, tmp_path, as_http_error
+):
+    from mini_app_polis.google import drive as drive_mod
+    from mini_app_polis.google._retry import RetryConfig
+
+    monkeypatch.setattr("mini_app_polis.google._retry.time.sleep", lambda _s: None)
+
+    class _Download(_FlakyChunkedDownload):
+        error = as_http_error(status=503)
+
+    monkeypatch.setattr(drive_mod, "MediaIoBaseDownload", _Download)
+    svc = _mock_service()
+    svc.files.return_value.get_media.return_value = {"data": b"ID3abc"}
+    dest = tmp_path / "song.mp3"
+
+    drive_mod.DriveFacade(
+        svc, retry=RetryConfig(max_retries=3, base_delay_s=0.1)
+    ).download_file("f", str(dest))
+
+    assert dest.read_bytes() == b"ID3abc"
+
+
+def test_download_m3u_file_data_retries_a_chunk_that_fails_with_a_5xx(
+    monkeypatch, as_http_error
+):
+    from mini_app_polis.google import drive as drive_mod
+    from mini_app_polis.google._retry import RetryConfig
+
+    monkeypatch.setattr("mini_app_polis.google._retry.time.sleep", lambda _s: None)
+
+    class _Download(_FlakyChunkedDownload):
+        error = as_http_error(status=500)
+
+    monkeypatch.setattr(drive_mod, "MediaIoBaseDownload", _Download)
+    svc = _mock_service()
+    svc.files.return_value.get_media.return_value = {"data": b"a\nb\n"}
+
+    lines = drive_mod.DriveFacade(
+        svc, retry=RetryConfig(max_retries=3, base_delay_s=0.1)
+    ).download_m3u_file_data("f")
+
+    assert lines == ["a", "b"]
+
+
+def test_download_file_bytes_does_not_retry_a_chunk_that_fails_with_a_4xx(
+    monkeypatch, as_http_error
+):
+    from googleapiclient.errors import HttpError
+
+    from mini_app_polis.google import drive as drive_mod
+
+    monkeypatch.setattr(drive_mod, "log", MagicMock())
+    downloads: list[_FlakyChunkedDownload] = []
+
+    class _Download(_FlakyChunkedDownload):
+        error = as_http_error(status=404)
+
+        def __init__(self, fh, request):
+            super().__init__(fh, request)
+            downloads.append(self)
+
+    monkeypatch.setattr(drive_mod, "MediaIoBaseDownload", _Download)
+    svc = _mock_service()
+    svc.files.return_value.get.return_value.execute.return_value = {}
+    svc.files.return_value.get_media.return_value = {"data": b"ID3abc"}
+
+    with pytest.raises(HttpError):
+        drive_mod.DriveFacade(svc).download_file_bytes("f")
+    assert downloads[0].attempts == 2
+
+
 # --- delete_file_with_fallback ---------------------------------------------
 
 
