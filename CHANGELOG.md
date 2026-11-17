@@ -1,3 +1,10 @@
+## [9.14.1](https://github.com/mini-app-polis/common-python-utils/compare/v9.14.0...v9.14.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **activity:** fall back to the activity channel when change_channel returns only whitespace ([c66f22f](https://github.com/mini-app-polis/common-python-utils/commit/c66f22fb79448ef2aeb655804c194350f8325944))
+
 # [9.14.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.13.2...v9.14.0) (2026-11-17)
 
 
