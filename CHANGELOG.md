@@ -1,3 +1,10 @@
+## [9.14.2](https://github.com/mini-app-polis/common-python-utils/compare/v9.14.1...v9.14.2) (2026-11-17)
+
+
+### Bug Fixes
+
+* **google:** retry a TLS session OpenSSL 3 reports as an unexpected EOF ([a96267e](https://github.com/mini-app-polis/common-python-utils/commit/a96267e3ca9105e35ca3b0732979a0389fabbc6b))
+
 ## [9.14.1](https://github.com/mini-app-polis/common-python-utils/compare/v9.14.0...v9.14.1) (2026-11-17)
 
 
