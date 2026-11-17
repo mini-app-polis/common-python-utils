@@ -22,6 +22,9 @@ log = logger_mod.get_logger()
 
 T = TypeVar("T")
 
+#: OpenSSL 3's reason for a TLS peer that closed without close_notify.
+_UNEXPECTED_EOF = "UNEXPECTED_EOF_WHILE_READING"
+
 
 @dataclass(frozen=True)
 class RetryConfig:
@@ -132,6 +135,15 @@ def is_retryable_non_http_error(error: Exception) -> bool:
     # The connection is gone, not the request wrong; the next attempt opens a
     # new one.
     if isinstance(error, (ssl.SSLEOFError, ssl.SSLZeroReturnError)):
+        return True
+
+    # The same dropped session under OpenSSL 3: a plain SSLError whose reason
+    # is UNEXPECTED_EOF_WHILE_READING ("[SSL: UNEXPECTED_EOF_WHILE_READING]
+    # unexpected eof while reading"), not an SSLEOFError. Matched on that
+    # reason alone, so certificate and handshake failures stay final.
+    if isinstance(error, ssl.SSLError) and _UNEXPECTED_EOF in (
+        f"{getattr(error, 'reason', None) or ''} {error}"
+    ):
         return True
 
     # Some transient connection resets/aborts surface as generic OSError
