@@ -674,12 +674,13 @@ def test_a_failing_or_empty_change_channel_uses_activity(sent):
     def broken(_caller: str, _machine: bool) -> str:
         raise RuntimeError("no idea")
 
-    for choice in (broken, lambda _c, _m: ""):
+    for choice in (broken, lambda _c, _m: "", lambda _c, _m: "  "):
         config = activity.ActivityConfig(
             send=sent, environment="production", group_seconds=0, change_channel=choice
         )
         run_request(config, responds(200, before=_writes(Track())))
     assert [c for c, _, _ in sent.messages] == [
+        activity.discord.CHANNEL_ACTIVITY,
         activity.discord.CHANNEL_ACTIVITY,
         activity.discord.CHANNEL_ACTIVITY,
     ]
