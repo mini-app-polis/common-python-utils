@@ -152,6 +152,15 @@ def test_is_retryable_non_http_error_dropped_tls_session():
     )
     assert is_retryable_non_http_error(ssl.SSLZeroReturnError(6, "closed")) is True
 
+    # The same, as OpenSSL 3 raises it: a plain SSLError with that reason.
+    eof = ssl.SSLError(
+        1, "[SSL: UNEXPECTED_EOF_WHILE_READING] unexpected eof while reading"
+    )
+    assert is_retryable_non_http_error(eof) is True
+    by_reason = ssl.SSLError(1, "unexpected eof while reading")
+    by_reason.reason = "UNEXPECTED_EOF_WHILE_READING"
+    assert is_retryable_non_http_error(by_reason) is True
+
     # Certificate and handshake failures are not transient.
     assert is_retryable_non_http_error(ssl.SSLCertVerificationError(1, "bad")) is False
     assert is_retryable_non_http_error(ssl.SSLError(1, "handshake failure")) is False
@@ -175,6 +184,30 @@ def test_execute_with_retry_retries_ssl_eof(monkeypatch):
     retry = RetryConfig(max_retries=3, base_delay_s=0.01, max_delay_s=0.02)
     assert execute_with_retry(fn, context="uploading bytes file", retry=retry) == "ok"
     assert state["n"] == 2
+
+
+def test_execute_with_retry_retries_openssl3_unexpected_eof(monkeypatch):
+    import ssl
+
+    from mini_app_polis.google._retry import RetryConfig, execute_with_retry
+
+    monkeypatch.setattr("mini_app_polis.google._retry.time.sleep", lambda _s: None)
+
+    state = {"n": 0}
+
+    def fn():
+        state["n"] += 1
+        if state["n"] <= 2:
+            raise ssl.SSLError(
+                1,
+                "[SSL: UNEXPECTED_EOF_WHILE_READING] unexpected eof while "
+                "reading (_ssl.c:2723)",
+            )
+        return "ok"
+
+    retry = RetryConfig(max_retries=3, base_delay_s=0.01, max_delay_s=0.02)
+    assert execute_with_retry(fn, context="listing files", retry=retry) == "ok"
+    assert state["n"] == 3
 
 
 def test_execute_with_retry_expected_error_skips_error_log(as_http_error, monkeypatch):
