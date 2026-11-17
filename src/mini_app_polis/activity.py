@@ -294,6 +294,12 @@ class ActivityConfig:
     to one route are gathered into one message; 0 posts each request's at
     once.
 
+    ``change_channel`` picks the channel a change summary goes to from its
+    caller id and whether that caller is a machine, so one service can give
+    a caller's changes a channel of their own (a cog's writes, say); None
+    (the default), or a choice that fails, posts to
+    ``discord.CHANNEL_ACTIVITY``.
+
     Nothing is posted outside production, whatever ``environment`` says.
     """
 
@@ -310,6 +316,7 @@ class ActivityConfig:
     label: bool = False
     display_name: NameResolver | None = None
     group_seconds: float = DEFAULT_GROUP_SECONDS
+    change_channel: Callable[[str, bool], str] | None = None
 
     def _title(self, title: str) -> str:
         return _labelled(title, self.label)
@@ -474,6 +481,18 @@ async def _send(
         return False
 
 
+def _change_channel(config: ActivityConfig, actor: str, machine: bool) -> str:
+    """The channel ``actor``'s change summary goes to: the config's choice,
+    or ``discord.CHANNEL_ACTIVITY`` when it has none or the choice fails."""
+    if config.change_channel is None:
+        return discord.CHANNEL_ACTIVITY
+    try:
+        return config.change_channel(actor, machine) or discord.CHANNEL_ACTIVITY
+    except Exception:
+        logger.exception("activity: change_channel failed; using activity")
+        return discord.CHANNEL_ACTIVITY
+
+
 async def _display(config: ActivityConfig, actor: str, machine: bool) -> str:
     """The name to show for ``actor``: the resolver's, or the id itself."""
     if machine or config.display_name is None:
@@ -514,7 +533,7 @@ async def emit_change(
     title = "data changed" if requests == 1 else f"data changed · {requests} writes"
     return await _send(
         config.send,
-        discord.CHANNEL_ACTIVITY,
+        _change_channel(config, actor, machine),
         {
             "embeds": [
                 {

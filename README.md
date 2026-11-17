@@ -431,7 +431,9 @@ bulk statement is `1 bulk write`), and one per 5xx, unhandled exception, or —
 when `is_machine` is given — 4xx to a machine caller. Call
 `await activity.flush_changes()` on shutdown so a burst still gathering is
 posted. The actor is `request.state.caller` unless `caller=` says otherwise;
-`display_name=` (sync or async) turns a person's id into a name. A fault
+`display_name=` (sync or async) turns a person's id into a name;
+`change_channel=` (caller id, is-machine → channel) gives a caller's change
+summaries a channel of their own, `activity` otherwise. A fault
 names the exception's type and Sentry id, never its message. Nothing is
 posted outside production. A handler, or
 a pure ASGI error middleware holding only the scope, can attach a reason

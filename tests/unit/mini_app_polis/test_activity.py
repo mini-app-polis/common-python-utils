@@ -643,6 +643,48 @@ def test_a_person_is_named_and_a_machine_is_not(sent):
     assert whos == ["Kaiano Levine", "user_1", "user_2"]
 
 
+def test_change_channel_routes_a_callers_changes(sent):
+    def route(caller: str, machine: bool) -> str:
+        return "cog-activity" if machine and caller == "some-cog" else "activity"
+
+    def config(machine: bool) -> activity.ActivityConfig:
+        return activity.ActivityConfig(
+            send=sent,
+            environment="production",
+            group_seconds=0,
+            is_machine=lambda _request: machine,
+            change_channel=route,
+        )
+
+    async def scenario() -> None:
+        await _run(
+            config(True), responds(200, before=_writes(Track())), caller="some-cog"
+        )
+        await _run(
+            config(False), responds(200, before=_writes(Track())), caller="user_1"
+        )
+        await activity.wait_for_deliveries()
+
+    asyncio.run(scenario())
+    channels = sorted(c for c, _, _ in sent.messages)
+    assert channels == ["activity", "cog-activity"]
+
+
+def test_a_failing_or_empty_change_channel_uses_activity(sent):
+    def broken(_caller: str, _machine: bool) -> str:
+        raise RuntimeError("no idea")
+
+    for choice in (broken, lambda _c, _m: ""):
+        config = activity.ActivityConfig(
+            send=sent, environment="production", group_seconds=0, change_channel=choice
+        )
+        run_request(config, responds(200, before=_writes(Track())))
+    assert [c for c, _, _ in sent.messages] == [
+        activity.discord.CHANNEL_ACTIVITY,
+        activity.discord.CHANNEL_ACTIVITY,
+    ]
+
+
 def test_a_failing_name_lookup_shows_the_id(sent):
     def broken(_caller: str) -> str:
         raise RuntimeError("db down")
