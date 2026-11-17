@@ -487,7 +487,8 @@ def _change_channel(config: ActivityConfig, actor: str, machine: bool) -> str:
     if config.change_channel is None:
         return discord.CHANNEL_ACTIVITY
     try:
-        return config.change_channel(actor, machine) or discord.CHANNEL_ACTIVITY
+        chosen = config.change_channel(actor, machine)
+        return (chosen or "").strip() or discord.CHANNEL_ACTIVITY
     except Exception:
         logger.exception("activity: change_channel failed; using activity")
         return discord.CHANNEL_ACTIVITY
