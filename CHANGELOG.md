@@ -1,3 +1,10 @@
+# [9.14.0](https://github.com/mini-app-polis/common-python-utils/compare/v9.13.2...v9.14.0) (2026-11-17)
+
+
+### Features
+
+* **activity:** let a service route a caller's change summaries to their own channel ([64cb0c3](https://github.com/mini-app-polis/common-python-utils/commit/64cb0c3ab31cd6229f31638e43f01681f4ba6c48))
+
 ## [9.13.2](https://github.com/mini-app-polis/common-python-utils/compare/v9.13.1...v9.13.2) (2026-11-16)
 
 
